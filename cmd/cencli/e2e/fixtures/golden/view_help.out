@@ -1,0 +1,33 @@
+Retrieve information about hosts, certificates, and web properties. Supports defanged IPs
+/ URLs.                                                                                  
+
+Usage:
+  censys view <asset> [flags]
+
+Examples:
+  censys view 8.8.8.8
+  censys view 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf
+  censys view platform.censys.io:80
+  censys view platform.censys.io # defaults to port 443
+  censys view platform.censys.io:80,google.com:80
+  censys view --input-file hosts.txt
+  censys view --input-file -  # read assets from STDIN
+  censys view platform.censys.io:80 --at-time 2025-09-15T14:30:00Z
+  censys view 8.8.8.8 --short
+
+Flags:
+  -a, --at string           Alias for --at-time
+      --at-time string      view data as of this time (certificates not supported)
+  -h, --help                help for view
+  -i, --input-file string   file to read the assets from. Overrides the positional argument.
+  -o, --org-id string       override the configured organization ID
+  -s, --short               render data through a configurable template
+
+Global Flags:
+      --debug                  enable debug logging
+      --no-color               disable ANSI colors and styles
+      --no-spinner             disable spinner during operations
+  -O, --output-format string   output format (json|yaml|ndjson|tree) (default "json")
+  -q, --quiet                  suppress non-essential output
+      --timeout duration       overall command timeout (e.g. 30s, 2m) (default 30s)
+

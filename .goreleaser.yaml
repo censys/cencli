@@ -1,0 +1,38 @@
+version: 2
+project_name: cencli
+
+before:
+  hooks:
+    - make sqlc
+
+builds:
+  - id: cencli
+    main: ./cmd/cencli/main.go
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/censys/cencli/internal/version.Version={{ .Version }} -X github.com/censys/cencli/internal/version.Commit={{ .Commit }} -X github.com/censys/cencli/internal/version.Date={{ .Date }}
+    binary: censys
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+
+# Docker images are built in the workflow and attached as release assets.
+# Skip Docker publishing from GoReleaser to avoid registry dependencies.
+
+release:
+  draft: false
+  prerelease: auto
+
+changelog:
+  use: github
+

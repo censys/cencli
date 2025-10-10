@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Go binaries and build artifacts
+censys
+!censys/
+*.out
+*.test
+/ci
+
+# Data files
+*.json
+*.jsonl
+*.txt
+*.csv
+*.tsv
+
+# E2E: keep tests and fixtures committed
+!/cmd/cencli/e2e/**
+
+# Environment and config files
+.env

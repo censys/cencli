@@ -1,0 +1,30 @@
+Run a search query across Censys data. Queries must be written in the Censys Query
+Language.                                                                         
+
+Usage:
+  censys search <query> [flags]
+
+Examples:
+  censys search "host.ip: 1.1.1.1/16"
+  censys search --fields host.ip,host.location "host.services: (protocol=SSH and not port: 22)"
+  censys search --collection-id <your-collection-id> "host.services.protocol=SSH"
+  censys search --page-size 50 --max-pages 5 "cert.names=censys.com"
+  censys search --max-pages -1 "host.services.port: 443 and host.location.country: Germany"
+
+Flags:
+  -c, --collection-id string   collection to search within (optional)
+  -f, --fields strings         fields to return in response (optional)
+  -h, --help                   help for search
+  -p, --max-pages int          maximum number of pages to fetch (-1 for all pages) (default 1)
+  -o, --org-id string          override the configured organization ID
+  -n, --page-size int          number of results to return per page (default 100)
+  -s, --short                  render data through a configurable template
+
+Global Flags:
+      --debug                  enable debug logging
+      --no-color               disable ANSI colors and styles
+      --no-spinner             disable spinner during operations
+  -O, --output-format string   output format (json|yaml|ndjson|tree) (default "json")
+  -q, --quiet                  suppress non-essential output
+      --timeout duration       overall command timeout (e.g. 30s, 2m) (default 30s)
+

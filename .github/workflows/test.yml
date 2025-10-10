@@ -1,0 +1,57 @@
+name: Run Tests and Check Coverage
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.go'
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests-and-coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        id: go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Restore Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+          key: ${{ runner.os }}-gobuild-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-gobuild-${{ steps.go.outputs.go-version }}-
+
+      - name: Restore GOBIN (tool) cache
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: ${{ runner.os }}-gobin-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-gobin-
+
+      - name: Install tools
+        run: make tools
+
+      - name: Build binary
+        run: make censys
+
+      - name: Run tests with race detector
+        run: make test-race
+
+      - name: Check coverage
+        run: make cover-check

@@ -1,0 +1,25 @@
+{{#each this}}
+Certificate for: {{orange parsed.subject.common_name.[0]}}
+Issuer: {{blue parsed.issuer.organization.[0]}} ({{blue parsed.issuer.common_name.[0]}})
+Validity: {{blue parsed.validity_period.not_before}} → {{blue parsed.validity_period.not_after}}
+
+Fingerprints:
+  - SHA256: {{yellow fingerprint_sha256}}
+  - SHA1:   {{yellow fingerprint_sha1}}
+  - MD5:    {{yellow fingerprint_md5}}
+
+Subject Alternative Names:
+{{#each parsed.extensions.subject_alt_name.dns_names}}
+  - {{blue this}}
+{{/each}}
+
+CT Log Entries:
+{{#each ct.entries}}
+  - {{blue @key}} |  Added: {{blue added_to_ct_at}}
+{{/each}}
+
+Validation Level: {{blue validation_level}}
+Parse Status: {{blue parse_status}}
+
+------------------------------------------------------------
+{{/each}}

@@ -1,0 +1,133 @@
+name: Weekly Tag
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # Mondays at 05:00 UTC (midnight EST; DST not adjusted)
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to tag and release from'
+        required: true
+        default: 'main'
+
+permissions:
+  contents: write
+
+jobs:
+  # Prepare weekly release: choose branch, run tests/e2e, then tag.
+  weekly_prepare:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git fetch --all --tags
+
+      - name: Select branch for release (manual input or weekly main)
+        id: select
+        env:
+          REQ_BRANCH: ${{ github.event.inputs.branch }}
+        run: |
+          set -euo pipefail
+          # If manually dispatched, honor the requested branch
+          if [ -n "${REQ_BRANCH:-}" ]; then
+            branch="${REQ_BRANCH}"
+            if ! git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+              echo "No valid branch found to release";
+              echo "should_release=false" >> "$GITHUB_OUTPUT";
+              exit 0
+            fi
+            sha=$(git rev-parse "origin/${branch}")
+            echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+            echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Weekly auto-selection: use main if it has commits in the last 7 days
+          has_main=$(git log --since='7 days ago' --oneline origin/main | wc -l | tr -d ' ' || echo 0)
+          if [ "${has_main}" -eq 0 ]; then
+            echo "No commits in main in the last 7 days, skipping release";
+            echo "should_release=false" >> "$GITHUB_OUTPUT";
+            exit 0
+          fi
+          branch="main"
+          if ! git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+            echo "No valid branch found to release";
+            echo "should_release=false" >> "$GITHUB_OUTPUT";
+            exit 0
+          fi
+          sha=$(git rev-parse "origin/${branch}")
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout selected commit
+        if: steps.select.outputs.should_release == 'true'
+        run: |
+          git checkout ${{ steps.select.outputs.sha }}
+
+      - uses: actions/setup-go@v5
+        if: steps.select.outputs.should_release == 'true'
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install tools
+        if: steps.select.outputs.should_release == 'true'
+        run: make tools
+
+      - name: Run full build and tests
+        if: steps.select.outputs.should_release == 'true'
+        run: make all | cat
+
+      - name: Build binary and add to path
+        if: steps.select.outputs.should_release == 'true'
+        run: |
+          make censys
+          export PATH=$PATH:$(pwd)/bin
+
+      - name: Run E2E tests
+        if: steps.select.outputs.should_release == 'true'
+        env:
+          CENSYS_API_TOKEN: ${{ secrets.CENSYS_API_TOKEN }}
+          CENSYS_ORG_ID: ${{ secrets.CENSYS_ORG_ID }}
+          CENCLI_ENABLE_E2E_TESTS: 'true'
+        run: make e2e
+
+      - name: Compute next semver tag
+        id: tag
+        if: steps.select.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          last=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1 || true)
+          if [ -z "$last" ]; then
+            new_tag="v0.0.1"
+          else
+            v="${last#v}"
+            IFS='.' read -r maj min pat <<< "$v" || true
+            pat="${pat%%-*}"
+            if [ -z "${maj:-}" ] || [ -z "${min:-}" ] || [ -z "${pat:-}" ]; then
+              new_tag="v0.0.1"
+            else
+              new_tag="v${maj}.${min}.$((pat + 1))"
+            fi
+          fi
+          echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: steps.select.outputs.should_release == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          SHA: ${{ steps.select.outputs.sha }}
+          BRANCH: ${{ steps.select.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git tag -a "${TAG}" "${SHA}" -m "Automated weekly release ${TAG} from ${BRANCH}"
+          git push origin "${TAG}"

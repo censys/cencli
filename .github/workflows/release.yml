@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  goreleaser:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        id: go
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Restore Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+          key: ${{ runner.os }}-gobuild-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-gobuild-${{ steps.go.outputs.go-version }}-
+      - name: Restore GOBIN (tool) cache
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: ${{ runner.os }}-gobin-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-gobin-
+      - name: Install tools
+        run: make tools
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

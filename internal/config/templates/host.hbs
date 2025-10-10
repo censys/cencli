@@ -1,0 +1,22 @@
+{{#each this}}
+IP: {{orange ip}}
+ASN: {{blue autonomous_system.asn}} ({{blue autonomous_system.name}})
+Location: {{blue location.city}}, {{blue location.province}}, {{blue location.country}} ({{blue location.country_code}})
+
+{{#if matched_services}}
+Matched Services ({{yellow (length matched_services)}}):
+{{#each matched_services}}
+  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
+{{/each}}
+{{/if}}
+
+Services ({{yellow (length services)}}):
+{{#each services}}
+  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
+{{/each}}
+
+WHOIS Org: {{blue whois.organization.name}}
+Abuse: {{#each whois.organization.abuse_contacts}}{{blue email}}{{/each}}
+
+------------------------------------------------------------
+{{/each}}

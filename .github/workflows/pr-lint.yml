@@ -1,0 +1,63 @@
+name: PR - Lint
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.go'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        id: go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Restore Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+          key: ${{ runner.os }}-gobuild-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-gobuild-${{ steps.go.outputs.go-version }}-
+
+      - name: Restore golangci-lint cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/golangci-lint
+          key: ${{ runner.os }}-golangci-${{ hashFiles('.golangci.yml', '**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-golangci-
+
+      - name: Restore GOBIN (tool) cache
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: ${{ runner.os }}-gobin-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            ${{ runner.os }}-gobin-
+
+      - name: Install tools
+        run: make tools
+
+      - name: Run vet
+        run: make vet
+
+      - name: Run staticcheck
+        run: staticcheck ./...
+
+      - name: Run golangci-lint
+        run: make lint

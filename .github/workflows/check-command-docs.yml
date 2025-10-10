@@ -1,0 +1,114 @@
+name: PR - Check Doc Updates
+
+on:
+  pull_request:
+    paths:
+      - 'internal/command/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@46.0.1
+        with:
+          files: |
+            internal/command/**
+
+      - name: Check for missing documentation updates
+        id: check-docs
+        run: |
+          # Initialize variables
+          missing_docs=""
+          commands_changed=""
+          
+          # Get all changed files in internal/command/
+          changed_files="${{ steps.changed-files.outputs.all_changed_files }}"
+          
+          # Extract unique command names from changed files
+          # Pattern: internal/command/<command_name>/...
+          commands=$(echo "$changed_files" | tr ' ' '\n' | grep -E '^internal/command/[^/]+/' | sed -E 's|internal/command/([^/]+)/.*|\1|' | sort -u)
+          
+          if [ -z "$commands" ]; then
+            echo "No command directories changed"
+            exit 0
+          fi
+          
+          echo "Commands with changes detected:"
+          echo "$commands"
+          
+          # For each command, check if corresponding docs were updated
+          for cmd in $commands; do
+            # Skip non-command directories (base files, shared utilities, etc.)
+            if [ "$cmd" = "root" ] || [ "$cmd" = "template" ]; then
+              echo "Skipping non-user-facing command: $cmd"
+              continue
+            fi
+            
+            # Convert command name to uppercase for doc file
+            doc_file="docs/commands/$(echo "$cmd" | tr '[:lower:]' '[:upper:]').md"
+            
+            # Check if the doc file exists
+            if [ ! -f "$doc_file" ]; then
+              echo "Warning: No documentation file found at $doc_file"
+              continue
+            fi
+            
+            # Check if the doc file was modified in this PR
+            if ! echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "$doc_file"; then
+              echo "Documentation not updated for: $cmd"
+              commands_changed="$commands_changed\n- \`$cmd\` (internal/command/$cmd/) → [$doc_file]($doc_file)"
+              missing_docs="true"
+            else
+              echo "Documentation updated for: $cmd ✓"
+            fi
+          done
+          
+          # Set output for next step
+          if [ "$missing_docs" = "true" ]; then
+            echo "missing=true" >> $GITHUB_OUTPUT
+            echo "commands<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$commands_changed" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "missing=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment PR
+        if: steps.check-docs.outputs.missing == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find and delete any existing comment from this workflow
+          existing_comment=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[] | select(.author.login == "github-actions" and (.body | contains("📚 Documentation Reminder"))) | .id' | head -1)
+          
+          if [ -n "$existing_comment" ]; then
+            echo "Deleting existing comment: $existing_comment"
+            gh api --method DELETE /repos/${{ github.repository }}/issues/comments/$existing_comment
+          fi
+          
+          # Create the new comment
+          cat << 'EOF' > pr_comment.md
+          ## 📚 Documentation Reminder
+
+          This PR modifies command implementation files but doesn't update the corresponding documentation:
+
+          ${{ steps.check-docs.outputs.commands }}
+
+          **Action Required:**
+          - If your changes affect user-facing behavior (flags, output, functionality), please update the documentation files listed above.
+          - If your changes are internal only (refactoring, bug fixes with no behavior change), you can safely ignore this message.
+
+          ---
+          *This is an automated check to help keep our documentation in sync with code changes.*
+          EOF
+
+          gh pr comment ${{ github.event.pull_request.number }} --body-file pr_comment.md

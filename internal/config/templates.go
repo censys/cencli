@@ -1,0 +1,321 @@
+package config
+
+import (
+	"embed"
+	"encoding"
+	"errors"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+
+	"github.com/spf13/viper"
+
+	"github.com/censys/cencli/internal/pkg/cenclierrors"
+)
+
+//go:embed templates
+var defaultTemplates embed.FS
+
+const (
+	templateDir = "templates"
+)
+
+type TemplateEntity string
+
+const (
+	TemplateEntityHost         TemplateEntity = "host"
+	TemplateEntityCertificate  TemplateEntity = "certificate"
+	TemplateEntityWebProperty  TemplateEntity = "webproperty"
+	TemplateEntitySearchResult TemplateEntity = "searchresult"
+)
+
+var ErrUnsupportedTemplateEntity = fmt.Errorf("unsupported template entity type")
+
+func (a TemplateEntity) String() string {
+	return string(a)
+}
+
+type TemplateConfig struct {
+	Path string `yaml:"path" mapstructure:"path" doc:"Path to the template file"`
+}
+
+var _ encoding.TextUnmarshaler = (*TemplateEntity)(nil)
+
+func (a *TemplateEntity) UnmarshalText(text []byte) error {
+	s := string(text)
+	switch s {
+	case TemplateEntityHost.String():
+		*a = TemplateEntityHost
+	case TemplateEntityCertificate.String():
+		*a = TemplateEntityCertificate
+	case TemplateEntityWebProperty.String():
+		*a = TemplateEntityWebProperty
+	case TemplateEntitySearchResult.String():
+		*a = TemplateEntitySearchResult
+	default:
+		return fmt.Errorf("%w: %s", ErrUnsupportedTemplateEntity, s)
+	}
+	return nil
+}
+
+func (c *Config) GetTemplate(entity TemplateEntity) (TemplateConfig, TemplateNotFoundError) {
+	if _, ok := c.Templates[entity]; !ok {
+		return TemplateConfig{}, newTemplateNotRegisteredError(string(entity))
+	}
+	return c.Templates[entity], nil
+}
+
+// initTemplates validates existing template paths and creates default templates if needed.
+func initTemplates(dataDir string, currentConfig *Config) cenclierrors.CencliError {
+	templatesDir := filepath.Join(dataDir, templateDir)
+	// the templates directory always exists, even if unused
+	if err := ensureTemplatesDirectory(templatesDir); err != nil {
+		return err
+	}
+	// validate each template
+	for entity, template := range currentConfig.Templates {
+		// if the path is set, validate it exists
+		if template.Path != "" {
+			if err := validateExistingTemplatePath(entity, template); err != nil {
+				return err
+			}
+			continue
+		}
+		// the path needs to be set
+		// look for existing template files in templates directory
+		existingTemplate, err := findExistingTemplateInDir(entity, templatesDir)
+		if err != nil {
+			return err
+		}
+		// if an existing template is found, set the path
+		if existingTemplate != "" {
+			template.Path = filepath.Join(templatesDir, existingTemplate)
+			currentConfig.Templates[entity] = template
+			// Update viper with the template path
+			viper.Set(fmt.Sprintf("templates.%s.path", entity), template.Path)
+			continue
+		}
+		// if no existing template is found, copy the default template
+		defaultTemplateName, err := findDefaultTemplateInEmbedded(entity)
+		if err != nil {
+			return err
+		}
+		if err := copyDefaultTemplate(defaultTemplateName, templatesDir); err != nil {
+			return err
+		}
+		// set the path
+		template.Path = filepath.Join(templatesDir, defaultTemplateName)
+		currentConfig.Templates[entity] = template
+		viper.Set(fmt.Sprintf("templates.%s.path", entity), template.Path)
+	}
+
+	return nil
+}
+
+// validateExistingTemplatePath checks if a configured template path exists and is valid.
+func validateExistingTemplatePath(entity TemplateEntity, templateConfig TemplateConfig) cenclierrors.CencliError {
+	if _, err := os.Stat(templateConfig.Path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return newTemplateNotFoundError(string(entity), templateConfig.Path)
+		}
+		return cenclierrors.NewCencliError(fmt.Errorf("failed to check template file for entity '%s': %w", entity, err))
+	}
+
+	return nil
+}
+
+// findExistingTemplateInDir searches for template files matching the entity name pattern.
+func findExistingTemplateInDir(entity TemplateEntity, templatesDir string) (string, cenclierrors.CencliError) {
+	pattern := regexp.MustCompile(fmt.Sprintf("^%s\\.", regexp.QuoteMeta(string(entity))))
+
+	entries, err := os.ReadDir(templatesDir)
+	if err != nil {
+		return "", newTemplateDirectoryError("read", templatesDir, err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && pattern.MatchString(entry.Name()) {
+			return entry.Name(), nil
+		}
+	}
+
+	return "", nil
+}
+
+// findDefaultTemplateInEmbedded searches for default template files in the embedded FS.
+func findDefaultTemplateInEmbedded(entity TemplateEntity) (string, cenclierrors.CencliError) {
+	pattern := regexp.MustCompile(fmt.Sprintf("^%s\\.", regexp.QuoteMeta(string(entity))))
+
+	embeddedEntries, err := defaultTemplates.ReadDir(templateDir)
+	if err != nil {
+		return "", cenclierrors.NewCencliError(fmt.Errorf("failed to read embedded templates directory: %w", err))
+	}
+
+	for _, entry := range embeddedEntries {
+		if !entry.IsDir() && pattern.MatchString(entry.Name()) {
+			return entry.Name(), nil
+		}
+	}
+
+	return "", NewDefaultTemplateNotFoundError(string(entity))
+}
+
+// copyDefaultTemplate copies a default template from embedded FS to the templates directory.
+func copyDefaultTemplate(templateName, templatesDir string) cenclierrors.CencliError {
+	// for some reason filepath.Join doesn't work with embedded FS
+	// on windows, but path.Join does
+	defaultTemplate, err := defaultTemplates.ReadFile(path.Join(templateDir, templateName))
+	if err != nil {
+		return cenclierrors.NewCencliError(fmt.Errorf("failed to read default template '%s': %w", templateName, err))
+	}
+
+	templatePath := filepath.Join(templatesDir, templateName)
+	if err := os.WriteFile(templatePath, defaultTemplate, 0o644); err != nil {
+		return cenclierrors.NewCencliError(fmt.Errorf("failed to write template '%s': %w", templateName, err))
+	}
+
+	return nil
+}
+
+// ensureTemplatesDirectory creates the templates directory if it doesn't exist.
+func ensureTemplatesDirectory(templatesDir string) cenclierrors.CencliError {
+	if _, err := os.Stat(templatesDir); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if err := os.MkdirAll(templatesDir, 0o700); err != nil {
+				return newTemplateDirectoryError("create", templatesDir, err)
+			}
+		} else {
+			return newTemplateDirectoryError("check", templatesDir, err)
+		}
+	}
+	return nil
+}
+
+type TemplateNotRegisteredError interface {
+	cenclierrors.CencliError
+}
+
+type templateNotRegisteredError struct {
+	entity string
+}
+
+var _ TemplateNotRegisteredError = &templateNotRegisteredError{}
+
+func newTemplateNotRegisteredError(entity string) TemplateNotRegisteredError {
+	return &templateNotRegisteredError{
+		entity: entity,
+	}
+}
+
+func (e *templateNotRegisteredError) Error() string {
+	return fmt.Sprintf("template not registered for entity: %s", e.entity)
+}
+
+func (e *templateNotRegisteredError) Title() string {
+	return "Template Not Registered"
+}
+
+func (e *templateNotRegisteredError) ShouldPrintUsage() bool {
+	return false
+}
+
+type TemplateNotFoundError interface {
+	cenclierrors.CencliError
+}
+
+type templateNotFoundError struct {
+	entity string
+	path   string
+}
+
+var _ TemplateNotFoundError = &templateNotFoundError{}
+
+func newTemplateNotFoundError(entity, path string) TemplateNotFoundError {
+	return &templateNotFoundError{
+		entity: entity,
+		path:   path,
+	}
+}
+
+func (e *templateNotFoundError) Error() string {
+	return fmt.Sprintf("template file not found for entity '%s' at path: %s", e.entity, e.path)
+}
+
+func (e *templateNotFoundError) Title() string {
+	return "Template Not Found"
+}
+
+func (e *templateNotFoundError) ShouldPrintUsage() bool {
+	return false
+}
+
+type DefaultTemplateNotFoundError interface {
+	cenclierrors.CencliError
+	Entity() string
+}
+
+type defaultTemplateNotFoundError struct {
+	entity string
+}
+
+var _ DefaultTemplateNotFoundError = &defaultTemplateNotFoundError{}
+
+func NewDefaultTemplateNotFoundError(entity string) DefaultTemplateNotFoundError {
+	return &defaultTemplateNotFoundError{
+		entity: entity,
+	}
+}
+
+func (e *defaultTemplateNotFoundError) Entity() string {
+	return e.entity
+}
+
+func (e *defaultTemplateNotFoundError) Error() string {
+	return fmt.Sprintf("no default template found for entity: %s", e.entity)
+}
+
+func (e *defaultTemplateNotFoundError) Title() string {
+	return "Default Template Not Found"
+}
+
+func (e *defaultTemplateNotFoundError) ShouldPrintUsage() bool {
+	return false
+}
+
+type TemplateDirectoryError interface {
+	cenclierrors.CencliError
+}
+
+type templateDirectoryError struct {
+	operation string
+	path      string
+	err       error
+}
+
+var _ TemplateDirectoryError = &templateDirectoryError{}
+
+func newTemplateDirectoryError(operation, path string, err error) TemplateDirectoryError {
+	return &templateDirectoryError{
+		operation: operation,
+		path:      path,
+		err:       err,
+	}
+}
+
+func (e *templateDirectoryError) Error() string {
+	return fmt.Sprintf("failed to %s template directory: %v", e.operation, e.err)
+}
+
+func (e *templateDirectoryError) Title() string {
+	return "Template Directory Error"
+}
+
+func (e *templateDirectoryError) ShouldPrintUsage() bool {
+	return false
+}
+
+func (e *templateDirectoryError) Unwrap() error {
+	return e.err
+}

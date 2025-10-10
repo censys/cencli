@@ -1,0 +1,11 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "sql/schema.sql"
+    queries:
+      - "sql/globals.sql"
+      - "sql/auths.sql"
+    gen:
+      go:
+        package: "db"
+        out: "../../../gen/db"

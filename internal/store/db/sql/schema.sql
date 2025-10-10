@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS globals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS auths (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL
+);

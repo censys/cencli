@@ -1,0 +1,31 @@
+CensEye helps you identify assets on the internet that share a specific key-value pair   
+with the asset you are currently viewing. It extracts data values then shows how many    
+other assets present the same value. This allows you to pivot into related infrastructure
+and begin building queries based on shared characteristics.                              
+
+Usage:
+  censys censeye <asset> [flags]
+
+Examples:
+  censys censeye 8.8.8.8
+  censys censeye --rarity-min 2 --rarity-max 25 1.1.1.1
+  censys censeye --raw --include-url 192.168.1.1
+
+Flags:
+  -h, --help                help for censeye
+      --include-url         include a Platform search URL in the output
+  -i, --input-file string   file to read the assets from. Overrides the positional argument.
+  -I, --interactive         display results in an interactive table (TUI)
+  -o, --org-id string       override the configured organization ID
+  -M, --rarity-max int      maximum host count for interesting results (must be non-zero) (default 100)
+  -m, --rarity-min int      minimum host count for interesting results (must be non-zero) (default 2)
+  -r, --raw                 output raw data
+
+Global Flags:
+      --debug                  enable debug logging
+      --no-color               disable ANSI colors and styles
+      --no-spinner             disable spinner during operations
+  -O, --output-format string   output format (json|yaml|ndjson|tree) (default "json")
+  -q, --quiet                  suppress non-essential output
+      --timeout duration       overall command timeout (e.g. 30s, 2m) (default 30s)
+

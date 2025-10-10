@@ -1,0 +1,28 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  go: '1.25.1'
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - errorlint
+    - gofumpt
+    - goimports
+    - revive
+    - ineffassign
+    - gosimple
+    - typecheck
+    - gocritic
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+      - name: indent-error-flow
+      - name: if-return
+      - name: unexported-return
+      - name: var-naming

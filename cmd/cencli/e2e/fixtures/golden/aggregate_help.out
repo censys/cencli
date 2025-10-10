@@ -1,0 +1,28 @@
+Aggregate results for a Platform search query. This functionality is equivalent to the
+Report Builder in the Platform web UI.                                                
+
+Usage:
+  censys aggregate <query> <field> [flags]
+
+Examples:
+  censys aggregate "host.services.protocol=SSH" "host.services.port"
+  censys aggregate -c <your-collection-id> "services.service_name:HTTP" "services.port"
+
+Flags:
+  -c, --collection-id string    collection to aggregate within (optional)
+  -l, --count-by-level string   which document level's count is returned per term bucket
+  -f, --filter-by-query         whether aggregation results are limited to values that match the query
+  -h, --help                    help for aggregate
+  -i, --interactive             display results in an interactive table (TUI)
+  -n, --num-buckets int         number of buckets to split results into (default 25)
+  -o, --org-id string           override the configured organization ID
+  -r, --raw                     output raw data
+
+Global Flags:
+      --debug                  enable debug logging
+      --no-color               disable ANSI colors and styles
+      --no-spinner             disable spinner during operations
+  -O, --output-format string   output format (json|yaml|ndjson|tree) (default "json")
+  -q, --quiet                  suppress non-essential output
+      --timeout duration       overall command timeout (e.g. 30s, 2m) (default 30s)
+
