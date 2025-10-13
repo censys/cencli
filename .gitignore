@@ -7,6 +7,7 @@ censys
 *.out
 *.test
 /ci
+completions/
 
 # Data files
 *.json
@@ -14,9 +15,6 @@ censys
 *.txt
 *.csv
 *.tsv
-
-# E2E: keep tests and fixtures committed
-!/cmd/cencli/e2e/**
 
 # Environment and config files
 .env
