@@ -98,11 +98,11 @@ Coming soon, stay tuned!
 
 ### Configuration
 
-The `config` command allows you to manage your personal access tokens and organization IDs. See the [config command docs](./docs/commands/config.md) for more details.
+The `config` command allows you to manage your personal access tokens and organization IDs. See the [config command docs](./docs/commands/CONFIG.md) for more details.
 
 ### View
 
-The `view` command allows you to fetch information about a particular host, certificate, or web property asset at a particular point in time. See the [view command docs](./docs/commands/view.md) for more details.
+The `view` command allows you to fetch information about a particular host, certificate, or web property asset at a particular point in time. See the [view command docs](./docs/commands/VIEW.md) for more details.
 
 ![view](examples/view/view.gif)
 
@@ -110,25 +110,25 @@ You can also use the `--short` flag to render output using templates, which can 
 
 ### Search
 
-The `search` command allows you to perform Censys Platform searches, either globally or within a collection. See the [search command docs](./docs/commands/search.md) for more details.
+The `search` command allows you to perform Censys Platform searches, either globally or within a collection. See the [search command docs](./docs/commands/SEARCH.md) for more details.
 
 ![search](examples/search/search.gif)
 
 ### Aggregate
 
-The `aggregate` command allows you to perform aggregate queries, either globally or within a collection. See the [aggregate command docs](./docs/commands/aggregate.md) for more details.
+The `aggregate` command allows you to perform aggregate queries, either globally or within a collection. See the [aggregate command docs](./docs/commands/AGGREGATE.md) for more details.
 
 ![aggregate](examples/aggregate/aggregate.gif)
 
 ### Censeye
 
-The `censeye` command allows you to perform a Censeye scan on a host. See the [censeye command docs](./docs/commands/censeye.md) for more details.
+The `censeye` command allows you to perform a Censeye scan on a host. See the [censeye command docs](./docs/commands/CENSEYE.md) for more details.
 
 ![censeye](examples/censeye/censeye-interactive.gif)
 
 ### History
 
-This is a WIP. See the [history command docs](./docs/commands/history.md) for more details.
+This is a WIP. See the [history command docs](./docs/commands/HISTORY.md) for more details.
 
 ### Other Commands
 
