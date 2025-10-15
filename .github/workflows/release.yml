@@ -52,8 +52,6 @@ jobs:
           key: ${{ runner.os }}-gobin-${{ hashFiles('Makefile') }}
           restore-keys: |
             ${{ runner.os }}-gobin-
-      - name: Install tools
-        run: make tool
       - name: Generate completions
         run: make completions
       - name: Release
