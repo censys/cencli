@@ -8,15 +8,15 @@ The Censys CLI is available for free and paid users of the Censys Platform, with
 
 ## Quick Start
 
-Make sure you have [installed the binary](#installation) and it is on your `PATH`.
+Make sure you have `cencli` [installed](#installation) and it is on your `$PATH`.
 
-1. Run this command and follow the prompts to add your Censys Platform Personal Access Token
+1. Run this command and follow the prompts to add your Censys Platform personal access token:
 
     ```bash
     $ censys config auth add
     ```
 
-2. (Optional) Run this command and follow the prompts to add your Censys Platform Organization ID
+2. (Optional) Run this command and follow the prompts to add your Censys Platform organization ID:
 
     ```bash
     $ censys config org-id add
@@ -30,71 +30,55 @@ Make sure you have [installed the binary](#installation) and it is on your `PATH
 
 ## Installation
 
-Versioned releases of `cencli` for different platforms and architectures are available for download from the [releases page](https://github.com/censys/cencli/releases). After you've downloaded the binary, make sure you add it to your `PATH`.
+This section describes how to get `cencli` on your system.
 
-### Supported Platforms
+### Homebrew
 
-Each release includes pre-built binaries for the following operating systems and architectures:
+macOS and Linux users can install `cencli` using [Homebrew](https://brew.sh/):
 
-| Operating System | Architecture | Platform Notes |
-|------------------|--------------|----------------|
-| **Linux** | `amd64` (x86_64) | Servers, cloud VMs (AWS/GCP/Azure), containers, WSL2 |
-| **Linux** | `arm64` (aarch64) | AWS Graviton, ARM servers, Raspberry Pi 4+ |
-| **macOS** | `amd64` (x86_64) | Intel-based Macs (pre-2020) |
-| **macOS** | `arm64` (Apple Silicon) | M1/M2/M3/M4 Macs |
-| **Windows** | `amd64` (x86_64) | Most Windows PCs and servers |
-| **Windows** | `arm64` | ARM-based Windows devices |
+```bash
+$ brew install censys/tap/cencli
+```
 
-All binaries are statically compiled with no external dependencies, making them portable and easy to deploy.
+At the end of the installation process, `zsh` and `bash` completion scripts will be automatically generated and linked to your shell environment.
 
-### Other Installation Methods
+> [!WARNING]
+> Do NOT try to run `brew install censys`. This is a legacy formula that is no longer maintained and in no way affiliated with `cencli`.
 
-Alternatively, if you have Go 1.25+ installed, you can install `cencli` using the following command:
+For Windows users (and those who prefer not to use Homebrew), you will need to use different methods, which are described below.
+
+### Downloading the Binary
+
+Stable binaries for different platforms (macOS/Linux/Windows) and architectures (amd64/arm64) are available for download on the [releases page](https://github.com/censys/cencli/releases). After you've downloaded and extracted the binary, make sure you add it to your `$PATH`.
+
+> [!WARNING]
+> For macOS users, your system may complain about the executable being untrusted after you try to run it. To bypass this, you can run `xattr -dr com.apple.quarantine /path/to/binary` to remove the quarantine flag. If you prefer to do this through the GUI, go to `Settings > Privacy & Security` and allow the executable to be run.
+
+### Go Install
+
+If you have Go 1.25+ installed, you can install `cencli` using the following command:
 
 ```bash
 $ go install github.com/censys/cencli/cmd/cencli@latest
+# make sure to rename the executable to 'censys'
+$ mv "$(go env GOPATH)/bin/cencli" "$(go env GOPATH)/bin/censys"
 ```
 
-#### Homebrew
+### Build from source
 
-Coming soon, stay tuned!
+Ensure you have Go 1.25+ installed, and run the following commands:
 
-#### Docker
-
-Coming soon, stay tuned!
-
-#### Build from source
-
-1. Ensure you have Go 1.25+ installed
-
-2. Clone the repository
-
-    ```bash
-    $ git clone https://github.com/censys/cencli.git
-    $ cd cencli
-    ```
-
-3. Build the executable. This will produce a `censys` binary in the `bin/` directory
-
-    ```bash
-    $ make censys
-    ```
-
-4. Add this line to your shell configuration file (e.g. `~/.bashrc` or `~/.zshrc`)
-
-    ```bash
-    $ export PATH=$PATH:$(pwd)/bin
-    ```
-
-5. Verify the installation
-
-    ```bash
-    $ censys --help
-    ```
+```bash
+$ git clone https://github.com/censys/cencli.git
+$ cd cencli
+$ make censys # builds the executable to ./bin/censys
+$ export PATH=$PATH:$(pwd)/bin
+$ censys --help
+```
 
 ## Usage
 
-`cencli` supports various commands for accessing our internet map. You can run `censys --help` to see all available commands.
+`cencli` supports various commands for accessing our platform. Run `censys --help` to see all available commands.
 
 ### Configuration
 
@@ -132,6 +116,9 @@ This is a WIP. See the [history command docs](./docs/commands/HISTORY.md) for mo
 
 ### Other Commands
 
-- `censys completion <bash|zsh|fish|powershell>`: Generate shell completion scripts
-- `censys version`: Print version information
+- `$ censys completion <bash|zsh|fish|powershell>`: generates shell completion scripts
+- `$ censys version`: prints version information
 
+## License
+
+This project is licensed under the Apache License 2.0.

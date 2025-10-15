@@ -22,6 +22,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.CENSYS_ARTIFACT_RELEASER_APP_ID }}
+          private-key: ${{ secrets.CENSYS_ARTIFACT_RELEASER_PRIVATE_KEY }}
+          repositories: |
+            cencli
+            homebrew-tap
+
       - uses: actions/setup-go@v5
         id: go
         with:
@@ -43,12 +53,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gobin-
       - name: Install tools
-        run: make tools
-      - name: Install GoReleaser
+        run: make tool
+      - name: Generate completions
+        run: make completions
+      - name: Release
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: latest
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

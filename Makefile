@@ -17,17 +17,16 @@ STATICCHECK_VERSION ?= 2025.1.1
 # Packages to include in coverage (exclude generated mocks)
 PKGS := $(shell $(GO) list ./... | grep -vE 'gen/*')
 
+$(BINARY):
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 $(GO) build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/$(BINARY) cmd/cencli/main.go
+
+clean:
+	rm -f $(BUILD_DIR)/$(BINARY)
+
 build: clean $(BINARY)
 
 all: fmt lint build test
-
-# One-stop local verification similar to CI (no e2e)
-verify: fmt vet
-	staticcheck ./...
-	$(MAKE) lint
-	$(MAKE) build
-	$(MAKE) test-race
-	$(MAKE) cover-check
 
 tools:
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
@@ -42,14 +41,6 @@ sqlc:
 mocks:
 	@echo "Generating mocks using go:generate directives..."
 	go generate ./internal/...
-
-
-$(BINARY):
-	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 $(GO) build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/$(BINARY) cmd/cencli/main.go
-
-clean:
-	rm -f $(BUILD_DIR)/$(BINARY)
 
 fmt:
 	$(GO) fmt ./...
@@ -111,9 +102,6 @@ cover-report:
 	@echo ""
 	@echo "Threshold: $$(cat ci/coverage_min_percent 2>/dev/null || echo "0")%"
 
-docker:
-	docker build -t cencli:local .
-
 e2e: $(BINARY)
 	$(GO) test -v ./cmd/cencli/e2e
 
@@ -128,4 +116,10 @@ e2e-with-env: $(BINARY)
 		godotenv -f .env bash -c 'CENCLI_ENABLE_E2E_TESTS=true $(GO) test -v ./cmd/cencli/e2e'; \
 	fi
 
-.PHONY: all verify clean $(BINARY) tools sqlc fmt vet lint test test-race cover cover-html cover-check cover-update-threshold cover-report docker e2e mocks
+completions: $(BINARY)
+	@echo "Generating completions..."
+	@mkdir -p completions
+	$(BUILD_DIR)/$(BINARY) completion bash > completions/censys.bash
+	$(BUILD_DIR)/$(BINARY) completion zsh > completions/_censys
+
+.PHONY: all clean $(BINARY) tools sqlc fmt vet lint test test-race cover cover-html cover-check cover-update-threshold cover-report e2e mocks completions

@@ -1,10 +1,6 @@
 version: 2
 project_name: cencli
 
-before:
-  hooks:
-    - make sqlc
-
 builds:
   - id: cencli
     main: ./cmd/cencli/main.go
@@ -22,12 +18,11 @@ archives:
     files:
       - README.md
       - LICENSE*
+      - docs/*
+      - completions/*
 
 checksum:
   name_template: "checksums.txt"
-
-# Docker images are built in the workflow and attached as release assets.
-# Skip Docker publishing from GoReleaser to avoid registry dependencies.
 
 release:
   draft: false
@@ -36,3 +31,31 @@ release:
 changelog:
   use: github
 
+homebrew_casks:
+  - name: cencli
+    ids:
+      - default
+    binary: censys
+    repository:
+      owner: censys
+      name: homebrew-tap
+    url:
+      template: "https://github.com/censys/cencli/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+      verified: "github.com/censys/cencli/"
+    completions:
+      bash: completions/censys.bash
+      zsh: completions/_censys
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
+    description: "Censys CLI"
+    homepage: "https://github.com/censys/cencli"
+
+    # https://goreleaser.com/customization/homebrew_casks#signing-and-notarizing
+    hooks:
+      post:
+          install: |
+            if OS.mac?
+              system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/censys"]
+            end
+    
+    caveats: |
+      NOTE: the installed executable is 'censys', not 'cencli'. For more info, visit https://docs.censys.com/docs/platform-cli.
