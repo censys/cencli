@@ -77,7 +77,7 @@ func (c *organizationIDCommand) Run(cmd *cobra.Command, args []string) cenclierr
 	}
 
 	if errors.Is(err, store.ErrGlobalNotFound) || len(values) == 0 {
-		formatter.Printf("No organization IDs found. Use `%s` to add one.\n", cmd.CommandPath()+" add")
+		formatter.Printf(formatter.Stdout, "No organization IDs found. Use `%s` to add one.\n", cmd.CommandPath()+" add")
 		return nil
 	}
 
@@ -99,24 +99,24 @@ func (c *organizationIDCommand) runTable(cmd *cobra.Command, values []*store.Val
 			_, err := c.Store().DeleteValueForGlobal(cmd.Context(), selected.ID)
 			if err != nil {
 				if !c.Config().Quiet {
-					formatter.Printf("❌ Failed to delete global value: %v\n", err)
+					formatter.Printf(formatter.Stderr, "❌ Failed to delete global value: %v\n", err)
 				}
 				return
 			}
 			if !c.Config().Quiet {
-				formatter.Printf("✅ Deleted organization ID \"%s\"\n", selected.Description)
+				formatter.Printf(formatter.Stdout, "✅ Deleted organization ID \"%s\"\n", selected.Description)
 			}
 		},
 		func(selected *store.ValueForGlobal) {
 			err := c.Store().UpdateGlobalLastUsedAtToNow(cmd.Context(), selected.ID)
 			if err != nil {
 				if !c.Config().Quiet {
-					formatter.Printf("❌ Failed to update global selection: %v\n", err)
+					formatter.Printf(formatter.Stderr, "❌ Failed to update global selection: %v\n", err)
 				}
 				return
 			}
 			if !c.Config().Quiet {
-				formatter.Printf("✅ Selected new organization ID [%s]\n", selected.Description)
+				formatter.Printf(formatter.Stdout, "✅ Selected new organization ID [%s]\n", selected.Description)
 			}
 		},
 	)
@@ -125,7 +125,7 @@ func (c *organizationIDCommand) runTable(cmd *cobra.Command, values []*store.Val
 
 func (c *organizationIDCommand) printTable(cmd *cobra.Command, values []*store.ValueForGlobal) cenclierrors.CencliError {
 	for _, v := range values {
-		formatter.Printf("%s\n", v.String(false))
+		formatter.Printf(formatter.Stdout, "%s\n", v.String(false))
 	}
 	return nil
 }

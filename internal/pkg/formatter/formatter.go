@@ -22,24 +22,15 @@ func StderrIsTTY() bool {
 	return term.IsTTY(Stderr)
 }
 
-func Printf(format string, a ...any) {
-	fmt.Fprintf(Stdout, format, a...)
+func Printf(w io.Writer, format string, a ...any) {
+	fmt.Fprintf(w, format, a...)
 }
 
-func Print(a ...any) {
-	fmt.Fprint(Stdout, a...)
+func Println(w io.Writer, a ...any) {
+	fmt.Fprintln(w, a...)
 }
 
-func Println(a ...any) {
-	fmt.Fprintln(Stdout, a...)
-}
-
-func Printlnf(format string, a ...any) {
-	fmt.Fprintf(Stdout, format, a...)
-	fmt.Fprintln(Stdout)
-}
-
-// PrintByFormat prints data according to the provided output format.
+// PrintByFormat prints data to stdout according to the provided output format.
 // Falls back to JSON when format is unrecognized.
 func PrintByFormat(data any, format OutputFormat, colored bool) error {
 	switch format.String() {

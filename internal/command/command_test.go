@@ -80,7 +80,7 @@ func TestCommand(t *testing.T) {
 			cmd: func(commandContext *Context) Command {
 				command := newTestCommand(commandContext)
 				command.runFn = func(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-					formatter.Print("test")
+					formatter.Println(formatter.Stdout, "test")
 					return nil
 				}
 				return command
@@ -89,7 +89,7 @@ func TestCommand(t *testing.T) {
 			args:  []string{},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				assert.NoError(t, err)
-				assert.Equal(t, "test", stdout)
+				assert.Equal(t, "test\n", stdout)
 			},
 		},
 		{
@@ -97,7 +97,7 @@ func TestCommand(t *testing.T) {
 			cmd: func(commandContext *Context) Command {
 				command := newTestCommand(commandContext)
 				command.runFn = func(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-					formatter.Print(command.Config().OutputFormat)
+					formatter.Println(formatter.Stdout, command.Config().OutputFormat)
 					return nil
 				}
 				return command
@@ -106,7 +106,7 @@ func TestCommand(t *testing.T) {
 			store: func(ctrl *gomock.Controller) store.Store { return storemocks.NewMockStore(ctrl) },
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				assert.NoError(t, err)
-				assert.Equal(t, "json", stdout)
+				assert.Equal(t, "json\n", stdout)
 			},
 		},
 		{
@@ -114,7 +114,7 @@ func TestCommand(t *testing.T) {
 			cmd: func(commandContext *Context) Command {
 				command := newTestCommand(commandContext)
 				command.runFn = func(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-					formatter.Print(command.Config().OutputFormat)
+					formatter.Println(formatter.Stdout, command.Config().OutputFormat)
 					return nil
 				}
 				return command
@@ -124,7 +124,7 @@ func TestCommand(t *testing.T) {
 			store: func(ctrl *gomock.Controller) store.Store { return storemocks.NewMockStore(ctrl) },
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				assert.NoError(t, err)
-				assert.Equal(t, "yaml", stdout)
+				assert.Equal(t, "yaml\n", stdout)
 			},
 		},
 	}

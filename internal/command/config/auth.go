@@ -72,7 +72,7 @@ func (c *authCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencli
 	}
 
 	if errors.Is(err, store.ErrAuthNotFound) || len(values) == 0 {
-		formatter.Printf("No personal access tokens found. Use `%s` to add one.\n", cmd.CommandPath()+" add")
+		formatter.Printf(formatter.Stdout, "No personal access tokens found. Use `%s` to add one.\n", cmd.CommandPath()+" add")
 		return nil
 	}
 
@@ -94,24 +94,24 @@ func (c *authCommand) runTable(cmd *cobra.Command, values []*store.ValueForAuth)
 			_, err := c.Store().DeleteValueForAuth(cmd.Context(), selected.ID)
 			if err != nil {
 				if !c.Config().Quiet {
-					formatter.Printf("❌ Failed to delete auth value: %v\n", err)
+					formatter.Printf(formatter.Stderr, "❌ Failed to delete auth value: %v\n", err)
 				}
 				return
 			}
 			if !c.Config().Quiet {
-				formatter.Printf("✅ Deleted personal access token \"%s\"\n", selected.Description)
+				formatter.Printf(formatter.Stdout, "✅ Deleted personal access token \"%s\"\n", selected.Description)
 			}
 		},
 		func(selected *store.ValueForAuth) {
 			err := c.Store().UpdateAuthLastUsedAtToNow(cmd.Context(), selected.ID)
 			if err != nil {
 				if !c.Config().Quiet {
-					formatter.Printf("❌ Failed to update auth selection: %v\n", err)
+					formatter.Printf(formatter.Stderr, "❌ Failed to update auth selection: %v\n", err)
 				}
 				return
 			}
 			if !c.Config().Quiet {
-				formatter.Printf("✅ Selected new personal access token [%s]\n", selected.Description)
+				formatter.Printf(formatter.Stdout, "✅ Selected new personal access token [%s]\n", selected.Description)
 			}
 		},
 	)
@@ -120,7 +120,7 @@ func (c *authCommand) runTable(cmd *cobra.Command, values []*store.ValueForAuth)
 
 func (c *authCommand) printTable(cmd *cobra.Command, values []*store.ValueForAuth) cenclierrors.CencliError {
 	for _, v := range values {
-		formatter.Printf("%s\n", v.String(false))
+		formatter.Printf(formatter.Stdout, "%s\n", v.String(false))
 	}
 	return nil
 }

@@ -155,7 +155,7 @@ func (c *addOrganizationIDCommand) Run(cmd *cobra.Command, args []string) cencli
 			}
 		}
 
-		formatter.Printf("✅ Added new organization ID [%s]\n", name)
+		formatter.Printf(formatter.Stdout, "✅ Added new organization ID [%s]\n", name)
 		return nil
 	}
 
@@ -193,7 +193,7 @@ func (c *addOrganizationIDCommand) Run(cmd *cobra.Command, args []string) cencli
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to add global value: %w", err))
 	}
 
-	formatter.Printf("✅ Added new organization ID [%s]\n", name)
+	formatter.Printf(formatter.Stdout, "✅ Added new organization ID [%s]\n", name)
 	return nil
 }
 
@@ -231,7 +231,7 @@ func (c *deleteOrganizationIDCommand) Run(cmd *cobra.Command, args []string) cen
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to delete organization ID value: %w", err))
 	}
 
-	formatter.Printf("✅ Deleted organization ID [%s]\n", args[0])
+	formatter.Printf(formatter.Stdout, "✅ Deleted organization ID [%s]\n", args[0])
 	return nil
 }
 
@@ -278,7 +278,7 @@ func (c *activateOrganizationIDCommand) Run(cmd *cobra.Command, args []string) c
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to activate organization ID: %w", err))
 	}
 
-	formatter.Printf("✅ Activated organization ID [%s]\n", args[0])
+	formatter.Printf(formatter.Stdout, "✅ Activated organization ID [%s]\n", args[0])
 	return nil
 }
 
