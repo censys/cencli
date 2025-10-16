@@ -23,6 +23,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.CENSYS_ARTIFACT_RELEASER_APP_ID }}
+          private-key: ${{ secrets.CENSYS_ARTIFACT_RELEASER_PRIVATE_KEY }}
+          repositories: |
+            cencli
+
       - name: Set up Git
         run: |
           git config user.name "${GITHUB_ACTOR}"
@@ -124,10 +132,12 @@ jobs:
       - name: Create and push tag
         if: steps.select.outputs.should_release == 'true'
         env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.tag.outputs.tag }}
           SHA: ${{ steps.select.outputs.sha }}
           BRANCH: ${{ steps.select.outputs.branch }}
         run: |
           set -euo pipefail
           git tag -a "${TAG}" "${SHA}" -m "Automated weekly release ${TAG} from ${BRANCH}"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin "${TAG}"
