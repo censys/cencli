@@ -77,16 +77,37 @@ Enable debug logging.
 
 Enables verbose debug logging, including HTTP requests, response details, and internal state information. Useful for troubleshooting issues.
 
-### `--timeout`
+### `timeouts.http`
 
 Overall command timeout.
 
-**Flag:** `--timeout`  
-**Environment Variable:** `CENCLI_TIMEOUT`  
+**Flag:** `--timeout-http`  
+**Environment Variable:** `CENCLI_TIMEOUTS_HTTP`  
 **Type:** `duration`  
-**Default:** `30s`
+**Default:** `0`
 
-Sets the maximum time a command can run before timing out. Accepts duration strings like `30s`, `2m`, `1h30m`. Note that some commands do not respect this timeout and will run indefinitely (such as the configuration commands).
+Sets the maximum time an individual HTTP request can take before timing out. Accepts duration strings like `30s`, `2m`, `1h30m`. Set to `0` to disable.
+
+## Spinner
+
+The spinner configuration controls the spinner UI.
+
+### `spinner.disabled`
+
+Disable the spinner.
+
+**Flag:** `--no-spinner`  
+**Environment Variable:** `CENCLI_SPINNER_DISABLED`  
+**Type:** `boolean`  
+**Default:** `false`
+
+### `spinner.start-stopwatch-after`
+
+Show stopwatch in the spinner after this many seconds.
+
+**Environment Variable:** `CENCLI_SPINNER_START_STOPWATCH_AFTER`  
+**Type:** `integer`  
+**Default:** `5`
 
 ## Retry Strategy
 

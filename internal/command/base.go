@@ -1,7 +1,6 @@
 package command
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -18,8 +17,7 @@ import (
 // to "force" subcommands to implement required methods.
 type BaseCommand struct {
 	*Context
-	rootCmd       *cobra.Command
-	cancelTimeout context.CancelFunc // stores timeout cancel for cleanup
+	rootCmd *cobra.Command
 }
 
 func NewBaseCommand(cmdContext *Context) *BaseCommand {
@@ -59,8 +57,6 @@ func (b *BaseCommand) Examples() []string { return []string{} }
 
 func (b *BaseCommand) Long() string { return "" }
 
-func (b *BaseCommand) DisableTimeout() bool { return false }
-
 func (b *BaseCommand) init(cmd Command) {
 	b.rootCmd.PersistentPreRunE = func(cobraCmd *cobra.Command, args []string) error {
 		// unmarshal the config so it is available to the command
@@ -69,24 +65,6 @@ func (b *BaseCommand) init(cmd Command) {
 		}
 		// set the logger
 		b.SetLogger(applog.New(b.Config().Debug, nil))
-		// add the timeout if it is set and the command allows it
-		if !cmd.DisableTimeout() {
-			timeout := b.Config().Timeout
-			if timeout > 0 {
-				ctx, cancel := context.WithTimeout(cobraCmd.Context(), timeout)
-				// Store cancel function to be called in PersistentPostRunE
-				b.cancelTimeout = cancel
-				cobraCmd.SetContext(ctx)
-			}
-		}
-		return nil
-	}
-
-	// Ensure timeout context is cleaned up after command execution
-	b.rootCmd.PersistentPostRunE = func(cobraCmd *cobra.Command, args []string) error {
-		if b.cancelTimeout != nil {
-			b.cancelTimeout()
-		}
 		return nil
 	}
 }

@@ -1,0 +1,24 @@
+{{#each this}}
+Hostname: {{orange hostname}}
+Number of endpoints: {{blue (length endpoints)}}
+
+{{#each endpoints}}
+- IP: {{blue ip}}
+  Port: {{blue port}}
+  Status: {{blue http.status_code}} {{blue http.status_reason}}{{#if http.headers.Location.headers.[0]}} → {{blue http.headers.Location.headers.[0]}}{{/if}}
+  Server: {{blue http.headers.Server.headers.[0]}}
+  Scan Time: {{blue scan_time}}
+
+{{/each}}
+Labels:
+{{#each labels}}
+  - {{blue value}} (confidence {{yellow confidence}})
+{{/each}}
+
+Software:
+{{#each software}}
+  - {{blue vendor}} {{blue product}} (confidence {{yellow confidence}})
+{{/each}}
+
+------------------------------------------------------------
+{{/each}}

@@ -25,7 +25,6 @@ func (c *Command) Long() string {
 	return "Generate shell completion scripts for the Censys CLI. You can save the output to a file and source it in your shell configuration file.\n\nFor example, if you saved output to ~/.censys_zsh.sh, you can add 'source ~/.censys_zsh.sh' to your .zshrc."
 }
 
-func (c *Command) DisableTimeout() bool { return true }
 func (c *Command) Args() command.PositionalArgs {
 	return command.RangeArgs(1, 1)
 }

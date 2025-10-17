@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 
@@ -20,59 +19,35 @@ import (
 type Config struct {
 	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|ndjson|tree)"`
 	NoColor       bool                              `yaml:"no-color" mapstructure:"no-color" doc:"Disable ANSI colors and styles"`
-	NoSpinner     bool                              `yaml:"no-spinner" mapstructure:"no-spinner" doc:"Disable spinner during operations"`
+	Spinner       SpinnerConfig                     `yaml:"spinner" mapstructure:"spinner"`
 	Quiet         bool                              `yaml:"quiet" mapstructure:"quiet" doc:"Suppress non-essential output"`
 	Debug         bool                              `yaml:"debug" mapstructure:"debug"`
-	Timeout       time.Duration                     `yaml:"timeout" mapstructure:"timeout" doc:"Overall command timeout (e.g. 30s, 2m)"`
+	Timeouts      TimeoutConfig                     `yaml:"timeouts" mapstructure:"timeouts"`
 	RetryStrategy RetryStrategy                     `yaml:"retry-strategy" mapstructure:"retry-strategy"`
 	Templates     map[TemplateEntity]TemplateConfig `yaml:"templates" mapstructure:"templates"`
 	Search        SearchConfig                      `yaml:"search" mapstructure:"search"`
 	DefaultTZ     datetime.TimeZone                 `yaml:"default-tz" mapstructure:"default-tz" doc:"Default timezone for timestamps"`
 }
 
-// SearchConfig contains defaults for search pagination.
-type SearchConfig struct {
-	// PageSize sets the default number of results per page for search.
-	// Must be >= 1.
-	PageSize int64 `yaml:"page-size" mapstructure:"page-size" doc:"Default number of results per page (must be >= 1)"`
-	// MaxPages limits the number of pages fetched. Set to -1 for unlimited.
-	// 0 is invalid and will be rejected.
-	MaxPages int64 `yaml:"max-pages" mapstructure:"max-pages" doc:"Number of pages to fetch (max is 100)"`
-}
-
 var defaultConfig = &Config{
-	OutputFormat: formatter.OutputFormatJSON,
-	NoColor:      false,
-	NoSpinner:    false,
-	Quiet:        false,
-	Debug:        false,
-	Timeout:      30 * time.Second,
-	RetryStrategy: RetryStrategy{
-		MaxAttempts: 2,
-		BaseDelay:   500 * time.Millisecond,
-		MaxDelay:    30 * time.Second,
-		Backoff:     BackoffFixed,
-	},
-	DefaultTZ: datetime.TimeZoneUTC,
-	Templates: map[TemplateEntity]TemplateConfig{
-		// will be potentially updated at runtime
-		TemplateEntityHost:         {},
-		TemplateEntityCertificate:  {},
-		TemplateEntityWebProperty:  {},
-		TemplateEntitySearchResult: {},
-	},
-	Search: SearchConfig{
-		PageSize: 100,
-		MaxPages: 1,
-	},
+	OutputFormat:  formatter.OutputFormatJSON,
+	NoColor:       false,
+	Spinner:       defaultSpinnerConfig,
+	Quiet:         false,
+	Debug:         false,
+	Timeouts:      defaultTimeoutConfig,
+	RetryStrategy: defaultRetryStrategy,
+	DefaultTZ:     datetime.TimeZoneUTC,
+	Templates:     defaultTemplateConfig,
+	Search:        defaultSearchConfig,
 }
 
 const (
-	noColorKey   = "no-color"
-	noSpinnerKey = "no-spinner"
-	quietKey     = "quiet"
-	debugKey     = "debug"
-	timeoutKey   = "timeout"
+	noColorKey     = "no-color"
+	noSpinnerKey   = "no-spinner"
+	quietKey       = "quiet"
+	debugKey       = "debug"
+	timeoutHTTPKey = "timeout-http"
 )
 
 func New(dataDir string) (*Config, cenclierrors.CencliError) {
@@ -80,7 +55,10 @@ func New(dataDir string) (*Config, cenclierrors.CencliError) {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(dataDir)
 	viper.SetEnvPrefix("CENCLI")
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.SetEnvKeyReplacer(strings.NewReplacer(
+		".", "_",
+		"-", "_",
+	))
 	viper.AutomaticEnv()
 
 	configPath := filepath.Join(dataDir, "config.yaml")
@@ -137,10 +115,11 @@ func New(dataDir string) (*Config, cenclierrors.CencliError) {
 func (c *Config) Unmarshal() cenclierrors.CencliError {
 	hooks := mapstructure.ComposeDecodeHookFunc(
 		rejectNumericDurationHookFunc(),
+		rejectNegativeDurationHookFunc(),
+		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToUint64HookFunc(),
 		validateUint64HookFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
-		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 	)
 
@@ -157,7 +136,8 @@ func BindGlobalFlags(persistentFlags *pflag.FlagSet) error {
 	if err := addPersistentBoolAndBind(persistentFlags, noColorKey, false, "disable ANSI colors and styles", ""); err != nil {
 		return fmt.Errorf("failed to bind no-color flag: %w", err)
 	}
-	if err := addPersistentBoolAndBind(persistentFlags, noSpinnerKey, false, "disable spinner during operations", ""); err != nil {
+	// Bind no-spinner flag to spinner.disabled config path
+	if err := addPersistentBoolAndBindToPath(persistentFlags, noSpinnerKey, "spinner.disabled", defaultConfig.Spinner.Disabled, "disable spinner during operations", ""); err != nil {
 		return fmt.Errorf("failed to bind no-spinner flag: %w", err)
 	}
 	if err := addPersistentBoolAndBind(persistentFlags, quietKey, false, "suppress non-essential output", "q"); err != nil {
@@ -166,8 +146,9 @@ func BindGlobalFlags(persistentFlags *pflag.FlagSet) error {
 	if err := addPersistentBoolAndBind(persistentFlags, debugKey, false, "enable debug logging", ""); err != nil {
 		return fmt.Errorf("failed to bind debug flag: %w", err)
 	}
-	if err := addPersistentDurationAndBind(persistentFlags, timeoutKey, defaultConfig.Timeout, "overall command timeout (e.g. 30s, 2m)"); err != nil {
-		return fmt.Errorf("failed to bind timeout flag: %w", err)
+	// Bind timeout-http flag to timeouts.http config path
+	if err := addPersistentDurationAndBindToPath(persistentFlags, timeoutHTTPKey, "timeouts.http", defaultConfig.Timeouts.HTTP, "per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable"); err != nil {
+		return fmt.Errorf("failed to bind timeout-http flag: %w", err)
 	}
 	if err := formatter.BindOutputFormat(persistentFlags); err != nil {
 		return fmt.Errorf("failed to bind output-format flag: %w", err)
@@ -186,49 +167,20 @@ func addPersistentBoolAndBind(persistentFlags *pflag.FlagSet, name string, defau
 	return viper.BindPFlag(name, persistentFlags.Lookup(name))
 }
 
-// addPersistentDurationAndBind defines a persistent duration flag and binds it to viper using the same key.
-// Duration values accept forms like "30s", "2m", etc.
-func addPersistentDurationAndBind(persistentFlags *pflag.FlagSet, name string, defaultValue time.Duration, usage string) error {
-	persistentFlags.Duration(name, defaultValue, usage)
-	return viper.BindPFlag(name, persistentFlags.Lookup(name))
+// addPersistentBoolAndBindToPath defines a persistent boolean flag and binds it to viper using a different config path.
+// This is useful when the flag name doesn't match the nested config structure.
+func addPersistentBoolAndBindToPath(persistentFlags *pflag.FlagSet, flagName string, viperPath string, defaultValue bool, usage string, short string) error {
+	if short != "" {
+		persistentFlags.BoolP(flagName, short, defaultValue, usage)
+	} else {
+		persistentFlags.Bool(flagName, defaultValue, usage)
+	}
+	return viper.BindPFlag(viperPath, persistentFlags.Lookup(flagName))
 }
 
-// rejectNumericDurationHookFunc disallows numeric values for time.Duration fields,
-// forcing users to include an explicit unit (e.g., "30s", "2m").
-func rejectNumericDurationHookFunc() mapstructure.DecodeHookFuncType {
-	return func(from reflect.Type, to reflect.Type, data any) (any, error) {
-		if to == reflect.TypeOf(time.Duration(0)) {
-			switch from.Kind() {
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-				reflect.Float32, reflect.Float64:
-				return nil, fmt.Errorf("missing unit in duration")
-			}
-		}
-		return data, nil
-	}
-}
-
-// validateUint64HookFunc validates that values being decoded to uint64 are not negative.
-// This prevents negative values from wrapping around to large positive numbers.
-func validateUint64HookFunc() mapstructure.DecodeHookFuncType {
-	return func(from reflect.Type, to reflect.Type, data any) (any, error) {
-		if to.Kind() == reflect.Uint64 {
-			switch from.Kind() {
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				// Check if the signed integer is negative
-				val := reflect.ValueOf(data)
-				if val.Int() < 0 {
-					return nil, fmt.Errorf("value cannot be negative")
-				}
-			case reflect.Float32, reflect.Float64:
-				// Check if the float is negative
-				val := reflect.ValueOf(data)
-				if val.Float() < 0 {
-					return nil, fmt.Errorf("value cannot be negative")
-				}
-			}
-		}
-		return data, nil
-	}
+// addPersistentDurationAndBindToPath defines a persistent duration flag and binds it to viper using a different config path.
+// This is useful when the flag name doesn't match the nested config structure.
+func addPersistentDurationAndBindToPath(persistentFlags *pflag.FlagSet, flagName string, viperPath string, defaultValue time.Duration, usage string) error {
+	persistentFlags.Duration(flagName, defaultValue, usage)
+	return viper.BindPFlag(viperPath, persistentFlags.Lookup(flagName))
 }

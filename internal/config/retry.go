@@ -14,6 +14,13 @@ type RetryStrategy struct {
 	Backoff     BackoffType   `yaml:"backoff" mapstructure:"backoff" doc:"Backoff strategy (fixed|linear|exponential)"`
 }
 
+var defaultRetryStrategy = RetryStrategy{
+	MaxAttempts: 2,
+	BaseDelay:   500 * time.Millisecond,
+	MaxDelay:    30 * time.Second,
+	Backoff:     BackoffFixed,
+}
+
 type BackoffType string
 
 const (

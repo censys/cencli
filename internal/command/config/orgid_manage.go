@@ -46,7 +46,6 @@ func (c *addOrganizationIDCommand) Short() string { return "Add a new organizati
 func (c *addOrganizationIDCommand) Long() string {
 	return "Add a new organization ID value that will be used across API requests."
 }
-func (c *addOrganizationIDCommand) DisableTimeout() bool { return true }
 
 func (c *addOrganizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
@@ -207,9 +206,8 @@ func newDeleteOrganizationIDCommand(ctx *command.Context) *deleteOrganizationIDC
 	return &deleteOrganizationIDCommand{BaseCommand: command.NewBaseCommand(ctx)}
 }
 
-func (c *deleteOrganizationIDCommand) Use() string          { return "delete <id>" }
-func (c *deleteOrganizationIDCommand) Short() string        { return "Delete a stored organization ID" }
-func (c *deleteOrganizationIDCommand) DisableTimeout() bool { return true }
+func (c *deleteOrganizationIDCommand) Use() string   { return "delete <id>" }
+func (c *deleteOrganizationIDCommand) Short() string { return "Delete a stored organization ID" }
 
 func (c *deleteOrganizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
 
@@ -254,9 +252,8 @@ func newActivateOrganizationIDCommand(ctx *command.Context) *activateOrganizatio
 	return &activateOrganizationIDCommand{BaseCommand: command.NewBaseCommand(ctx)}
 }
 
-func (c *activateOrganizationIDCommand) Use() string          { return "activate <id>" }
-func (c *activateOrganizationIDCommand) Short() string        { return "Set the active organization ID" }
-func (c *activateOrganizationIDCommand) DisableTimeout() bool { return true }
+func (c *activateOrganizationIDCommand) Use() string   { return "activate <id>" }
+func (c *activateOrganizationIDCommand) Short() string { return "Set the active organization ID" }
 
 func (c *activateOrganizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
 

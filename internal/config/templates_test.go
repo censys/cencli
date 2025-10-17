@@ -10,6 +10,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestTemplatePathsWrittenToYAML tests that template paths are properly initialized
+// and written to the config.yaml file during config initialization.
+func TestTemplatePathsWrittenToYAML(t *testing.T) {
+	tempDir, cleanup := setupConfigTest(t)
+	defer cleanup()
+
+	cfg, err := New(tempDir)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// Verify templates were initialized with paths
+	require.Contains(t, cfg.Templates, TemplateEntityHost)
+	require.Contains(t, cfg.Templates, TemplateEntityCertificate)
+	require.Contains(t, cfg.Templates, TemplateEntityWebProperty)
+	require.Contains(t, cfg.Templates, TemplateEntitySearchResult)
+
+	// All template paths should be set
+	assert.NotEmpty(t, cfg.Templates[TemplateEntityHost].Path)
+	assert.NotEmpty(t, cfg.Templates[TemplateEntityCertificate].Path)
+	assert.NotEmpty(t, cfg.Templates[TemplateEntityWebProperty].Path)
+	assert.NotEmpty(t, cfg.Templates[TemplateEntitySearchResult].Path)
+
+	// Verify the config file contains the template paths
+	configPath := filepath.Join(tempDir, "config.yaml")
+	fileContent, readErr := os.ReadFile(configPath)
+	require.NoError(t, readErr)
+	configStr := string(fileContent)
+
+	// Check that templates section exists and has paths
+	assert.Contains(t, configStr, "templates:")
+	assert.Contains(t, configStr, "host:")
+	assert.Contains(t, configStr, "certificate:")
+	assert.Contains(t, configStr, "webproperty:")
+	assert.Contains(t, configStr, "searchresult:")
+	assert.Contains(t, configStr, "path:")
+	assert.Contains(t, configStr, "host.hbs")
+	assert.Contains(t, configStr, "certificate.hbs")
+	assert.Contains(t, configStr, "webproperty.hbs")
+	assert.Contains(t, configStr, "searchresult.hbs")
+
+	// Verify template files were created
+	templatesDir := filepath.Join(tempDir, "templates")
+	assert.DirExists(t, templatesDir)
+	assert.FileExists(t, filepath.Join(templatesDir, "host.hbs"))
+	assert.FileExists(t, filepath.Join(templatesDir, "certificate.hbs"))
+	assert.FileExists(t, filepath.Join(templatesDir, "webproperty.hbs"))
+	assert.FileExists(t, filepath.Join(templatesDir, "searchresult.hbs"))
+}
+
 func TestInitTemplates(t *testing.T) {
 	tests := []struct {
 		name           string

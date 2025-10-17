@@ -44,9 +44,14 @@ type censysSDKImpl struct {
 
 var _ Client = &censysSDKImpl{}
 
-func NewCensysSDK(ctx context.Context, ds store.Store, retryStrategy config.RetryStrategy) (Client, error) {
+func NewCensysSDK(
+	ctx context.Context,
+	ds store.Store,
+	httpRequestTimeout time.Duration,
+	retryStrategy config.RetryStrategy,
+) (Client, error) {
 	sdkOpts := []censys.SDKOption{
-		censys.WithClient(clienthttp.New(buildUserAgent())),
+		censys.WithClient(clienthttp.New(httpRequestTimeout, buildUserAgent())),
 	}
 
 	storedPAT, err := ds.GetLastUsedAuthByName(ctx, config.AuthName)
