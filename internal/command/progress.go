@@ -57,7 +57,7 @@ func (c *Context) startProgress(
 	logger *slog.Logger,
 	initialMessage string,
 ) (context.Context, func(error)) {
-	disableSpinner := c.config.NoSpinner || c.config.Quiet
+	disableSpinner := c.config.Spinner.Disabled || c.config.Quiet
 
 	pub, events := progress.NewChannelPublisher(0)
 	display := newProgressDisplay(ctx, logger, disableSpinner, initialMessage)

@@ -23,10 +23,10 @@ Flags:
   -s, --start string      start time
 
 Global Flags:
-      --debug                  enable debug logging
-      --no-color               disable ANSI colors and styles
-      --no-spinner             disable spinner during operations
-  -O, --output-format string   output format (json|yaml|ndjson|tree) (default "json")
-  -q, --quiet                  suppress non-essential output
-      --timeout duration       overall command timeout (e.g. 30s, 2m) (default 30s)
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|ndjson|tree) (default "json")
+  -q, --quiet                   suppress non-essential output
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
 

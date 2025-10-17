@@ -59,11 +59,6 @@ func (c *Command) Short() string {
 	return "Retrieve historical data for hosts, web properties, and certificates"
 }
 
-func (c *Command) DisableTimeout() bool {
-	// History API calls can take longer than the default timeout
-	return true
-}
-
 func (c *Command) Long() string {
 	return "Explore how hosts, web properties, and certificates have changed over time.\n\n" +
 		"Returns raw data showing events, observations, and snapshots for the specified time window.\n\n" +

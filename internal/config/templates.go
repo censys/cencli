@@ -41,6 +41,14 @@ type TemplateConfig struct {
 	Path string `yaml:"path" mapstructure:"path" doc:"Path to the template file"`
 }
 
+var defaultTemplateConfig = map[TemplateEntity]TemplateConfig{
+	// will be potentially updated at runtime
+	TemplateEntityHost:         {},
+	TemplateEntityCertificate:  {},
+	TemplateEntityWebProperty:  {},
+	TemplateEntitySearchResult: {},
+}
+
 var _ encoding.TextUnmarshaler = (*TemplateEntity)(nil)
 
 func (a *TemplateEntity) UnmarshalText(text []byte) error {

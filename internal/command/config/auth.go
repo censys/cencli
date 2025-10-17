@@ -34,10 +34,9 @@ func newAuthCommand(cmdContext *command.Context) *authCommand {
 	return cmd
 }
 
-func (c *authCommand) Use() string          { return "auth" }
-func (c *authCommand) Short() string        { return "Manage personal access token authentication" }
-func (c *authCommand) Long() string         { return "View and manage your personal access token values." }
-func (c *authCommand) DisableTimeout() bool { return true }
+func (c *authCommand) Use() string   { return "auth" }
+func (c *authCommand) Short() string { return "Manage personal access token authentication" }
+func (c *authCommand) Long() string  { return "View and manage your personal access token values." }
 
 func (c *authCommand) Init() error {
 	c.flags.accessible = flags.NewBoolFlag(

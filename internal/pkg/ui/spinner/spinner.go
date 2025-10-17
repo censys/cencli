@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/term"
@@ -39,8 +40,10 @@ type spinnerComponent struct {
 }
 
 type spinnerComponentOptions struct {
-	design  spinner.Spinner
-	message string
+	design             spinner.Spinner
+	message            string
+	stopwatchEnabled   bool
+	stopwatchStartSecs uint
 }
 
 // ComponentOption configures the spinner component behavior.
@@ -55,6 +58,13 @@ func WithDesign(design spinner.Spinner) ComponentOption {
 func WithMessage(message string) ComponentOption {
 	return func(o *spinnerComponentOptions) {
 		o.message = message
+	}
+}
+
+func WithStopwatch(startAfterSeconds uint) ComponentOption {
+	return func(o *spinnerComponentOptions) {
+		o.stopwatchEnabled = true
+		o.stopwatchStartSecs = startAfterSeconds
 	}
 }
 
@@ -92,16 +102,28 @@ func newSpinner(out io.Writer, opts ...ComponentOption) (startWithContext func(d
 		once:        sync.Once{},
 	}
 
-	return s.StartWithContext, s.Stop, s
+	// Wrap StartWithContext to pass the stopwatch options
+	startWrapper := func(done <-chan struct{}) {
+		s.startWithContext(done, spinnerOpts.stopwatchEnabled, spinnerOpts.stopwatchStartSecs)
+	}
+
+	return startWrapper, s.Stop, s
 }
 
-// StartWithContext stops the spinner when the context is done.
-func (s *spinnerComponent) StartWithContext(ctxDone <-chan struct{}) {
+// startWithContext stops the spinner when the context is done.
+func (s *spinnerComponent) startWithContext(ctxDone <-chan struct{}, stopwatchEnabled bool, stopwatchStartSecs uint) {
 	m := spinner.New()
 	m.Spinner = s.design
 
 	prog := tea.NewProgram(
-		model{spinner: m, done: s.done, message: s.message},
+		model{
+			spinner:            m,
+			done:               s.done,
+			message:            s.message,
+			stopwatchEnabled:   stopwatchEnabled,
+			stopwatchStartSecs: stopwatchStartSecs,
+			startTime:          time.Now(),
+		},
 		tea.WithoutSignalHandler(), // Let parent handle signals
 		tea.WithOutput(s.out),
 		tea.WithInput(nil), // Disable input to avoid capturing Ctrl-C
@@ -149,13 +171,21 @@ func (s *spinnerComponent) SetMessage(message string) {
 }
 
 type model struct {
-	spinner spinner.Model
-	message string
-	done    chan struct{}
+	spinner            spinner.Model
+	message            string
+	done               chan struct{}
+	stopwatchEnabled   bool
+	stopwatchStartSecs uint
+	startTime          time.Time
+	elapsedSeconds     uint
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.spinner.Tick, waitForDone(m.done))
+	cmds := []tea.Cmd{m.spinner.Tick, waitForDone(m.done)}
+	if m.stopwatchEnabled {
+		cmds = append(cmds, stopwatchTick())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -164,6 +194,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+	case stopwatchTickMsg:
+		if m.stopwatchEnabled {
+			elapsed := time.Since(m.startTime)
+			m.elapsedSeconds = uint(elapsed.Seconds())
+			return m, stopwatchTick()
+		}
+		return m, nil
 	case doneMsg:
 		return m, tea.Quit
 	case setMessageMsg:
@@ -174,7 +211,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	return fmt.Sprintf("\r%s %s", m.spinner.View(), m.message)
+	msg := m.message
+	if m.stopwatchEnabled && m.elapsedSeconds >= m.stopwatchStartSecs {
+		msg = fmt.Sprintf("%s (time elapsed: %ds)", m.message, m.elapsedSeconds)
+	}
+	return fmt.Sprintf("\r%s %s", m.spinner.View(), msg)
 }
 
 type doneMsg struct{}
@@ -187,6 +228,14 @@ func waitForDone(done chan struct{}) tea.Cmd {
 }
 
 type setMessageMsg struct{ text string }
+
+type stopwatchTickMsg struct{}
+
+func stopwatchTick() tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return stopwatchTickMsg{}
+	})
+}
 
 // StartWithHandle starts a spinner and returns a handle that can update the message and stop the spinner.
 func StartWithHandle(ctxDone <-chan struct{}, disabled bool, opts ...ComponentOption) Handle {

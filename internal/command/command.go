@@ -57,11 +57,6 @@ type Command interface {
 	// what you are trying to do.
 	// Not required to implement.
 	Init() error
-	// DisableTimeout returns whether the command should ignore the global timeout.
-	// By default, all commands respect the configured timeout.
-	// Override this to return true for commands that need to run indefinitely.
-	// Not required to implement.
-	DisableTimeout() bool
 	// Flags returns the underlying flag set for the command.
 	// Used for modifying a command's flags.
 	// Should not be implemented.

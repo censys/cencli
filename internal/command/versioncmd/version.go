@@ -30,10 +30,6 @@ func (c *Command) Args() command.PositionalArgs {
 	return command.RangeArgs(0, 0)
 }
 
-func (c *Command) DisableTimeout() bool {
-	return true
-}
-
 func (c *Command) Init() error {
 	return nil
 }

@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -66,48 +65,6 @@ func TestConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "template_paths_written_to_yaml",
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				// Verify templates were initialized with paths
-				require.Contains(t, cfg.Templates, TemplateEntityHost)
-				require.Contains(t, cfg.Templates, TemplateEntityCertificate)
-				require.Contains(t, cfg.Templates, TemplateEntityWebProperty)
-				require.Contains(t, cfg.Templates, TemplateEntitySearchResult)
-
-				// All template paths should be set
-				assert.NotEmpty(t, cfg.Templates[TemplateEntityHost].Path)
-				assert.NotEmpty(t, cfg.Templates[TemplateEntityCertificate].Path)
-				assert.NotEmpty(t, cfg.Templates[TemplateEntityWebProperty].Path)
-				assert.NotEmpty(t, cfg.Templates[TemplateEntitySearchResult].Path)
-
-				// Verify the config file contains the template paths
-				configPath := filepath.Join(tempDir, "config.yaml")
-				fileContent, err := os.ReadFile(configPath)
-				require.NoError(t, err)
-				configStr := string(fileContent)
-
-				// Check that templates section exists and has paths
-				assert.Contains(t, configStr, "templates:")
-				assert.Contains(t, configStr, "host:")
-				assert.Contains(t, configStr, "certificate:")
-				assert.Contains(t, configStr, "webproperty:")
-				assert.Contains(t, configStr, "searchresult:")
-				assert.Contains(t, configStr, "path:")
-				assert.Contains(t, configStr, "host.hbs")
-				assert.Contains(t, configStr, "certificate.hbs")
-				assert.Contains(t, configStr, "webproperty.hbs")
-				assert.Contains(t, configStr, "searchresult.hbs")
-
-				// Verify template files were created
-				templatesDir := filepath.Join(tempDir, "templates")
-				assert.DirExists(t, templatesDir)
-				assert.FileExists(t, filepath.Join(templatesDir, "host.hbs"))
-				assert.FileExists(t, filepath.Join(templatesDir, "certificate.hbs"))
-				assert.FileExists(t, filepath.Join(templatesDir, "webproperty.hbs"))
-				assert.FileExists(t, filepath.Join(templatesDir, "searchresult.hbs"))
-			},
-		},
-		{
 			name: "invalid_output_format",
 			setup: func(tempDir string) error {
 				configPath := filepath.Join(tempDir, "config.yaml")
@@ -116,59 +73,6 @@ func TestConfig(t *testing.T) {
 			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "invalid output format")
-			},
-		},
-		{
-			name: "valid_duration",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: 30s\n"), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, 30*time.Second, cfg.Timeout)
-			},
-		},
-		{
-			name: "integer_duration_rejected",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: 30\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "missing unit in duration")
-			},
-		},
-		{
-			name: "invalid_duration_string",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: \"30\"\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "missing unit in duration")
-			},
-		},
-		{
-			name: "custom_retry_strategy",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.backoff: fixed\n"), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, BackoffFixed, cfg.RetryStrategy.Backoff)
-			},
-		},
-		{
-			name: "invalid_backoff_type",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.backoff: invalid\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid backoff type")
 			},
 		},
 		{
@@ -211,168 +115,19 @@ func TestConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "viper_override_invalid_duration",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: 30s\n"), 0o644)
-			},
-			override: func() error {
-				viper.Set("timeout", 30) // numeric duration should be rejected
-				return nil
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				var invalidConfigErr InvalidConfigError
-				assert.ErrorAs(t, err, &invalidConfigErr)
-				assert.Contains(t, err.Error(), "missing unit in duration")
-			},
-		},
-		{
-			name: "viper_override_invalid_backoff",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.backoff: exponential\n"), 0o644)
-			},
-			override: func() error {
-				viper.Set("retry-strategy.backoff", "invalid")
-				return nil
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid backoff type")
-			},
-		},
-		{
-			name: "invalid_duration_format",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: invalid_duration\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				var invalidConfigErr InvalidConfigError
-				assert.ErrorAs(t, err, &invalidConfigErr)
-				assert.Contains(t, err.Error(), "failed to unmarshal config")
-			},
-		},
-		{
-			name: "negative_duration",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: -30s\n"), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				// Negative durations are technically valid in Go, just unusual
-				assert.Equal(t, -30*time.Second, cfg.Timeout)
-			},
-		},
-		{
-			name: "zero_duration",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: 0s\n"), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, time.Duration(0), cfg.Timeout)
-			},
-		},
-		{
-			name: "retry_config_invalid_max_attempts",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.max-attempts: -1\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				// Negative values are parsed but may be invalid at runtime
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "value cannot be negative")
-			},
-		},
-		{
-			name: "retry_config_invalid_base_delay",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.base-delay: invalid\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				var invalidConfigErr InvalidConfigError
-				assert.ErrorAs(t, err, &invalidConfigErr)
-				assert.Contains(t, err.Error(), "failed to unmarshal config")
-			},
-		},
-		{
-			name: "retry_config_numeric_base_delay",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.base-delay: 500\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				var invalidConfigErr InvalidConfigError
-				assert.ErrorAs(t, err, &invalidConfigErr)
-				assert.Contains(t, err.Error(), "missing unit in duration")
-			},
-		},
-		{
-			name: "retry_config_numeric_max_delay",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.max-delay: 30000\n"), 0o644)
-			},
-			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
-				var invalidConfigErr InvalidConfigError
-				assert.ErrorAs(t, err, &invalidConfigErr)
-				assert.Contains(t, err.Error(), "missing unit in duration")
-			},
-		},
-		{
-			name: "valid_retry_config_all_fields",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte(`retry-strategy:
-  max-attempts: 5
-  base-delay: 1s
-  max-delay: 60s
-  backoff: exponential
-`), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, uint64(5), cfg.RetryStrategy.MaxAttempts)
-				assert.Equal(t, 1*time.Second, cfg.RetryStrategy.BaseDelay)
-				assert.Equal(t, 60*time.Second, cfg.RetryStrategy.MaxDelay)
-				assert.Equal(t, BackoffExponential, cfg.RetryStrategy.Backoff)
-			},
-		},
-		{
-			name: "valid_linear_backoff",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.backoff: linear\n"), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, BackoffLinear, cfg.RetryStrategy.Backoff)
-			},
-		},
-		{
-			name: "valid_exponential_backoff",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("retry-strategy.backoff: exponential\n"), 0o644)
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, BackoffExponential, cfg.RetryStrategy.Backoff)
-			},
-		},
-		{
 			name: "all_boolean_flags_true",
 			setup: func(tempDir string) error {
 				configPath := filepath.Join(tempDir, "config.yaml")
 				return os.WriteFile(configPath, []byte(`no-color: true
-no-spinner: true
+spinner:
+  disabled: true
 quiet: true
 debug: true
 `), 0o644)
 			},
 			assert: func(t *testing.T, cfg *Config, tempDir string) {
 				assert.True(t, cfg.NoColor)
-				assert.True(t, cfg.NoSpinner)
+				assert.True(t, cfg.Spinner.Disabled)
 				assert.True(t, cfg.Quiet)
 				assert.True(t, cfg.Debug)
 			},
@@ -404,7 +159,6 @@ debug: false
 			assert: func(t *testing.T, cfg *Config, tempDir string) {
 				// Empty config file should still load defaults
 				assert.Equal(t, formatter.OutputFormatJSON, cfg.OutputFormat)
-				assert.Equal(t, 30*time.Second, cfg.Timeout)
 				assert.Equal(t, BackoffFixed, cfg.RetryStrategy.Backoff)
 				assert.Equal(t, uint64(2), cfg.RetryStrategy.MaxAttempts)
 			},
@@ -416,12 +170,10 @@ debug: false
 				return os.WriteFile(configPath, []byte(`# This is a comment
 output-format: yaml # inline comment
 # Another comment
-timeout: 45s
 `), 0o644)
 			},
 			assert: func(t *testing.T, cfg *Config, tempDir string) {
 				assert.Equal(t, formatter.OutputFormatYAML, cfg.OutputFormat)
-				assert.Equal(t, 45*time.Second, cfg.Timeout)
 			},
 		},
 		{
@@ -516,19 +268,6 @@ func TestConfigEnvironmentVariables(t *testing.T) {
 			assertErr: func(t *testing.T, err cenclierrors.CencliError) {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "invalid output format")
-			},
-		},
-		{
-			name: "env_override_timeout",
-			setup: func(tempDir string) error {
-				configPath := filepath.Join(tempDir, "config.yaml")
-				return os.WriteFile(configPath, []byte("timeout: 30s\n"), 0o644)
-			},
-			envVars: map[string]string{
-				"CENCLI_TIMEOUT": "60s",
-			},
-			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, 60*time.Second, cfg.Timeout)
 			},
 		},
 		{
@@ -631,13 +370,11 @@ func TestConfigDefaults(t *testing.T) {
 	// Assert all default values
 	assert.Equal(t, formatter.OutputFormatJSON, cfg.OutputFormat)
 	assert.False(t, cfg.NoColor)
-	assert.False(t, cfg.NoSpinner)
+	assert.False(t, cfg.Spinner.Disabled)
+	assert.Equal(t, uint64(5), cfg.Spinner.StartStopwatchAfterSeconds)
 	assert.False(t, cfg.Quiet)
 	assert.False(t, cfg.Debug)
-	assert.Equal(t, 30*time.Second, cfg.Timeout)
 	assert.Equal(t, uint64(2), cfg.RetryStrategy.MaxAttempts)
-	assert.Equal(t, 500*time.Millisecond, cfg.RetryStrategy.BaseDelay)
-	assert.Equal(t, 30*time.Second, cfg.RetryStrategy.MaxDelay)
 	assert.Equal(t, BackoffFixed, cfg.RetryStrategy.Backoff)
 
 	// Verify config file was created with correct content
@@ -676,8 +413,9 @@ func TestConfig_DocComments_InitialCreation(t *testing.T) {
 	assert.Contains(t, yamlStr, "# Default output format (json|yaml|ndjson|tree)")
 	assert.Contains(t, yamlStr, "# Disable ANSI colors and styles")
 	assert.Contains(t, yamlStr, "# Disable spinner during operations")
+	assert.Contains(t, yamlStr, "# Show stopwatch in the spinner after this many seconds")
 	assert.Contains(t, yamlStr, "# Suppress non-essential output")
-	assert.Contains(t, yamlStr, "# Overall command timeout (e.g. 30s, 2m)")
+	assert.Contains(t, yamlStr, "# Per-request timeout for HTTP requests")
 
 	// Verify nested struct comments
 	assert.Contains(t, yamlStr, "# Backoff strategy (fixed|linear|exponential)")
@@ -719,4 +457,36 @@ func TestConfig_DocComments_LineFormat(t *testing.T) {
 		}
 	}
 	assert.True(t, foundInlineComment, "Should have at least one inline comment")
+}
+
+// Helper functions for other tests
+
+func setupConfigTest(t *testing.T) (tempDir string, cleanup func()) {
+	t.Helper()
+
+	// Save original viper settings
+	originalSettings := viper.AllSettings()
+
+	// Create temp directory
+	tempDir = t.TempDir()
+
+	// Reset viper
+	viper.Reset()
+
+	// Return cleanup function
+	cleanup = func() {
+		viper.Reset()
+		for key, value := range originalSettings {
+			viper.Set(key, value)
+		}
+	}
+
+	return tempDir, cleanup
+}
+
+func writeConfigFile(t *testing.T, tempDir string, content string) {
+	t.Helper()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(content), 0o644)
+	require.NoError(t, err)
 }

@@ -10,7 +10,7 @@ type Client struct {
 	http.Client
 }
 
-func New(userAgent string) *Client {
+func New(requestTimeout time.Duration, userAgent string) *Client {
 	// Custom base transport tuned for CLI usage
 	base := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -32,8 +32,7 @@ func New(userAgent string) *Client {
 				RoundTripper: base,
 				userAgent:    userAgent,
 			},
-			// Rely on per-request contexts for cancellation. Keep transport-level safety timeouts above.
-			Timeout: 0,
+			Timeout: requestTimeout,
 		},
 	}
 }

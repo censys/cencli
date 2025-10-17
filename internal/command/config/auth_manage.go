@@ -40,10 +40,9 @@ func newAddAuthCommand(cmdContext *command.Context) *addAuthCommand {
 	return cmd
 }
 
-func (c *addAuthCommand) Use() string          { return "add" }
-func (c *addAuthCommand) Short() string        { return "Add a new personal access token" }
-func (c *addAuthCommand) Long() string         { return "Add a new personal access token for authentication." }
-func (c *addAuthCommand) DisableTimeout() bool { return true }
+func (c *addAuthCommand) Use() string   { return "add" }
+func (c *addAuthCommand) Short() string { return "Add a new personal access token" }
+func (c *addAuthCommand) Long() string  { return "Add a new personal access token for authentication." }
 
 func (c *addAuthCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
@@ -202,9 +201,8 @@ func newDeleteAuthCommand(ctx *command.Context) *deleteAuthCommand {
 	return &deleteAuthCommand{BaseCommand: command.NewBaseCommand(ctx)}
 }
 
-func (c *deleteAuthCommand) Use() string          { return "delete <id>" }
-func (c *deleteAuthCommand) Short() string        { return "Delete a personal access token" }
-func (c *deleteAuthCommand) DisableTimeout() bool { return true }
+func (c *deleteAuthCommand) Use() string   { return "delete <id>" }
+func (c *deleteAuthCommand) Short() string { return "Delete a personal access token" }
 
 func (c *deleteAuthCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
 
@@ -240,9 +238,8 @@ func newActivateAuthCommand(ctx *command.Context) *activateAuthCommand {
 	return &activateAuthCommand{BaseCommand: command.NewBaseCommand(ctx)}
 }
 
-func (c *activateAuthCommand) Use() string          { return "activate <id>" }
-func (c *activateAuthCommand) Short() string        { return "Set the active personal access token" }
-func (c *activateAuthCommand) DisableTimeout() bool { return true }
+func (c *activateAuthCommand) Use() string   { return "activate <id>" }
+func (c *activateAuthCommand) Short() string { return "Set the active personal access token" }
 
 func (c *activateAuthCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
 

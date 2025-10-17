@@ -41,7 +41,6 @@ func (c *organizationIDCommand) Short() string { return "Manage organization ID 
 func (c *organizationIDCommand) Long() string {
 	return "View and manage organization ID values that will be used across API requests."
 }
-func (c *organizationIDCommand) DisableTimeout() bool { return true }
 
 func (c *organizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
