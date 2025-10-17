@@ -1,0 +1,25 @@
+{{#each this}}
+{{#if host}}
+{{orange "host"}}
+
+IP: {{blue host.ip}}
+{{#if host.matched_services}}
+Matched Services ({{yellow (length host.matched_services)}}):
+{{#each host.matched_services}}
+  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
+{{/each}}
+{{/if}}
+{{/if}}
+{{#if certificate}}
+{{orange "certificate"}}
+
+Common Name: {{blue certificate.parsed.subject.common_name.[0]}}
+{{/if}}
+{{#if webproperty}}
+{{orange "webproperty"}}
+
+Hostname: {{blue webproperty.hostname}}
+{{/if}}
+
+------------------------------------------------------------
+{{/each}}

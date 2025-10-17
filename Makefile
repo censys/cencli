@@ -102,13 +102,16 @@ cover-report:
 	@echo ""
 	@echo "Threshold: $$(cat ci/coverage_min_percent 2>/dev/null || echo "0")%"
 
-e2e: $(BINARY)
+e2e-setup:
+	@cp internal/config/templates/* cmd/cencli/e2e/fixtures/templates/
+
+e2e: e2e-setup $(BINARY)
 	$(GO) test -v ./cmd/cencli/e2e
 
 # Run E2E tests with environment variables from .env
 # To run a specific fixture, use: make e2e-with-env FIXTURE=view/host-basic
 # To run all fixtures for a command, use: make e2e-with-env FIXTURE=view/help
-e2e-with-env: $(BINARY)
+e2e-with-env: e2e-setup $(BINARY)
 	@if [ -n "$(FIXTURE)" ]; then \
 		echo "Running E2E test for fixture: $(FIXTURE)"; \
 		godotenv -f .env bash -c 'CENCLI_ENABLE_E2E_TESTS=true $(GO) test -v ./cmd/cencli/e2e -run TestE2E/$(FIXTURE)'; \

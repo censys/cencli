@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/censys/cencli/cmd/cencli/e2e/fixtures/golden"
-	"github.com/censys/cencli/internal/config/templates"
+	"github.com/censys/cencli/cmd/cencli/e2e/fixtures/templates"
 )
 
 var viewFixtures = []Fixture{
