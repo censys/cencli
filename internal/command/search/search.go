@@ -177,7 +177,9 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"query", c.query,
 	)
 	if !c.Config().Quiet && !c.maxPages.IsPresent() {
-		formatter.Println(styles.GlobalStyles.Warning.Render("Warning: fetching all pages (--max-pages=-1). This may take a while and increase API usage."))
+		msg := styles.GlobalStyles.Warning.Render("Warning: fetching all pages (--max-pages=-1). This may take a while and increase API usage.")
+		formatter.Println(formatter.Stderr, msg)
+		logger.Debug("fetching all pages", "message", msg)
 	}
 
 	var result search.Result

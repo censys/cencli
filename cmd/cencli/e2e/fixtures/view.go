@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -29,8 +30,11 @@ var viewFixtures = []Fixture{
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assertGoldenFile(t, golden.ViewHelpStdout, stdout, 2)
-			assert.Contains(t, string(stderr), "Invalid Asset ID")
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			rest := strings.Join(lines[2:], "\n")
+			assertGoldenFile(t, golden.ViewHelpStdout, []byte(rest), 2)
 		},
 	},
 	// ================================================
@@ -95,8 +99,11 @@ var viewFixtures = []Fixture{
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assertGoldenFile(t, golden.ViewHelpStdout, stdout, 2)
-			assert.Contains(t, string(stderr), "Invalid Timestamp")
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Timestamp]", lines[0])
+			rest := strings.Join(lines[2:], "\n")
+			assertGoldenFile(t, golden.ViewHelpStdout, []byte(rest), 2)
 		},
 	},
 	// ================================================
@@ -148,8 +155,11 @@ var viewFixtures = []Fixture{
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assertGoldenFile(t, golden.ViewHelpStdout, stdout, 2)
-			assert.Contains(t, string(stderr), "At-Time Not Supported")
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[At-Time Not Supported]", lines[0])
+			rest := strings.Join(lines[2:], "\n")
+			assertGoldenFile(t, golden.ViewHelpStdout, []byte(rest), 2)
 		},
 	},
 	// ================================================

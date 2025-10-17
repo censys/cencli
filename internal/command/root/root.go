@@ -62,11 +62,11 @@ func (c *Command) Init() error {
 }
 
 func (c *Command) HelpFunc(cmd *cobra.Command, _ []string) {
-	formatter.Println(rootHelpFunc(cmd))
+	formatter.Println(formatter.Stdout, rootHelpFunc(cmd))
 }
 
 func (c *Command) UsageFunc(cmd *cobra.Command, _ []string) {
-	formatter.Println(rootHelpFunc(cmd))
+	formatter.Println(formatter.Stderr, rootHelpFunc(cmd))
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError { return nil }

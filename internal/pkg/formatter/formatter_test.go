@@ -114,21 +114,9 @@ func TestPrintln(t *testing.T) {
 	Stdout = &buf
 	defer func() { Stdout = old }()
 
-	Println("test message")
+	Println(Stdout, "test message")
 
 	assert.Equal(t, "test message\n", buf.String())
-}
-
-func TestPrintlnf(t *testing.T) {
-	// Capture output
-	var buf bytes.Buffer
-	old := Stdout
-	Stdout = &buf
-	defer func() { Stdout = old }()
-
-	Printlnf("Hello %s, you have %d messages", "Alice", 3)
-
-	assert.Equal(t, "Hello Alice, you have 3 messages\n", buf.String())
 }
 
 func TestPrintError(t *testing.T) {
@@ -150,19 +138,7 @@ func TestPrintf(t *testing.T) {
 	Stdout = &buf
 	defer func() { Stdout = old }()
 
-	Printf("Number: %d, String: %s", 42, "test")
+	Printf(Stdout, "Number: %d, String: %s", 42, "test")
 
 	assert.Equal(t, "Number: 42, String: test", buf.String())
-}
-
-func TestPrint(t *testing.T) {
-	// Capture output
-	var buf bytes.Buffer
-	old := Stdout
-	Stdout = &buf
-	defer func() { Stdout = old }()
-
-	Print("hello", " ", "world")
-
-	assert.Equal(t, "hello world", buf.String())
 }

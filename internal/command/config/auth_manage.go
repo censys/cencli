@@ -148,7 +148,7 @@ func (c *addAuthCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cen
 			}
 		}
 
-		formatter.Printf("✅ Added new personal access token [%s]\n", name)
+		formatter.Printf(formatter.Stdout, "✅ Added new personal access token [%s]\n", name)
 		return nil
 	}
 
@@ -187,7 +187,7 @@ func (c *addAuthCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cen
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to add auth value: %w", err))
 	}
 
-	formatter.Printf("✅ Added new personal access token [%s]\n", name)
+	formatter.Printf(formatter.Stdout, "✅ Added new personal access token [%s]\n", name)
 	return nil
 }
 
@@ -224,7 +224,7 @@ func (c *deleteAuthCommand) Run(cmd *cobra.Command, args []string) cenclierrors.
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to delete auth value: %w", err))
 	}
 
-	formatter.Printf("✅ Deleted personal access token [%s]\n", args[0])
+	formatter.Printf(formatter.Stdout, "✅ Deleted personal access token [%s]\n", args[0])
 	return nil
 }
 
@@ -261,7 +261,7 @@ func (c *activateAuthCommand) Run(cmd *cobra.Command, args []string) cenclierror
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to activate auth: %w", err))
 	}
 
-	formatter.Printf("✅ Activated personal access token [%s]\n", args[0])
+	formatter.Printf(formatter.Stdout, "✅ Activated personal access token [%s]\n", args[0])
 	return nil
 }
 

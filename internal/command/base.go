@@ -44,11 +44,11 @@ func (b *BaseCommand) AddSubCommands(cmds ...Command) error {
 func (b *BaseCommand) PostRun(cmd *cobra.Command, args []string) cenclierrors.CencliError { return nil }
 
 func (b *BaseCommand) HelpFunc(cmd *cobra.Command, examples []string) {
-	formatter.Println(helpTemplate(cmd, examples))
+	formatter.Println(formatter.Stdout, helpTemplate(cmd, examples))
 }
 
 func (b *BaseCommand) UsageFunc(cmd *cobra.Command, examples []string) {
-	formatter.Println(usageTemplate(cmd, examples))
+	formatter.Println(formatter.Stderr, usageTemplate(cmd, examples))
 }
 
 func (b *BaseCommand) Init() error { return nil }
