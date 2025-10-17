@@ -43,7 +43,7 @@ type spinnerComponentOptions struct {
 	design             spinner.Spinner
 	message            string
 	stopwatchEnabled   bool
-	stopwatchStartSecs uint
+	stopwatchStartSecs uint64
 }
 
 // ComponentOption configures the spinner component behavior.
@@ -61,7 +61,7 @@ func WithMessage(message string) ComponentOption {
 	}
 }
 
-func WithStopwatch(startAfterSeconds uint) ComponentOption {
+func WithStopwatch(startAfterSeconds uint64) ComponentOption {
 	return func(o *spinnerComponentOptions) {
 		o.stopwatchEnabled = true
 		o.stopwatchStartSecs = startAfterSeconds
@@ -111,7 +111,7 @@ func newSpinner(out io.Writer, opts ...ComponentOption) (startWithContext func(d
 }
 
 // startWithContext stops the spinner when the context is done.
-func (s *spinnerComponent) startWithContext(ctxDone <-chan struct{}, stopwatchEnabled bool, stopwatchStartSecs uint) {
+func (s *spinnerComponent) startWithContext(ctxDone <-chan struct{}, stopwatchEnabled bool, stopwatchStartSecs uint64) {
 	m := spinner.New()
 	m.Spinner = s.design
 
@@ -175,9 +175,9 @@ type model struct {
 	message            string
 	done               chan struct{}
 	stopwatchEnabled   bool
-	stopwatchStartSecs uint
+	stopwatchStartSecs uint64
 	startTime          time.Time
-	elapsedSeconds     uint
+	elapsedSeconds     uint64
 }
 
 func (m model) Init() tea.Cmd {
@@ -197,7 +197,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stopwatchTickMsg:
 		if m.stopwatchEnabled {
 			elapsed := time.Since(m.startTime)
-			m.elapsedSeconds = uint(elapsed.Seconds())
+			m.elapsedSeconds = uint64(elapsed.Seconds())
 			return m, stopwatchTick()
 		}
 		return m, nil

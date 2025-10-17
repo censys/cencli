@@ -20,12 +20,22 @@ type progressDisplay struct {
 // newProgressDisplay creates a progress display that shows a spinner (if enabled) and logs events.
 // The spinner is only shown when disableSpinner is false (interactive mode).
 // Progress events are always logged at debug level regardless of spinner state.
-func newProgressDisplay(ctx context.Context, log *slog.Logger, disableSpinner bool, initialMessage string) progressDisplay {
+func newProgressDisplay(
+	ctx context.Context,
+	log *slog.Logger,
+	disableSpinner bool,
+	initialMessage string,
+	stopwatchAfterSeconds uint64,
+) progressDisplay {
 	handle := spinner.NewNoopHandle()
-	if !disableSpinner && initialMessage != "" {
-		handle = spinner.StartWithHandle(ctx.Done(), false, spinner.WithMessage(initialMessage))
-	} else if !disableSpinner {
-		handle = spinner.StartWithHandle(ctx.Done(), false)
+	spinnerOpts := []spinner.ComponentOption{
+		spinner.WithStopwatch(stopwatchAfterSeconds),
+	}
+	if initialMessage != "" {
+		spinnerOpts = append(spinnerOpts, spinner.WithMessage(initialMessage))
+	}
+	if !disableSpinner {
+		handle = spinner.StartWithHandle(ctx.Done(), false, spinnerOpts...)
 	}
 	return progressDisplay{handle: handle, disableSpinner: disableSpinner, logger: log}
 }
@@ -60,7 +70,7 @@ func (c *Context) startProgress(
 	disableSpinner := c.config.Spinner.Disabled || c.config.Quiet
 
 	pub, events := progress.NewChannelPublisher(0)
-	display := newProgressDisplay(ctx, logger, disableSpinner, initialMessage)
+	display := newProgressDisplay(ctx, logger, disableSpinner, initialMessage, c.config.Spinner.StartStopwatchAfterSeconds)
 
 	derived := progress.WithPublisher(ctx, pub)
 
