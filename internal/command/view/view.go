@@ -64,7 +64,7 @@ func (c *Command) Short() string {
 }
 
 func (c *Command) Long() string {
-	return `Retrieve information about hosts, certificates, and web properties. Supports defanged IPs / URLs.`
+	return "Retrieve information about hosts, certificates, and web properties.\nSupports defanged IPs / URLs."
 }
 
 func (c *Command) Examples() []string {

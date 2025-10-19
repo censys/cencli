@@ -50,8 +50,6 @@ Flags:
 
 Additional help topics:
   root test       test short
-
-Use "root [command] --help" for more information.
 `,
 		},
 	}

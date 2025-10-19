@@ -58,7 +58,7 @@ func TestRootHelpFunc_WithSubcommands(t *testing.T) {
 		t.Fatalf("RootCommandToCobra: %v", cErr)
 	}
 
-	out := stripANSI(rootHelpFunc(cobraCmd))
+	out := stripANSI(rootHelpFunc(formatter.Stdout, cobraCmd))
 
 	if !strings.Contains(out, "censys - The Censys CLI") {
 		t.Fatalf("expected welcome header in help output, got: %s", out)
@@ -76,7 +76,7 @@ func TestRootHelpFunc_NoSubcommands(t *testing.T) {
 	cobraCmd, _ := command.RootCommandToCobra(&Command{BaseCommand: command.NewBaseCommand(command.NewCommandContext(&config.Config{}, nil))})
 	// Remove children
 	cobraCmd.ResetCommands()
-	out := stripANSI(rootHelpFunc(cobraCmd))
+	out := stripANSI(rootHelpFunc(formatter.Stdout, cobraCmd))
 	if strings.Contains(out, "Available Commands:") {
 		t.Fatalf("did not expect Available Commands section when none exist, got: %s", out)
 	}

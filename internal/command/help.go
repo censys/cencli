@@ -29,9 +29,9 @@ func usageTemplate(cmd *cobra.Command, examples []string) string {
 		parts := strings.SplitN(cmdPath, " ", 2)
 		formattedPath := styles.GlobalStyles.Signature.Render(parts[0])
 		if len(parts) > 1 {
-			formattedPath += " " + parts[1]
+			formattedPath += " " + styles.GlobalStyles.Primary.Render(parts[1])
 		}
-		b.WriteString("  " + formattedPath + " [command]\n")
+		b.WriteString("  " + formattedPath + " " + styles.GlobalStyles.Secondary.Render("[command]") + "\n")
 	}
 	if len(examples) > 0 {
 		b.WriteString("\n" + styles.GlobalStyles.Info.Render("Examples:") + "\n")
@@ -49,7 +49,7 @@ func usageTemplate(cmd *cobra.Command, examples []string) string {
 					name := fmt.Sprintf("%-*s", cmd.NamePadding(), c.Name())
 					fmt.Fprintf(&b, "  %s %s\n",
 						styles.GlobalStyles.Signature.Render(name),
-						styles.GlobalStyles.Tertiary.Render(c.Short))
+						styles.GlobalStyles.Secondary.Render(c.Short))
 				}
 			}
 		} else {
@@ -93,12 +93,6 @@ func usageTemplate(cmd *cobra.Command, examples []string) string {
 			}
 		}
 	}
-	if cmd.HasAvailableSubCommands() {
-		b.WriteString("\n")
-		b.WriteString(styles.GlobalStyles.Secondary.Render("Use \""))
-		b.WriteString(styles.GlobalStyles.Signature.Render(cmd.CommandPath() + " [command] --help"))
-		b.WriteString(styles.GlobalStyles.Secondary.Render("\" for more information.") + "\n")
-	}
 	return b.String()
 }
 
@@ -122,26 +116,51 @@ func helpTemplate(cmd *cobra.Command, examples []string) string {
 
 func useLine(cmd *cobra.Command) string {
 	useLine := cmd.UseLine()
-	parts := strings.SplitN(useLine, " ", 2)
-	rootCmdStr := styles.GlobalStyles.Signature.Render(parts[0])
-	if len(parts) > 1 {
-		return rootCmdStr + " " + parts[1]
+	parts := strings.Fields(useLine)
+	if len(parts) == 0 {
+		return ""
 	}
-	return rootCmdStr
+	rootCmdStr := styles.GlobalStyles.Signature.Render(parts[0])
+	if len(parts) == 1 {
+		return rootCmdStr
+	}
+	subCmdStr := styles.GlobalStyles.Primary.Render(parts[1])
+	if len(parts) > 2 {
+		rest := styles.GlobalStyles.Secondary.Render(strings.Join(parts[2:], " "))
+		return fmt.Sprintf("%s %s %s", rootCmdStr, subCmdStr, rest)
+	}
+	return fmt.Sprintf("%s %s", rootCmdStr, subCmdStr)
 }
 
 func renderExampleLine(cmdPath, example string) string {
 	parts := strings.SplitN(cmdPath, " ", 2)
-	styledPath := styles.GlobalStyles.Signature.Render(parts[0])
+	base := styles.GlobalStyles.Signature.Render(parts[0])
+	subcommand := ""
 	if len(parts) > 1 {
-		styledPath += " " + parts[1]
+		subcommand = styles.GlobalStyles.Primary.Render(parts[1])
 	}
-	if commentIdx := strings.Index(example, "#"); commentIdx >= 0 {
-		beforeComment := example[:commentIdx]
-		comment := example[commentIdx:]
-		return styledPath + " " + beforeComment + styles.GlobalStyles.Comment.Render(comment)
+
+	commentIdx := strings.Index(example, "#")
+	var beforeComment, comment string
+	if commentIdx >= 0 {
+		beforeComment = example[:commentIdx]
+		comment = styles.GlobalStyles.Comment.Render(example[commentIdx:])
+	} else {
+		beforeComment = example
 	}
-	return styledPath + " " + example
+
+	beforeComment = styles.GlobalStyles.Secondary.Render(strings.TrimSpace(beforeComment))
+
+	if subcommand != "" {
+		if comment != "" {
+			return fmt.Sprintf("%s %s %s", base, subcommand, beforeComment+" "+comment)
+		}
+		return fmt.Sprintf("%s %s %s", base, subcommand, beforeComment)
+	}
+	if comment != "" {
+		return fmt.Sprintf("%s %s", base, beforeComment+" "+comment)
+	}
+	return fmt.Sprintf("%s %s", base, beforeComment)
 }
 
 // =============================================================================

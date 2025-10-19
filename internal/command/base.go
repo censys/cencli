@@ -9,6 +9,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	applog "github.com/censys/cencli/internal/pkg/log"
+	"github.com/censys/cencli/internal/pkg/styles"
 )
 
 // BaseCommand is what each Command implementation must embed.
@@ -44,10 +45,18 @@ func (b *BaseCommand) AddSubCommands(cmds ...Command) error {
 func (b *BaseCommand) PostRun(cmd *cobra.Command, args []string) cenclierrors.CencliError { return nil }
 
 func (b *BaseCommand) HelpFunc(cmd *cobra.Command, examples []string) {
+	if !formatter.StdoutIsTTY() {
+		restore := styles.TemporarilyDisableStyles()
+		defer restore()
+	}
 	formatter.Println(formatter.Stdout, helpTemplate(cmd, examples))
 }
 
 func (b *BaseCommand) UsageFunc(cmd *cobra.Command, examples []string) {
+	if !formatter.StderrIsTTY() {
+		restore := styles.TemporarilyDisableStyles()
+		defer restore()
+	}
 	formatter.Println(formatter.Stderr, usageTemplate(cmd, examples))
 }
 

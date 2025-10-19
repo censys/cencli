@@ -11,6 +11,7 @@ import (
 	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
+	"github.com/censys/cencli/internal/pkg/censyscopy"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/ui/form"
@@ -161,7 +162,7 @@ func (c *addAuthCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cen
 				huh.NewInput().
 					EchoMode(huh.EchoModePassword).
 					Title("Enter a new personal access token").
-					Description("Enter your personal access token value").
+					Description(censyscopy.DocumentationPAT(formatter.Stdout)).
 					Value(&value).
 					Validate(form.NonEmpty("token value cannot be empty")),
 				huh.NewInput().

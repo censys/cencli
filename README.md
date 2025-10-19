@@ -90,7 +90,7 @@ The `view` command allows you to fetch information about a particular host, cert
 
 ![view](examples/view/view.gif)
 
-You can also use the `--short` flag to render output using templates, which can be customized. See the [templating documentation](./docs/commands/view.md#templates) for more details.
+You can also use the `--short` flag to render output using templates, which can be customized. See the [templating documentation](./docs/commands/VIEW.md#templates) for more details.
 
 ### Search
 

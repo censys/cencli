@@ -2,6 +2,7 @@ package root
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ import (
 	"github.com/censys/cencli/internal/command/view"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
+	"github.com/censys/cencli/internal/pkg/censyscopy"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
 	"github.com/censys/cencli/internal/pkg/tape"
@@ -62,11 +64,19 @@ func (c *Command) Init() error {
 }
 
 func (c *Command) HelpFunc(cmd *cobra.Command, _ []string) {
-	formatter.Println(formatter.Stdout, rootHelpFunc(cmd))
+	if !formatter.StdoutIsTTY() {
+		restore := styles.TemporarilyDisableStyles()
+		defer restore()
+	}
+	formatter.Println(formatter.Stdout, rootHelpFunc(formatter.Stdout, cmd))
 }
 
 func (c *Command) UsageFunc(cmd *cobra.Command, _ []string) {
-	formatter.Println(formatter.Stderr, rootHelpFunc(cmd))
+	if !formatter.StderrIsTTY() {
+		restore := styles.TemporarilyDisableStyles()
+		defer restore()
+	}
+	formatter.Println(formatter.Stderr, rootHelpFunc(formatter.Stderr, cmd))
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError { return nil }
@@ -80,13 +90,15 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 }
 
 // rootHelpFunc renders a special welcome message and command list for the root command.
-func rootHelpFunc(cmd *cobra.Command) string {
+// Takes a writer to determine if the output is a TTY for link rendering.
+func rootHelpFunc(w io.Writer, cmd *cobra.Command) string {
 	var b strings.Builder
 
 	// Welcome message
-	b.WriteString(styles.GlobalStyles.Signature.Render("censys - The Censys CLI") + "\n\n")
-	b.WriteString(styles.GlobalStyles.Secondary.Render("The Censys CLI tool helps you interact with Censys services from the command line.") + "\n\n")
-	b.WriteString(styles.GlobalStyles.Secondary.Render("Get started by exploring the available commands below.") + "\n\n")
+	b.WriteString(styles.GlobalStyles.Signature.Render("censys"))
+	b.WriteString(styles.GlobalStyles.Primary.Render(" - "+censyscopy.Title()) + "\n\n")
+	b.WriteString(styles.GlobalStyles.Primary.Render(censyscopy.Description()) + "\n\n")
+	b.WriteString(styles.GlobalStyles.Primary.Render("Get started by exploring the available commands below.") + "\n\n")
 
 	// Available Commands section
 	if cmd.HasAvailableSubCommands() {
@@ -98,18 +110,21 @@ func rootHelpFunc(cmd *cobra.Command) string {
 				name := fmt.Sprintf("%-*s", cmd.NamePadding(), c.Name())
 				fmt.Fprintf(&b, "  %s %s\n",
 					styles.GlobalStyles.Signature.Render(name),
-					styles.GlobalStyles.Tertiary.Render(c.Short))
+					styles.GlobalStyles.Secondary.Render(c.Short))
 			}
 		}
-		b.WriteString("\n")
+		b.WriteRune('\n')
 	}
 
 	if cmd.HasAvailableSubCommands() {
-		b.WriteString(styles.GlobalStyles.Secondary.Render("Use \""))
-		b.WriteString(styles.GlobalStyles.Signature.Render(cmd.CommandPath() + " [command] --help"))
-		b.WriteString(styles.GlobalStyles.Secondary.Render("\" for more information about a specific command.") + "\n")
+		b.WriteString(styles.GlobalStyles.Comment.Render(
+			fmt.Sprintf("Run \"%s [command] --help\" for help with a specific command.", cmd.CommandPath()),
+		))
+		b.WriteRune('\n')
 	}
-
+	b.WriteRune('\n')
+	b.WriteString(styles.GlobalStyles.Primary.Render(censyscopy.DocumentationCLI(w)))
+	b.WriteRune('\n')
 	return b.String()
 }
 

@@ -309,7 +309,9 @@ func NewCensysClientNotConfiguredError() ClientNotConfiguredError {
 	return &censysClientNotConfiguredError{}
 }
 
-func (e *censysClientNotConfiguredError) Error() string { return "The API client is not configured." }
+func (e *censysClientNotConfiguredError) Error() string {
+	return "The API client is not configured. Run 'censys config auth add' to configure your API client."
+}
 
 func (e *censysClientNotConfiguredError) Title() string {
 	return "Censys Client Not Configured"
