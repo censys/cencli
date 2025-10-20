@@ -14,7 +14,7 @@ const (
 	CencliRepo              CencliLink = "https://github.com/censys/cencli"
 	CencliDocs              CencliLink = "https://docs.censys.com/docs/platform-cli"
 	CensysPATInstructions   CencliLink = "https://docs.censys.com/reference/get-started#step-2-create-a-personal-access-token"
-	CensysOrgIDInstructions CencliLink = "https://docs.censys.com/reference/get-started?#step-3-find-and-use-your-organization-id-optional"
+	CensysOrgIDInstructions CencliLink = "https://docs.censys.com/reference/get-started#step-3-find-and-use-your-organization-id-optional"
 )
 
 func (l CencliLink) String() string {
