@@ -12,6 +12,7 @@ import (
 	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
+	"github.com/censys/cencli/internal/pkg/censyscopy"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/ui/form"
@@ -165,8 +166,8 @@ func (c *addOrganizationIDCommand) Run(cmd *cobra.Command, args []string) cencli
 		huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
-					Title("Enter a new organization ID").
-					Description("Enter the organization ID value that will be used in API requests").
+					Title("Enter your organization ID (will be used for all API requests)").
+					Description(censyscopy.DocumentationOrgID(formatter.Stdout)).
 					Value(&value).
 					Validate(form.NonEmptyUUID("organization ID must be a valid UUID")),
 				huh.NewInput().

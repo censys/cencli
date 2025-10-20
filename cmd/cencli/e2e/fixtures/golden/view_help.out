@@ -1,5 +1,5 @@
-Retrieve information about hosts, certificates, and web properties. Supports defanged IPs
-/ URLs.                                                                                  
+Retrieve information about hosts, certificates, and web properties.
+Supports defanged IPs / URLs.                                      
 
 Usage:
   censys view <asset> [flags]
@@ -11,7 +11,7 @@ Examples:
   censys view platform.censys.io # defaults to port 443
   censys view platform.censys.io:80,google.com:80
   censys view --input-file hosts.txt
-  censys view --input-file -  # read assets from STDIN
+  censys view --input-file - # read assets from STDIN
   censys view platform.censys.io:80 --at-time 2025-09-15T14:30:00Z
   censys view 8.8.8.8 --short
 
