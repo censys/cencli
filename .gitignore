@@ -18,3 +18,6 @@ completions/
 
 # Environment and config files
 .env
+
+# E2E test files
+!cmd/cencli/e2e/fixtures/golden/*.out
