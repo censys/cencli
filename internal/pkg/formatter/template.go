@@ -53,6 +53,8 @@ func registerTemplateHelpers(colored bool) {
 		helpers.NewCapitalizeHelper(),
 		helpers.NewLookupURLHelper(colored),
 		helpers.NewJoinHelper(),
+		helpers.NewPluckHelper(),
+		helpers.NewConcatHelper(),
 	)
 
 	helpersToRegister = append(helpersToRegister,
