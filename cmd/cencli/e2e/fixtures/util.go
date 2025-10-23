@@ -87,11 +87,16 @@ func removeFirstNLines(data []byte, n int) []byte {
 }
 
 // assertGoldenFile asserts that the given stdout matches the contents of the golden file.
-// It normalizes both inputs by trimming trailing whitespace to handle platform differences.
+// It normalizes both inputs by trimming trailing whitespace and normalizing line endings
+// to handle platform differences (Windows uses \r\n, Unix uses \n).
 // leadingLinesRemoved is the number of lines to remove from the beginning of the stdout.
 func assertGoldenFile(t *testing.T, golden, stdout []byte, leadingLinesRemoved int) {
 	golden = removeFirstNLines(golden, leadingLinesRemoved)
-	normalizedGolden := bytes.TrimRight(golden, "\n\r\t ")
-	normalizedStdout := bytes.TrimRight(stdout, "\n\r\t ")
+	// normalize line endings to \n for cross-platform compatibility
+	normalizedGolden := bytes.ReplaceAll(golden, []byte("\r\n"), []byte("\n"))
+	normalizedStdout := bytes.ReplaceAll(stdout, []byte("\r\n"), []byte("\n"))
+	// trim trailing whitespace
+	normalizedGolden = bytes.TrimRight(normalizedGolden, "\n\r\t ")
+	normalizedStdout = bytes.TrimRight(normalizedStdout, "\n\r\t ")
 	assert.Equal(t, string(normalizedGolden), string(normalizedStdout))
 }

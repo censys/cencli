@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	// enableE2ETestsEnvVar will actually run the tests if true
+	// If not set to true, the E2E tests will be skipped.
 	enableE2ETestsEnvVar = "CENCLI_ENABLE_E2E_TESTS"
 )
 
 func TestE2E(t *testing.T) {
 	if os.Getenv(enableE2ETestsEnvVar) != "true" {
-		t.Skip("E2E tests are disabled. Set " + enableE2ETestsEnvVar + " to 'true' to run tests")
+		t.Skip("E2E tests are disabled. Set " + enableE2ETestsEnvVar + " to 'true' to run these tests")
 		return
 	}
 
@@ -52,10 +52,15 @@ func runFixtureTest(
 	ctx, cancel := context.WithTimeout(context.Background(), fixture.Timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx,
-		binaryPath,
-		append([]string{command}, fixture.Args...)...,
-	)
+	// Special case: "root" means no subcommand, just run the binary with args
+	var cmdArgs []string
+	if command == "root" {
+		cmdArgs = fixture.Args
+	} else {
+		cmdArgs = append([]string{command}, fixture.Args...)
+	}
+
+	cmd := exec.CommandContext(ctx, binaryPath, cmdArgs...)
 	cmd.Env = append(os.Environ(), lib.E2EEnvVars(dataDir)...)
 
 	result := lib.RunCommand(cmd)

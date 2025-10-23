@@ -13,12 +13,17 @@ const (
 
 // E2EEnvVars returns the environment variables that are used for all e2e tests.
 // It configures a custom data directory and disables color/spinner output for deterministic testing.
+// If the data dir is empty, which will be the case for the smoke test,
+// then that environment variable is not set.
 func E2EEnvVars(dataDir string) []string {
-	return []string{
-		"CENCLI_DATA_DIR=" + dataDir,
+	res := []string{
 		"CENCLI_NO_COLOR=1",
 		"CENCLI_NO_SPINNER=1",
 	}
+	if dataDir != "" {
+		res = append(res, "CENCLI_DATA_DIR="+dataDir)
+	}
+	return res
 }
 
 // ConfigureAuth sets up authentication credentials for e2e tests by running config commands.

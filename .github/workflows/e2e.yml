@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  e2e:
+  e2e-native:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -43,4 +43,41 @@ jobs:
           CENSYS_API_TOKEN: ${{ secrets.CENSYS_API_TOKEN }}
           CENSYS_ORG_ID: ${{ secrets.CENSYS_ORG_ID }}
           CENCLI_ENABLE_E2E_TESTS: 'true'
+        run: make e2e
+
+  e2e-smoke:
+    strategy:
+      matrix:
+        os: 
+          - ubuntu-latest    # linux/amd64
+          - ubuntu-24.04-arm # linux/arm64
+          - macos-latest     # darwin/arm64
+          - windows-latest   # windows/amd64
+          - windows-11-arm   # windows/arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Restore Go build cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-gobuild-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-gobuild-
+
+      - name: Add binary directory to PATH
+        run: |
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Run E2E smoke tests
+        env:
+          CENCLI_ENABLE_SMOKE_TEST: 'true'
         run: make e2e

@@ -1,0 +1,22 @@
+censys - The Censys CLI
+
+The Censys CLI brings the authority of internet intelligence to your terminal. 
+Leverage the Censys Platform to analyze assets, perform searches, hunt threats,
+all from the command line.                                                     
+
+Get started by exploring the available commands below.
+
+Available Commands:
+  aggregate   Aggregate results for a Platform search query
+  censeye     Analyze a host and generate pivotable queries with rarity bounds
+  completion  Generate shell completion scripts
+  config      Manage configuration
+  history     Retrieve historical data for hosts, web properties, and certificates
+  search      Execute a search query across Censys data
+  version     Print version information
+  view        Retrieve information about hosts, certificates, and web properties
+
+Run "censys [command] --help" for help with a specific command.
+
+For more information, please refer to the documentation: https://docs.censys.com/docs/platform-cli
+

@@ -15,4 +15,6 @@ var (
 	CenseyeHelpStdout []byte
 	//go:embed history_help.out
 	HistoryHelpStdout []byte
+	//go:embed root.out
+	RootStdout []byte
 )
