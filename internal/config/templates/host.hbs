@@ -38,8 +38,8 @@ Services ({{#if services}}{{yellow (length services)}}{{else}}0{{/if}}):
 {{#each services}}
   - {{orange protocol}} {{blue port}}/{{yellow transport_protocol}}{{#if labels}}
       Labels: {{#each labels}}{{#if @index}}, {{/if}}{{blue value}}{{/each}}{{/if}}{{#if software}}
-      Software: {{#each software}}{{#if @index}}, {{/if}}{{blue vendor}} {{blue product}}{{#if version}} {{yellow version}}{{/if}}{{/each}}{{/if}}{{#if hardware}}
-      Hardware: {{blue hardware.vendor}} {{blue hardware.product}}{{#if hardware.version}} {{yellow hardware.version}}{{/if}}{{/if}}{{#if tls}}
+      Software: {{#each software}}{{#if (gt @index 1)}}, {{/if}}{{render_components this}}{{/each}}{{/if}}{{#if hardware}}
+      Hardware: {{#each hardware}}{{#if (gt @index 1)}}, {{/if}}{{render_components this}}{{/each}}{{/if}}{{#if tls}}
       Cert: {{#if cert.parsed.subject_dn}}Subject DN: {{blue cert.parsed.subject_dn}}{{/if}}{{#if cert.parsed.issuer_dn}}, Issuer DN: {{blue cert.parsed.issuer_dn}}{{/if}}{{#if cert.parsed.validity_period.not_before}}{{/if}}{{/if}}{{#if threats}}
       Threats: {{#each threats}}{{#if @index}}, {{/if}}{{red this}}{{/each}}{{/if}}{{#if cves}}
       CVEs: {{#each cves}}{{#if @index}}, {{/if}}{{yellow this}}{{/each}}{{/if}}

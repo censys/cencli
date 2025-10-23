@@ -55,6 +55,7 @@ func registerTemplateHelpers(colored bool) {
 		helpers.NewJoinHelper(),
 		helpers.NewPluckHelper(),
 		helpers.NewConcatHelper(),
+		helpers.NewSoftwareHelper(),
 	)
 
 	helpersToRegister = append(helpersToRegister,
