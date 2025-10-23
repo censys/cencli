@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"sync"
 
 	handlebars "github.com/aymerick/raymond"
-	"github.com/charmbracelet/lipgloss"
 
+	"github.com/censys/cencli/internal/config/templates/helpers"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/styles"
 )
@@ -44,35 +43,29 @@ func PrintDataWithTemplate(templatePath string, colored bool, data any) cenclier
 
 // registerTemplateHelpers registers the template helpers for the template engine.
 func registerTemplateHelpers(colored bool) {
-	colors := map[string]styles.Color{
-		"red":    styles.ColorRed,
-		"blue":   styles.ColorBlue,
-		"orange": styles.ColorOrange,
-		"yellow": styles.ColorGold,
-	}
+	var helpersToRegister []helpers.HandlebarsHelper
 
-	for name, color := range colors {
-		c := color
-		handlebars.RegisterHelper(name, func(v interface{}) string {
-			if !colored {
-				return fmt.Sprint(v)
-			}
-			return lipgloss.NewStyle().Foreground(c).Render(fmt.Sprint(v))
-		})
-	}
+	helpersToRegister = append(helpersToRegister,
+		helpers.NewLengthHelper(),
+		helpers.NewLessThanHelper(),
+		helpers.NewGreaterThanHelper(),
+		helpers.NewEqualHelper(),
+		helpers.NewCapitalizeHelper(),
+		helpers.NewLookupURLHelper(colored),
+		helpers.NewJoinHelper(),
+	)
 
-	handlebars.RegisterHelper("length", func(v interface{}) string {
-		if v == nil {
-			return "0"
-		}
-		val := reflect.ValueOf(v)
-		switch val.Kind() {
-		case reflect.Slice, reflect.Array, reflect.Map, reflect.String:
-			return fmt.Sprintf("%d", val.Len())
-		default:
-			return "0"
-		}
-	})
+	helpersToRegister = append(helpersToRegister,
+		helpers.NewColorHelpers(
+			colored,
+			helpers.ColorHelperConfig{Name: "red", Color: styles.ColorRed},
+			helpers.ColorHelperConfig{Name: "blue", Color: styles.ColorBlue},
+			helpers.ColorHelperConfig{Name: "orange", Color: styles.ColorOrange},
+			helpers.ColorHelperConfig{Name: "yellow", Color: styles.ColorGold},
+		)...,
+	)
+
+	helpers.RegisterHelpers(helpersToRegister...)
 }
 
 // dataToJSON converts the data to a "JSON-style" Go object,

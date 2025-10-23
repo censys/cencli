@@ -1,15 +1,6 @@
 {{#each this}}
-Hostname: {{orange hostname}}
-Number of endpoints: {{blue (length endpoints)}}
+Hostname: {{orange hostname}}:{{orange port}}
 
-{{#each endpoints}}
-- IP: {{blue ip}}
-  Port: {{blue port}}
-  Status: {{blue http.status_code}} {{blue http.status_reason}}{{#if http.headers.Location.headers.[0]}} → {{blue http.headers.Location.headers.[0]}}{{/if}}
-  Server: {{blue http.headers.Server.headers.[0]}}
-  Scan Time: {{blue scan_time}}
-
-{{/each}}
 Labels:
 {{#each labels}}
   - {{blue value}} (confidence {{yellow confidence}})
@@ -20,5 +11,23 @@ Software:
   - {{blue vendor}} {{blue product}} (confidence {{yellow confidence}})
 {{/each}}
 
+
+Endpoints ({{blue (length endpoints)}}):
+{{#each endpoints}}
+- IP: {{blue ip}}
+  Status: {{blue http.status_code}} {{blue http.status_reason}}{{#if http.headers.Location.headers.[0]}} → {{blue http.headers.Location.headers.[0]}}{{/if}}
+  Server: {{blue http.headers.Server.headers.[0]}}
+  Scan Time: {{blue scan_time}}
+
+{{/each}}
+
+
+
 ------------------------------------------------------------
 {{/each}}
+
+
+TODO if the product starts with the vendor, drop the vendor
+TODO drop confidence
+TODO make labels and software have the header with length
+TODO show endpoint type in the list

@@ -1,22 +1,55 @@
 {{#each this}}
 IP: {{orange ip}}
+Platform URL: {{platform_lookup_url "host" ip}}
 ASN: {{blue autonomous_system.asn}} ({{blue autonomous_system.name}})
-Location: {{blue location.city}}, {{blue location.province}}, {{blue location.country}} ({{blue location.country_code}})
+WHOIS Org: {{blue whois.organization.name}}
+{{#if location.country}}
+Location: {{#if location.city}}{{blue location.city}}, {{/if}}{{#if location.province}}{{blue location.province}}, {{/if}}{{blue location.country}} ({{blue location.country_code}})
+{{#if location.coordinates}}Coordinates: {{blue location.coordinates.latitude}}°, {{blue location.coordinates.longitude}}°{{/if}}
+{{/if}}
 
-{{#if matched_services}}
-Matched Services ({{yellow (length matched_services)}}):
-{{#each matched_services}}
-  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
+{{#if dns.reverse_dns.names}}
+Reverse DNS ({{yellow (length dns.reverse_dns.names)}}):
+{{#each dns.reverse_dns.names}}
+  {{#if (lt @index 10)}}
+  - {{blue this}}
+  {{else if (eq @index 10)}}
+  ...
+  {{/if}}
 {{/each}}
 {{/if}}
 
-Services ({{yellow (length services)}}):
-{{#each services}}
-  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
+{{#if dns.forward_dns}}
+Forward DNS ({{yellow (length dns.forward_dns)}}):
+{{#each dns.forward_dns}}
+  {{#if (lt @index 10)}}
+  - {{blue @key}}
+  {{else if (eq @index 10)}}
+  ...
+  {{/if}}
 {{/each}}
+{{/if}}
 
-WHOIS Org: {{blue whois.organization.name}}
-Abuse: {{#each whois.organization.abuse_contacts}}{{blue email}}{{/each}}
+{{#if operating_system.vendor}}
+Operating System: {{blue (capitalize operating_system.vendor "first")}} {{#if operating_system.product}}{{blue (capitalize operating_system.product "first")}}{{/if}}{{#if operating_system.version}} {{blue (capitalize operating_system.version "first")}}{{/if}}
+{{/if}}
+
+Services ({{#if services}}{{yellow (length services)}}{{else}}0{{/if}}):
+{{#if services}}
+{{#each services}}
+  - {{orange protocol}} {{blue port}}/{{yellow (capitalize transport_protocol "all")}}
+      Labels: {{#if labels}}{{#each labels}}{{#if @index}}, {{/if}}{{blue value}}{{/each}}{{else}}N/A{{/if}}
+      Software: {{#if software}}{{#each software}}{{#if @index}}, {{/if}}{{blue vendor}} {{blue product}}{{#if version}} {{yellow version}}{{/if}}{{/each}}{{else}}N/A{{/if}}
+      Hardware: {{#if hardware.vendor}}{{blue hardware.vendor}} {{blue hardware.product}}{{#if hardware.version}} {{yellow hardware.version}}{{/if}}{{else}}N/A{{/if}}
+      TLS: {{#if tls}}{{#if cert.parsed.subject.common_name}}Subject: {{blue (join cert.parsed.subject.common_name ", ")}}{{/if}}{{#if cert.parsed.issuer.common_name}}, Issuer: {{blue (join cert.parsed.issuer.common_name ", ")}}{{/if}}{{#if cert.parsed.validity_period.not_before}}{{/if}}{{else}}N/A{{/if}}
+      Threats: {{#if threats}}{{#each threats}}{{#if @index}}, {{/if}}{{red this}}{{/each}}{{else}}N/A{{/if}}
+      CVEs: {{#if cves}}{{#each cves}}{{#if @index}}, {{/if}}{{yellow this}}{{/each}}{{else}}N/A{{/if}}
+
+{{/each}}
+{{/if}}
+
 
 ------------------------------------------------------------
 {{/each}}
+
+TODO fix CVEs and Threats because they are not showing up
