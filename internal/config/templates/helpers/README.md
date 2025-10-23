@@ -43,6 +43,33 @@ Joins a list of strings with a delimiter.
 {{join ports " | "}}  {{!-- "80 | 443 | 8080" --}}
 ```
 
+### `pluck`
+Extracts values from an array of objects/maps by key and filters out falsy values (nil, empty string, false, 0).
+
+**Arguments:**
+- `array` (required): The array of objects/maps to extract from
+- `key` (required): The key/field name to extract
+
+```handlebars
+{{join (pluck users "name") ", "}}  {{!-- "Alice, Bob, Charlie" --}}
+{{join (pluck users "email") ", "}}  {{!-- filters out empty/nil emails --}}
+```
+
+The helper automatically filters out falsy values, so only valid values are included in the result.
+
+### `concat`
+Concatenates an array of strings, automatically filtering out empty strings.
+
+**Arguments:**
+- `array` (required): The array of strings to concatenate
+
+```handlebars
+{{concat pathParts}}  {{!-- "home/user/documents" --}}
+{{concat urlParts}}   {{!-- "https://example.com:443/api/v1" --}}
+```
+
+The helper automatically filters out empty strings, so only non-empty values are included in the result.
+
 ### Comparison Helpers
 Compare values: `lt` (less than), `gt` (greater than), `eq` (equal).
 
