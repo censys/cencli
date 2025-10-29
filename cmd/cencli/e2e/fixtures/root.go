@@ -14,7 +14,7 @@ var RootFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second, // give more time since this will be run on all platforms
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertGoldenFile(t, golden.RootStdout, stdout, 0)
 		},
 	},

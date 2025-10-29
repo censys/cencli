@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/censys/cencli/cmd/cencli/e2e/fixtures"
 	"github.com/censys/cencli/cmd/cencli/e2e/lib"
@@ -30,7 +31,7 @@ func TestE2E(t *testing.T) {
 			for _, fixture := range fixtures {
 				t.Run(fixture.Name, func(t *testing.T) {
 					dataDir := t.TempDir()
-					runFixtureTest(t, binaryPath, dataDir, command, fixture)
+					runFixtureTest(t, binaryPath, dataDir, true, command, fixture)
 				})
 			}
 		})
@@ -41,9 +42,22 @@ func runFixtureTest(
 	t *testing.T,
 	binaryPath string,
 	dataDir string,
+	dataDirEnvOverride bool,
 	command string,
 	fixture fixtures.Fixture,
 ) {
+	// Run the setup command if it is present
+	if fixture.Setup.IsPresent() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, binaryPath)
+		cmd.Env = append(os.Environ(), lib.E2EEnvVars(dataDir)...)
+		result := lib.RunCommand(cmd)
+		require.NoError(t, result.Error, "failed to run setup command for fixture %s", fixture.Name)
+		require.Equal(t, 0, result.ExitCode, "unexpected exit code, stderr: %s", string(result.Stderr))
+		fixture.Setup.MustGet()(t, dataDir)
+	}
+
 	if fixture.NeedsAuth {
 		err := lib.ConfigureAuth(dataDir, binaryPath)
 		require.NoError(t, err, "Failed to configure auth for fixture %s", fixture.Name)
@@ -61,11 +75,17 @@ func runFixtureTest(
 	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, cmdArgs...)
-	cmd.Env = append(os.Environ(), lib.E2EEnvVars(dataDir)...)
+	var env []string
+	if dataDirEnvOverride {
+		env = lib.E2EEnvVars(dataDir)
+	} else {
+		env = lib.E2EEnvVars("")
+	}
+	cmd.Env = append(os.Environ(), env...)
 
 	result := lib.RunCommand(cmd)
 	require.NoError(t, result.Error, "failed to run command for fixture %s", fixture.Name)
 
 	require.Equal(t, fixture.ExitCode, result.ExitCode, "unexpected exit code, stderr: %s", string(result.Stderr))
-	fixture.Assert(t, result.Stdout, result.Stderr)
+	fixture.Assert(t, dataDir, result.Stdout, result.Stderr)
 }

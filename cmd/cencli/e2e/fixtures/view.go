@@ -19,7 +19,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertGoldenFile(t, golden.ViewHelpStdout, stdout, 0)
 		},
 	},
@@ -29,7 +29,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			lines := strings.Split(string(stderr), "\n")
 			assert.Greater(t, len(lines), 3)
 			assert.Equal(t, "[Invalid Asset ID]", lines[0])
@@ -46,7 +46,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			assert.Len(t, v, 1)
 			assert.Equal(t, "1.1.1.1", v[0]["ip"])
@@ -59,7 +59,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   8 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 1)
 			assert.Equal(t, "1.1.1.1", v[0]["ip"])
@@ -72,7 +72,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			assertRenderedTemplate(t, templates.HostTemplate, stdout)
 		},
@@ -83,7 +83,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 2)
 			assert.Equal(t, "1.1.1.1", v[0]["ip"])
@@ -98,7 +98,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			lines := strings.Split(string(stderr), "\n")
 			assert.Greater(t, len(lines), 3)
 			assert.Equal(t, "[Invalid Timestamp]", lines[0])
@@ -115,7 +115,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 1)
 			assert.Equal(t, "3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf", v[0]["fingerprint_sha256"])
@@ -128,7 +128,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			assertRenderedTemplate(t, templates.CertificateTemplate, stdout)
 		},
@@ -139,7 +139,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 2)
 			assert.Equal(t, "3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf", v[0]["fingerprint_sha256"])
@@ -154,7 +154,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			lines := strings.Split(string(stderr), "\n")
 			assert.Greater(t, len(lines), 3)
 			assert.Equal(t, "[At-Time Not Supported]", lines[0])
@@ -171,7 +171,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 1)
 			assert.Equal(t, "platform.censys.io", v[0]["hostname"])
@@ -185,7 +185,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   8 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 1)
 			assert.Equal(t, "platform.censys.io", v[0]["hostname"])
@@ -199,7 +199,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertRenderedTemplate(t, templates.WebPropertyTemplate, stdout)
 			assertHas200(t, stderr)
 		},
@@ -210,7 +210,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 2)
 			assert.Equal(t, "platform.censys.io", v[0]["hostname"])
@@ -226,7 +226,7 @@ var viewFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			require.Len(t, v, 1)
 			assert.Equal(t, "platform.censys.io", v[0]["hostname"])

@@ -44,8 +44,9 @@ var (
 )
 
 func init() {
-	// only run the root fixture for now
+	// only run the root and config fixtures for now
 	smokeTestFixtures["root"] = fixtures.RootFixtures
+	smokeTestFixtures["config"] = fixtures.ConfigFixtures
 
 	// get the cencli data directory
 	homeDir, err := os.UserHomeDir()
@@ -68,11 +69,13 @@ func TestSmoke(t *testing.T) {
 		t.Run(command, func(t *testing.T) {
 			for _, fixture := range fixtures {
 				t.Run(fixture.Name, func(t *testing.T) {
-					// ensure the data directory is empty
-					ensureDataDirEmpty(t)
+					// ensure the data directory is empty, unless the fixture has a setup function
+					if fixture.Setup.IsAbsent() {
+						ensureDataDirEmpty(t)
+					}
 					// run the fixture test with an empty data directory
 					// so that the default data directory is used and the expected files and directories are created
-					runFixtureTest(t, binaryPath, "", command, fixture)
+					runFixtureTest(t, binaryPath, dataDir, false, command, fixture)
 					// ensure the data directory contains the expected files and directories
 					ensureDataDirContents(t)
 					// delete the data directory

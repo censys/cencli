@@ -10,7 +10,7 @@ import (
 
 	"github.com/censys/cencli/internal/app/search"
 	"github.com/censys/cencli/internal/command"
-	"github.com/censys/cencli/internal/config"
+	"github.com/censys/cencli/internal/config/templates"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
@@ -236,7 +236,7 @@ func (c *Command) renderSearchResult(result search.Result) cenclierrors.CencliEr
 		}
 	}
 	if c.short && !c.Config().Quiet {
-		return c.PrintDataWithTemplate(config.TemplateEntitySearchResult, data)
+		return c.PrintDataWithTemplate(templates.TemplateEntitySearchResult, data)
 	}
 	return c.PrintData(data)
 }

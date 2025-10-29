@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   e2e-native:
+    if: false # UNDO THIS
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

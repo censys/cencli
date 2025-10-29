@@ -10,7 +10,7 @@ import (
 
 	"github.com/censys/cencli/internal/app/view"
 	"github.com/censys/cencli/internal/command"
-	"github.com/censys/cencli/internal/config"
+	"github.com/censys/cencli/internal/config/templates"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
@@ -316,14 +316,14 @@ func (c *Command) printShort(res assetResult) cenclierrors.CencliError {
 	return c.PrintDataWithTemplate(templateEntity, res.Data())
 }
 
-func templateEntityFromAssetType(assetType assets.AssetType) (config.TemplateEntity, cenclierrors.CencliError) {
+func templateEntityFromAssetType(assetType assets.AssetType) (templates.TemplateEntity, cenclierrors.CencliError) {
 	switch assetType {
 	case assets.AssetTypeHost:
-		return config.TemplateEntityHost, nil
+		return templates.TemplateEntityHost, nil
 	case assets.AssetTypeCertificate:
-		return config.TemplateEntityCertificate, nil
+		return templates.TemplateEntityCertificate, nil
 	case assets.AssetTypeWebProperty:
-		return config.TemplateEntityWebProperty, nil
+		return templates.TemplateEntityWebProperty, nil
 	default:
 		return "", NewUnsupportedAssetTypeError(assetType, "templating not supported for this asset type")
 	}

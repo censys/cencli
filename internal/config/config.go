@@ -11,22 +11,23 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/censys/cencli/internal/config/templates"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/datetime"
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
 
 type Config struct {
-	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|ndjson|tree)"`
-	NoColor       bool                              `yaml:"no-color" mapstructure:"no-color" doc:"Disable ANSI colors and styles"`
-	Spinner       SpinnerConfig                     `yaml:"spinner" mapstructure:"spinner"`
-	Quiet         bool                              `yaml:"quiet" mapstructure:"quiet" doc:"Suppress non-essential output"`
-	Debug         bool                              `yaml:"debug" mapstructure:"debug"`
-	Timeouts      TimeoutConfig                     `yaml:"timeouts" mapstructure:"timeouts"`
-	RetryStrategy RetryStrategy                     `yaml:"retry-strategy" mapstructure:"retry-strategy"`
-	Templates     map[TemplateEntity]TemplateConfig `yaml:"templates" mapstructure:"templates"`
-	Search        SearchConfig                      `yaml:"search" mapstructure:"search"`
-	DefaultTZ     datetime.TimeZone                 `yaml:"default-tz" mapstructure:"default-tz" doc:"Default timezone for timestamps"`
+	OutputFormat  formatter.OutputFormat                                `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|ndjson|tree)"`
+	NoColor       bool                                                  `yaml:"no-color" mapstructure:"no-color" doc:"Disable ANSI colors and styles"`
+	Spinner       SpinnerConfig                                         `yaml:"spinner" mapstructure:"spinner"`
+	Quiet         bool                                                  `yaml:"quiet" mapstructure:"quiet" doc:"Suppress non-essential output"`
+	Debug         bool                                                  `yaml:"debug" mapstructure:"debug"`
+	Timeouts      TimeoutConfig                                         `yaml:"timeouts" mapstructure:"timeouts"`
+	RetryStrategy RetryStrategy                                         `yaml:"retry-strategy" mapstructure:"retry-strategy"`
+	Templates     map[templates.TemplateEntity]templates.TemplateConfig `yaml:"templates" mapstructure:"templates"`
+	Search        SearchConfig                                          `yaml:"search" mapstructure:"search"`
+	DefaultTZ     datetime.TimeZone                                     `yaml:"default-tz" mapstructure:"default-tz" doc:"Default timezone for timestamps"`
 }
 
 var defaultConfig = &Config{
@@ -38,7 +39,7 @@ var defaultConfig = &Config{
 	Timeouts:      defaultTimeoutConfig,
 	RetryStrategy: defaultRetryStrategy,
 	DefaultTZ:     datetime.TimeZoneUTC,
-	Templates:     defaultTemplateConfig,
+	Templates:     templates.DefaultTemplateConfig,
 	Search:        defaultSearchConfig,
 }
 
@@ -91,12 +92,21 @@ func New(dataDir string) (*Config, cenclierrors.CencliError) {
 	}
 
 	// Initialize templates after config is loaded
-	if err := initTemplates(dataDir, cfg); err != nil {
+	updatedTemplates, err := templates.InitTemplates(dataDir, cfg.Templates)
+	if err != nil {
 		var cencliErr cenclierrors.CencliError
 		if errors.As(err, &cencliErr) {
 			return nil, cencliErr
 		}
 		return nil, newInvalidConfigError(fmt.Errorf("failed to initialize templates: %w", err).Error())
+	}
+
+	// Update config with the new template paths
+	cfg.Templates = updatedTemplates
+
+	// Update viper with the template paths
+	for entity, template := range updatedTemplates {
+		viper.Set(fmt.Sprintf("templates.%s.path", entity), template.Path)
 	}
 
 	// Write the updated config back to the file to persist template paths
@@ -183,4 +193,12 @@ func addPersistentBoolAndBindToPath(persistentFlags *pflag.FlagSet, flagName str
 func addPersistentDurationAndBindToPath(persistentFlags *pflag.FlagSet, flagName string, viperPath string, defaultValue time.Duration, usage string) error {
 	persistentFlags.Duration(flagName, defaultValue, usage)
 	return viper.BindPFlag(viperPath, persistentFlags.Lookup(flagName))
+}
+
+// GetTemplate returns the template configuration for the given entity.
+func (c *Config) GetTemplate(entity templates.TemplateEntity) (templates.TemplateConfig, templates.TemplateNotRegisteredError) {
+	if _, ok := c.Templates[entity]; !ok {
+		return templates.TemplateConfig{}, templates.NewTemplateNotRegisteredError(string(entity))
+	}
+	return c.Templates[entity], nil
 }
