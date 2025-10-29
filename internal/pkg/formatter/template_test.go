@@ -681,3 +681,23 @@ func TestTemplateFailureError(t *testing.T) {
 		})
 	}
 }
+
+func TestPrintDataWithTemplate_MissingFile(t *testing.T) {
+	// Test that using a missing template file produces an error
+	nonexistentPath := filepath.Join(t.TempDir(), "nonexistent.hbs")
+
+	// capture stdout
+	var buf bytes.Buffer
+	old := Stdout
+	Stdout = &buf
+	defer func() { Stdout = old }()
+
+	data := map[string]any{"ip": "127.0.0.1"}
+	err := PrintDataWithTemplate(nonexistentPath, true, data)
+
+	// Should error when trying to read the missing file
+	require.Error(t, err)
+	var templateFailureErr TemplateFailureError
+	assert.ErrorAs(t, err, &templateFailureErr)
+	assert.Contains(t, err.Error(), "failed to render template")
+}

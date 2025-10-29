@@ -106,7 +106,7 @@ cover-report:
 	@echo "Threshold: $$(cat ci/coverage_min_percent 2>/dev/null || echo "0")%"
 
 e2e-setup:
-	@cp internal/config/templates/* cmd/cencli/e2e/fixtures/templates/
+	@cp internal/config/templates/defaults/* cmd/cencli/e2e/fixtures/templates/
 
 e2e: e2e-setup $(BINARY)
 	$(GO) test -v ./cmd/cencli/e2e

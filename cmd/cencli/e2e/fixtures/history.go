@@ -16,7 +16,7 @@ var historyFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertGoldenFile(t, golden.HistoryHelpStdout, stdout, 0)
 		},
 	},
@@ -26,7 +26,7 @@ var historyFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   12 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			v := unmarshalJSONAny[[]struct {
 				Time   time.Time `json:"time"`

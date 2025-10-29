@@ -3,6 +3,8 @@ package fixtures
 import (
 	"testing"
 	"time"
+
+	"github.com/samber/mo"
 )
 
 type Fixture struct {
@@ -16,8 +18,11 @@ type Fixture struct {
 	Timeout time.Duration
 	// NeedsAuth is set to configure a PAT and org ID before running the fixture.
 	NeedsAuth bool
-	// AssertSchema is the function that asserts the expected output.
-	Assert func(t *testing.T, stdout, stderr []byte)
+	// Setup is an optional function that is called after the binary is initially invoked
+	// to setup the generated files and directories, but before the command is run.
+	Setup mo.Option[func(t *testing.T, dataDir string)]
+	// Assert is the function that asserts the expected output.
+	Assert func(t *testing.T, dataDir string, stdout, stderr []byte)
 }
 
 // Fixtures returns all the fixtures for the e2ev2 tests.
@@ -29,5 +34,6 @@ func Fixtures() map[string][]Fixture {
 		"search":    searchFixtures,
 		"censeye":   censeyeFixtures,
 		"history":   historyFixtures,
+		"config":    ConfigFixtures,
 	}
 }

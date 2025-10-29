@@ -1,23 +1,32 @@
 {{#each this}}
-Hostname: {{orange hostname}}
-Number of endpoints: {{blue (length endpoints)}}
+Hostname: {{orange hostname}}:{{orange port}}
+Platform URL: {{platform_lookup_url "webproperty" hostname}}
 
-{{#each endpoints}}
-- IP: {{blue ip}}
-  Port: {{blue port}}
-  Status: {{blue http.status_code}} {{blue http.status_reason}}{{#if http.headers.Location.headers.[0]}} → {{blue http.headers.Location.headers.[0]}}{{/if}}
-  Server: {{blue http.headers.Server.headers.[0]}}
-  Scan Time: {{blue scan_time}}
+{{#if cert}}
+Certificate:
+  Fingerprint (SHA256): {{blue cert.fingerprint_sha256}}
+  Issuer: {{blue cert.parsed.issuer_dn}}
+  Subject: {{blue cert.parsed.subject_dn}}
+  Names: {{join cert.names ", "}}
+{{/if}}
 
-{{/each}}
-Labels:
-{{#each labels}}
-  - {{blue value}} (confidence {{yellow confidence}})
-{{/each}}
+Labels: {{#if labels}}{{join (pluck labels "value") ", "}}{{/if}}
 
 Software:
 {{#each software}}
-  - {{blue vendor}} {{blue product}} (confidence {{yellow confidence}})
+  - {{blue vendor}} {{blue product}}
+{{/each}}
+
+Endpoints ({{blue (length endpoints)}}):
+{{#each endpoints}}
+- {{orange path}} ({{blue endpoint_type}})
+    IP: {{blue ip}}
+    Type: {{blue endpoint_type}}
+    Status: {{blue http.status_code}} {{blue http.status_reason}}{{#if http.headers.Location.headers.[0]}} → {{blue http.headers.Location.headers.[0]}}{{/if}}
+    Server: {{blue http.headers.Server.headers.[0]}}
+    HTML Title: {{blue http.html_title}}
+    Scan Time: {{blue scan_time}}
+
 {{/each}}
 
 ------------------------------------------------------------

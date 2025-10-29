@@ -69,6 +69,8 @@ func (a *TemplateEntity) UnmarshalText(text []byte) error {
 
 // InitTemplates validates existing template paths and creates default templates if needed.
 // Returns the updated template configuration map.
+// If a template file is missing, it will set the path but not fail - the error will occur
+// when actually trying to use the template.
 func InitTemplates(dataDir string, templateConfigs map[TemplateEntity]TemplateConfig) (map[TemplateEntity]TemplateConfig, cenclierrors.CencliError) {
 	templatesDir := filepath.Join(dataDir, templateDir)
 	// the templates directory always exists, even if unused
@@ -84,11 +86,9 @@ func InitTemplates(dataDir string, templateConfigs map[TemplateEntity]TemplateCo
 
 	// validate each template
 	for entity, template := range updatedConfigs {
-		// if the path is set, validate it exists
+		// if the path is set, just keep it (don't validate during init)
+		// validation will happen when the template is actually used
 		if template.Path != "" {
-			if err := validateExistingTemplatePath(entity, template); err != nil {
-				return nil, err
-			}
 			continue
 		}
 		// the path needs to be set
@@ -117,6 +117,36 @@ func InitTemplates(dataDir string, templateConfigs map[TemplateEntity]TemplateCo
 	}
 
 	return updatedConfigs, nil
+}
+
+// ResetTemplates replaces all template files with the latest defaults.
+// This is useful when templates are in a broken state or the user wants to update to new defaults.
+// Unlike InitTemplates, this will overwrite existing files and ignore any errors about missing files.
+func ResetTemplates(dataDir string) ([]string, cenclierrors.CencliError) {
+	templatesDir := filepath.Join(dataDir, templateDir)
+
+	// Ensure templates directory exists
+	if err := ensureTemplatesDirectory(templatesDir); err != nil {
+		return nil, err
+	}
+
+	// Get list of default templates
+	defaultTemplateNames, err := ListDefaultTemplates()
+	if err != nil {
+		return nil, cenclierrors.NewCencliError(fmt.Errorf("failed to list default templates: %w", err))
+	}
+
+	var reset []string
+	for _, templateName := range defaultTemplateNames {
+		// Copy default template, overwriting any existing file
+		if err := CopyDefaultTemplate(templateName, templatesDir); err != nil {
+			// Continue on error - we want to reset as many as possible
+			continue
+		}
+		reset = append(reset, templateName)
+	}
+
+	return reset, nil
 }
 
 // validateExistingTemplatePath checks if a configured template path exists and is valid.

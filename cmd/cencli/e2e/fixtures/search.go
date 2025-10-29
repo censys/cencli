@@ -17,7 +17,7 @@ var searchFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertGoldenFile(t, golden.SearchHelpStdout, stdout, 0)
 		},
 	},
@@ -27,7 +27,7 @@ var searchFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			assert.Contains(t, string(stderr), "pages: 2")
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
@@ -40,7 +40,7 @@ var searchFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			assertRenderedTemplate(t, templates.SearchResultTemplate, stdout)
 		},

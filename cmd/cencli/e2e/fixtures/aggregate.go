@@ -16,7 +16,7 @@ var aggregateFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertGoldenFile(t, golden.AggregateHelpStdout, stdout, 0)
 		},
 	},
@@ -26,7 +26,7 @@ var aggregateFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			assert.Contains(t, string(stdout), "host.services.protocol=SSH")
 			assert.Contains(t, string(stdout), "host.services.port")
@@ -39,7 +39,7 @@ var aggregateFixtures = []Fixture{
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
+		Assert: func(t *testing.T, _ string, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			v := unmarshalJSONAny[[]struct {
 				Key   string `json:"key"`

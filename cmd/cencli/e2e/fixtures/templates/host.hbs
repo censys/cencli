@@ -1,22 +1,52 @@
 {{#each this}}
 IP: {{orange ip}}
+Platform URL: {{platform_lookup_url "host" ip}}
 ASN: {{blue autonomous_system.asn}} ({{blue autonomous_system.name}})
-Location: {{blue location.city}}, {{blue location.province}}, {{blue location.country}} ({{blue location.country_code}})
+WHOIS Org: {{blue whois.organization.name}}
+{{#if location.country}}
+Location: {{#if location.city}}{{blue location.city}}, {{/if}}{{#if location.province}}{{blue location.province}}, {{/if}}{{blue location.country}} ({{blue location.country_code}})
+{{#if location.coordinates}}Coordinates: {{blue location.coordinates.latitude}}°, {{blue location.coordinates.longitude}}°{{/if}}{{/if}}
+{{#if dns.reverse_dns.names}}
 
-{{#if matched_services}}
-Matched Services ({{yellow (length matched_services)}}):
-{{#each matched_services}}
-  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
+Reverse DNS ({{yellow (length dns.reverse_dns.names)}}):
+{{#each dns.reverse_dns.names}}
+  {{#if (lt @index 10)}}
+  - {{blue this}}
+  {{else if (eq @index 10)}}
+  ...
+  {{/if}}
+{{/each}}
+{{/if}}
+{{#if dns.forward_dns}}
+
+Forward DNS ({{yellow (length dns.forward_dns)}}):
+{{#each dns.forward_dns}}
+  {{#if (lt @index 10)}}
+  - {{blue @key}}
+  {{else if (eq @index 10)}}
+  ...
+  {{/if}}
+{{/each}}
+{{/if}}
+{{#if operating_system.vendor}}
+
+Operating System: {{blue (capitalize operating_system.vendor)}} {{#if operating_system.product}}{{blue (capitalize operating_system.product)}}{{/if}}{{#if operating_system.version}} {{blue (capitalize operating_system.version)}}{{/if}}
+{{/if}}
+
+Services ({{#if services}}{{yellow (length services)}}{{else}}0{{/if}}):
+{{#if services}}
+{{#each services}}
+  - {{orange protocol}} {{blue port}}/{{yellow transport_protocol}}{{#if labels}}
+      Labels: {{#each labels}}{{#if @index}}, {{/if}}{{blue value}}{{/each}}{{/if}}{{#if software}}
+      Software: {{#each software}}{{#if @index}}, {{/if}}{{blue vendor}} {{blue product}}{{#if version}} {{yellow version}}{{/if}}{{/each}}{{/if}}{{#if hardware.vendor}}
+      Hardware: {{blue hardware.vendor}} {{blue hardware.product}}{{#if hardware.version}} {{yellow hardware.version}}{{/if}}{{/if}}{{#if tls}}
+      Cert: {{#if cert.parsed.subject_dn}}Subject DN: {{blue cert.parsed.subject_dn}}{{/if}}{{#if cert.parsed.issuer_dn}}, Issuer DN: {{blue cert.parsed.issuer_dn}}{{/if}}{{#if cert.parsed.validity_period.not_before}}{{/if}}{{/if}}{{#if threats}}
+      Threats: {{#each threats}}{{#if @index}}, {{/if}}{{red this}}{{/each}}{{/if}}{{#if cves}}
+      CVEs: {{#each cves}}{{#if @index}}, {{/if}}{{yellow this}}{{/each}}{{/if}}
+
 {{/each}}
 {{/if}}
 
-Services ({{yellow (length services)}}):
-{{#each services}}
-  - Port {{blue port}}/{{yellow transport_protocol}} | {{red protocol}}
-{{/each}}
-
-WHOIS Org: {{blue whois.organization.name}}
-Abuse: {{#each whois.organization.abuse_contacts}}{{blue email}}{{/each}}
 
 ------------------------------------------------------------
 {{/each}}

@@ -103,16 +103,16 @@ func TestInitTemplates(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid_explicit_path_returns_error",
+			name: "invalid_explicit_path_does_not_error_during_init",
 			setup: func(tempDir string) map[TemplateEntity]TemplateConfig {
 				return map[TemplateEntity]TemplateConfig{
 					TemplateEntityHost: {Path: "/nonexistent/path/template.hbs"},
 				}
 			},
-			expectedError: func(t *testing.T, err error) {
-				require.Error(t, err)
-				var templateNotFoundErr TemplateNotFoundError
-				assert.ErrorAs(t, err, &templateNotFoundErr)
+			expectedConfig: func(t *testing.T, result map[TemplateEntity]TemplateConfig, tempDir string) {
+				// Path should be set even though file doesn't exist
+				// Error will occur when actually trying to use the template
+				assert.Equal(t, "/nonexistent/path/template.hbs", result[TemplateEntityHost].Path)
 			},
 		},
 	}
@@ -457,4 +457,117 @@ func TestTemplateEntityString(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.entity.String())
 		})
 	}
+}
+
+func TestResetTemplates(t *testing.T) {
+	t.Run("resets_all_templates", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create templates directory with some existing files
+		templatesDir := filepath.Join(tempDir, "templates")
+		err := os.MkdirAll(templatesDir, 0o755)
+		require.NoError(t, err)
+
+		// Create an existing template with custom content
+		customContent := []byte("custom template content")
+		err = os.WriteFile(filepath.Join(templatesDir, "host.hbs"), customContent, 0o644)
+		require.NoError(t, err)
+
+		// Reset templates
+		reset, err := ResetTemplates(tempDir)
+		require.NoError(t, err)
+		require.NotEmpty(t, reset)
+
+		// Verify all default templates were reset
+		assert.Contains(t, reset, "host.hbs")
+		assert.Contains(t, reset, "certificate.hbs")
+		assert.Contains(t, reset, "webproperty.hbs")
+		assert.Contains(t, reset, "searchresult.hbs")
+
+		// Verify the custom content was overwritten
+		content, err := os.ReadFile(filepath.Join(templatesDir, "host.hbs"))
+		require.NoError(t, err)
+		assert.NotEqual(t, customContent, content)
+		assert.NotEmpty(t, content)
+	})
+
+	t.Run("creates_directory_if_missing", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Don't create templates directory - ResetTemplates should create it
+		reset, err := ResetTemplates(tempDir)
+		require.NoError(t, err)
+		require.NotEmpty(t, reset)
+
+		// Verify directory was created
+		templatesDir := filepath.Join(tempDir, "templates")
+		assert.DirExists(t, templatesDir)
+
+		// Verify templates were created
+		for _, name := range reset {
+			assert.FileExists(t, filepath.Join(templatesDir, name))
+		}
+	})
+}
+
+func TestInitTemplatesDoesNotFailOnMissingFiles(t *testing.T) {
+	t.Run("missing_template_file_does_not_fail_init", func(t *testing.T) {
+		tempDir := t.TempDir()
+		templatesDir := filepath.Join(tempDir, "templates")
+		err := os.MkdirAll(templatesDir, 0o755)
+		require.NoError(t, err)
+
+		// Create a template file
+		err = os.WriteFile(filepath.Join(templatesDir, "host.hbs"), []byte("test"), 0o644)
+		require.NoError(t, err)
+
+		// Initialize with a path pointing to a missing file
+		templateConfigs := map[TemplateEntity]TemplateConfig{
+			TemplateEntityHost:        {Path: filepath.Join(templatesDir, "host.hbs")},
+			TemplateEntityCertificate: {Path: filepath.Join(templatesDir, "certificate.hbs")}, // missing
+		}
+
+		// This should NOT fail even though certificate.hbs doesn't exist
+		result, err := InitTemplates(tempDir, templateConfigs)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Both paths should be set
+		assert.Equal(t, filepath.Join(templatesDir, "host.hbs"), result[TemplateEntityHost].Path)
+		assert.Equal(t, filepath.Join(templatesDir, "certificate.hbs"), result[TemplateEntityCertificate].Path)
+	})
+
+	t.Run("deleted_template_file_does_not_fail_init", func(t *testing.T) {
+		tempDir := t.TempDir()
+		templatesDir := filepath.Join(tempDir, "templates")
+		err := os.MkdirAll(templatesDir, 0o755)
+		require.NoError(t, err)
+
+		// Create template files
+		err = os.WriteFile(filepath.Join(templatesDir, "host.hbs"), []byte("test"), 0o644)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templatesDir, "certificate.hbs"), []byte("test"), 0o644)
+		require.NoError(t, err)
+
+		// First init - should work fine
+		templateConfigs := map[TemplateEntity]TemplateConfig{
+			TemplateEntityHost:        {},
+			TemplateEntityCertificate: {},
+		}
+		result1, err := InitTemplates(tempDir, templateConfigs)
+		require.NoError(t, err)
+
+		// Delete one of the template files
+		err = os.Remove(filepath.Join(templatesDir, "certificate.hbs"))
+		require.NoError(t, err)
+
+		// Second init with paths from first init - should NOT fail
+		result2, err := InitTemplates(tempDir, result1)
+		require.NoError(t, err)
+		require.NotNil(t, result2)
+
+		// Paths should still be set even though file is missing
+		assert.Equal(t, filepath.Join(templatesDir, "host.hbs"), result2[TemplateEntityHost].Path)
+		assert.Equal(t, filepath.Join(templatesDir, "certificate.hbs"), result2[TemplateEntityCertificate].Path)
+	})
 }

@@ -48,7 +48,7 @@ func (c *templatesCommand) Long() string  { return "View and manage your output 
 
 func (c *templatesCommand) Init() error {
 	return c.AddSubCommands(
-		newMigrateTemplatesCommand(c.Context),
+		newResetTemplatesCommand(c.Context),
 	)
 }
 
@@ -62,37 +62,37 @@ func (c *templatesCommand) Run(cmd *cobra.Command, args []string) cenclierrors.C
 	return cenclierrors.NewCencliError(cmd.Help())
 }
 
-type migrateTemplatesCommand struct {
+type resetTemplatesCommand struct {
 	*command.BaseCommand
 	yes        bool
 	accessible bool
-	flags      migrateTemplatesCommandFlags
+	flags      resetTemplatesCommandFlags
 }
 
-type migrateTemplatesCommandFlags struct {
+type resetTemplatesCommandFlags struct {
 	yes        flags.BoolFlag
 	accessible flags.BoolFlag
 }
 
-var _ command.Command = (*migrateTemplatesCommand)(nil)
+var _ command.Command = (*resetTemplatesCommand)(nil)
 
-func newMigrateTemplatesCommand(cmdContext *command.Context) *migrateTemplatesCommand {
-	cmd := &migrateTemplatesCommand{
+func newResetTemplatesCommand(cmdContext *command.Context) *resetTemplatesCommand {
+	cmd := &resetTemplatesCommand{
 		BaseCommand: command.NewBaseCommand(cmdContext),
 	}
 	return cmd
 }
 
-func (c *migrateTemplatesCommand) Use() string { return "migrate" }
-func (c *migrateTemplatesCommand) Short() string {
-	return "Migrate templates to the latest defaults"
+func (c *resetTemplatesCommand) Use() string { return "reset" }
+func (c *resetTemplatesCommand) Short() string {
+	return "Reset templates to the latest defaults"
 }
 
-func (c *migrateTemplatesCommand) Long() string {
-	return "Replace your existing templates with the latest default templates. This will overwrite any customizations you have made."
+func (c *resetTemplatesCommand) Long() string {
+	return "Replace your existing templates with the latest default templates. This will overwrite any customizations you have made and fix any broken template files."
 }
 
-func (c *migrateTemplatesCommand) Init() error {
+func (c *resetTemplatesCommand) Init() error {
 	c.flags.yes = flags.NewBoolFlag(
 		c.Flags(),
 		"yes",
@@ -110,9 +110,9 @@ func (c *migrateTemplatesCommand) Init() error {
 	return nil
 }
 
-func (c *migrateTemplatesCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
+func (c *resetTemplatesCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
-func (c *migrateTemplatesCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
+func (c *resetTemplatesCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	var err cenclierrors.CencliError
 	c.yes, err = c.flags.yes.Value()
 	if err != nil {
@@ -125,96 +125,63 @@ func (c *migrateTemplatesCommand) PreRun(cmd *cobra.Command, args []string) cenc
 	return nil
 }
 
-func (c *migrateTemplatesCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
+func (c *resetTemplatesCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	// Get the data directory
 	dataDir, err := getDataDir()
 	if err != nil {
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to get data directory: %w", err))
 	}
-	templatesDir := templates.GetTemplatesDir(dataDir)
 
-	// Check if templates directory exists
-	if _, err := os.Stat(templatesDir); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			formatter.Printf(formatter.Stderr, "No templates directory found at %s\n", templatesDir)
-			return cenclierrors.NewCencliError(fmt.Errorf("templates directory does not exist"))
-		}
-		return cenclierrors.NewCencliError(fmt.Errorf("failed to check templates directory: %w", err))
-	}
-
-	// Get list of default templates
+	// Get list of default templates for confirmation
 	defaultTemplateNames, err := templates.ListDefaultTemplates()
 	if err != nil {
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to list default templates: %w", err))
 	}
 
 	if len(defaultTemplateNames) == 0 {
-		formatter.Printf(formatter.Stdout, "No default templates found to migrate.\n")
-		return nil
-	}
-
-	// Check which templates exist in the user's directory
-	var existingTemplates []string
-	for _, templateName := range defaultTemplateNames {
-		templatePath := filepath.Join(templatesDir, templateName)
-		if _, err := os.Stat(templatePath); err == nil {
-			existingTemplates = append(existingTemplates, templateName)
-		}
-	}
-
-	if len(existingTemplates) == 0 {
-		formatter.Printf(formatter.Stdout, "No existing templates found to migrate.\n")
+		formatter.Printf(formatter.Stdout, "No default templates found to reset.\n")
 		return nil
 	}
 
 	// Show confirmation unless --yes flag is set
 	if !c.yes {
-		confirmed, err := c.confirmMigration(cmd, existingTemplates)
+		confirmed, err := c.confirmReset(cmd, defaultTemplateNames)
 		if err != nil {
 			return err
 		}
 		if !confirmed {
-			formatter.Printf(formatter.Stdout, "Migration cancelled.\n")
+			formatter.Printf(formatter.Stdout, "Reset cancelled.\n")
 			return nil
 		}
 	}
 
-	// Perform the migration
-	var migrated []string
-	var failed []string
-
-	for _, templateName := range defaultTemplateNames {
-		if err := templates.CopyDefaultTemplate(templateName, templatesDir); err != nil {
-			failed = append(failed, templateName)
-			if !c.Config().Quiet {
-				formatter.Printf(formatter.Stderr, "❌ Failed to migrate %s: %v\n", templateName, err)
-			}
-		} else {
-			migrated = append(migrated, templateName)
-		}
+	// Perform the reset - this will overwrite all templates and ignore errors
+	reset, err := templates.ResetTemplates(dataDir)
+	if err != nil {
+		return cenclierrors.NewCencliError(err)
 	}
 
 	// Report results
-	if len(migrated) > 0 && !c.Config().Quiet {
-		formatter.Printf(formatter.Stdout, "✅ Successfully migrated %d template(s):\n", len(migrated))
-		for _, name := range migrated {
+	if len(reset) > 0 && !c.Config().Quiet {
+		formatter.Printf(formatter.Stdout, "✅ Successfully reset %d template(s):\n", len(reset))
+		for _, name := range reset {
 			formatter.Printf(formatter.Stdout, "   - %s\n", name)
 		}
 	}
 
-	if len(failed) > 0 {
-		return cenclierrors.NewCencliError(fmt.Errorf("failed to migrate %d template(s)", len(failed)))
+	if len(reset) == 0 {
+		formatter.Printf(formatter.Stderr, "⚠️  No templates were reset. Check that default templates are available.\n")
 	}
 
 	return nil
 }
 
-func (c *migrateTemplatesCommand) confirmMigration(cmd *cobra.Command, templates []string) (bool, cenclierrors.CencliError) {
-	description := "The following templates will be replaced with the latest defaults:\n"
+func (c *resetTemplatesCommand) confirmReset(cmd *cobra.Command, templates []string) (bool, cenclierrors.CencliError) {
+	description := "The following templates will be reset to the latest defaults:\n"
 	for _, name := range templates {
 		description += fmt.Sprintf("  • %s\n", name)
 	}
-	description += "\n⚠️  This will overwrite any customizations you have made."
+	description += "\n⚠️  This will overwrite any customizations you have made and fix any broken template files."
 
 	var confirmed bool
 
@@ -222,9 +189,9 @@ func (c *migrateTemplatesCommand) confirmMigration(cmd *cobra.Command, templates
 		huh.NewForm(
 			huh.NewGroup(
 				huh.NewConfirm().
-					Title("Migrate Templates").
+					Title("Reset Templates").
 					Description(description).
-					Affirmative("Yes, replace templates").
+					Affirmative("Yes, reset templates").
 					Negative("Cancel").
 					Value(&confirmed),
 			),
