@@ -2,20 +2,19 @@
 Hostname: {{orange hostname}}:{{orange port}}
 Platform URL: {{platform_lookup_url "webproperty" hostname}}
 
-{{#if cert}}
-Certificate:
+{{#if cert}}Certificate:
   Fingerprint (SHA256): {{blue cert.fingerprint_sha256}}
   Issuer: {{blue cert.parsed.issuer_dn}}
   Subject: {{blue cert.parsed.subject_dn}}
   Names: {{join cert.names ", "}}
+
 {{/if}}
-
-Labels: {{#if labels}}{{join (pluck labels "value") ", "}}{{/if}}
-
-Software:
-{{#each software}}
-  - {{blue vendor}} {{blue product}}
-{{/each}}
+{{#if labels}}Labels: {{blue (join (pluck labels "value") ", ")}}
+{{/if}}
+{{#if (has_components software)}}Software: {{blue (render_components software)}}
+{{/if}}
+{{#if (has_components hardware)}}Hardware: {{blue (render_components hardware)}}
+{{/if}}
 
 Endpoints ({{blue (length endpoints)}}):
 {{#each endpoints}}
