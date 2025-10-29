@@ -59,6 +59,7 @@ func registerTemplateHelpers(colored bool) {
 		helpers.NewSoftwareListHelper(colored),
 		helpers.NewHasComponentsHelper(),
 		helpers.NewOSHelper(colored),
+		helpers.NewLocationHelper(colored),
 	)
 
 	helpersToRegister = append(helpersToRegister,

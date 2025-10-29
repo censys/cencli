@@ -4,7 +4,7 @@ Platform URL: {{platform_lookup_url "host" ip}}
 ASN: {{blue autonomous_system.asn}} ({{blue autonomous_system.name}})
 WHOIS Org: {{blue whois.organization.name}}
 {{#if location.country}}
-Location: {{#if location.city}}{{blue location.city}}, {{/if}}{{#if location.province}}{{blue location.province}}, {{/if}}{{blue location.country}} ({{blue location.country_code}})
+Location: {{render_location location}}
 {{#if location.coordinates}}Coordinates: {{blue location.coordinates.latitude}}°, {{blue location.coordinates.longitude}}°{{/if}}{{/if}}
 {{#if dns.reverse_dns.names}}
 
