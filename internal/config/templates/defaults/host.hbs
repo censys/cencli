@@ -1,6 +1,5 @@
 {{#each this}}
-IP: {{orange ip}}
-Platform URL: {{platform_lookup_url "host" ip}}
+IP: {{clickable_ip ip}}
 ASN: {{blue autonomous_system.asn}} ({{blue autonomous_system.name}})
 WHOIS Org: {{blue whois.organization.name}}
 {{#if location.country}}
