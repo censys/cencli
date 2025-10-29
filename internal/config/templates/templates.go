@@ -1,4 +1,4 @@
-package config
+package templates
 
 import (
 	"embed"
@@ -10,15 +10,14 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/spf13/viper"
-
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 )
 
-//go:embed templates
+//go:embed defaults
 var defaultTemplates embed.FS
 
 const (
+	defaultsDir = "defaults"
 	templateDir = "templates"
 )
 
@@ -41,7 +40,7 @@ type TemplateConfig struct {
 	Path string `yaml:"path" mapstructure:"path" doc:"Path to the template file"`
 }
 
-var defaultTemplateConfig = map[TemplateEntity]TemplateConfig{
+var DefaultTemplateConfig = map[TemplateEntity]TemplateConfig{
 	// will be potentially updated at runtime
 	TemplateEntityHost:         {},
 	TemplateEntityCertificate:  {},
@@ -68,26 +67,27 @@ func (a *TemplateEntity) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (c *Config) GetTemplate(entity TemplateEntity) (TemplateConfig, TemplateNotFoundError) {
-	if _, ok := c.Templates[entity]; !ok {
-		return TemplateConfig{}, newTemplateNotRegisteredError(string(entity))
-	}
-	return c.Templates[entity], nil
-}
-
-// initTemplates validates existing template paths and creates default templates if needed.
-func initTemplates(dataDir string, currentConfig *Config) cenclierrors.CencliError {
+// InitTemplates validates existing template paths and creates default templates if needed.
+// Returns the updated template configuration map.
+func InitTemplates(dataDir string, templateConfigs map[TemplateEntity]TemplateConfig) (map[TemplateEntity]TemplateConfig, cenclierrors.CencliError) {
 	templatesDir := filepath.Join(dataDir, templateDir)
 	// the templates directory always exists, even if unused
 	if err := ensureTemplatesDirectory(templatesDir); err != nil {
-		return err
+		return nil, err
 	}
+
+	// Create a copy of the template configs to modify
+	updatedConfigs := make(map[TemplateEntity]TemplateConfig)
+	for k, v := range templateConfigs {
+		updatedConfigs[k] = v
+	}
+
 	// validate each template
-	for entity, template := range currentConfig.Templates {
+	for entity, template := range updatedConfigs {
 		// if the path is set, validate it exists
 		if template.Path != "" {
 			if err := validateExistingTemplatePath(entity, template); err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
@@ -95,31 +95,28 @@ func initTemplates(dataDir string, currentConfig *Config) cenclierrors.CencliErr
 		// look for existing template files in templates directory
 		existingTemplate, err := findExistingTemplateInDir(entity, templatesDir)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// if an existing template is found, set the path
 		if existingTemplate != "" {
 			template.Path = filepath.Join(templatesDir, existingTemplate)
-			currentConfig.Templates[entity] = template
-			// Update viper with the template path
-			viper.Set(fmt.Sprintf("templates.%s.path", entity), template.Path)
+			updatedConfigs[entity] = template
 			continue
 		}
 		// if no existing template is found, copy the default template
 		defaultTemplateName, err := findDefaultTemplateInEmbedded(entity)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := copyDefaultTemplate(defaultTemplateName, templatesDir); err != nil {
-			return err
+		if err := CopyDefaultTemplate(defaultTemplateName, templatesDir); err != nil {
+			return nil, err
 		}
 		// set the path
 		template.Path = filepath.Join(templatesDir, defaultTemplateName)
-		currentConfig.Templates[entity] = template
-		viper.Set(fmt.Sprintf("templates.%s.path", entity), template.Path)
+		updatedConfigs[entity] = template
 	}
 
-	return nil
+	return updatedConfigs, nil
 }
 
 // validateExistingTemplatePath checks if a configured template path exists and is valid.
@@ -156,7 +153,7 @@ func findExistingTemplateInDir(entity TemplateEntity, templatesDir string) (stri
 func findDefaultTemplateInEmbedded(entity TemplateEntity) (string, cenclierrors.CencliError) {
 	pattern := regexp.MustCompile(fmt.Sprintf("^%s\\.", regexp.QuoteMeta(string(entity))))
 
-	embeddedEntries, err := defaultTemplates.ReadDir(templateDir)
+	embeddedEntries, err := defaultTemplates.ReadDir(defaultsDir)
 	if err != nil {
 		return "", cenclierrors.NewCencliError(fmt.Errorf("failed to read embedded templates directory: %w", err))
 	}
@@ -170,11 +167,12 @@ func findDefaultTemplateInEmbedded(entity TemplateEntity) (string, cenclierrors.
 	return "", NewDefaultTemplateNotFoundError(string(entity))
 }
 
-// copyDefaultTemplate copies a default template from embedded FS to the templates directory.
-func copyDefaultTemplate(templateName, templatesDir string) cenclierrors.CencliError {
+// CopyDefaultTemplate copies a default template from embedded FS to the templates directory.
+// This is exported so it can be used by the migration command.
+func CopyDefaultTemplate(templateName, templatesDir string) cenclierrors.CencliError {
 	// for some reason filepath.Join doesn't work with embedded FS
 	// on windows, but path.Join does
-	defaultTemplate, err := defaultTemplates.ReadFile(path.Join(templateDir, templateName))
+	defaultTemplate, err := defaultTemplates.ReadFile(path.Join(defaultsDir, templateName))
 	if err != nil {
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to read default template '%s': %w", templateName, err))
 	}
@@ -201,6 +199,27 @@ func ensureTemplatesDirectory(templatesDir string) cenclierrors.CencliError {
 	return nil
 }
 
+// GetTemplatesDir returns the path to the templates directory for a given data directory.
+func GetTemplatesDir(dataDir string) string {
+	return filepath.Join(dataDir, templateDir)
+}
+
+// ListDefaultTemplates returns a list of all default template names available in the embedded FS.
+func ListDefaultTemplates() ([]string, error) {
+	entries, err := defaultTemplates.ReadDir(defaultsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read embedded templates directory: %w", err)
+	}
+
+	var templates []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			templates = append(templates, entry.Name())
+		}
+	}
+	return templates, nil
+}
+
 type TemplateNotRegisteredError interface {
 	cenclierrors.CencliError
 }
@@ -211,7 +230,7 @@ type templateNotRegisteredError struct {
 
 var _ TemplateNotRegisteredError = &templateNotRegisteredError{}
 
-func newTemplateNotRegisteredError(entity string) TemplateNotRegisteredError {
+func NewTemplateNotRegisteredError(entity string) TemplateNotRegisteredError {
 	return &templateNotRegisteredError{
 		entity: entity,
 	}

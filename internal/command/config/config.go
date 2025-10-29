@@ -30,6 +30,7 @@ func (c *Command) Init() error {
 		newAuthCommand(c.Context),
 		newOrganizationIDCommand(c.Context),
 		newPrintCommand(c.Context),
+		newTemplatesCommand(c.Context),
 	)
 }
 

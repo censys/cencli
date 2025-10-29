@@ -10,6 +10,7 @@ import (
 	"github.com/censys/cencli/internal/app/search"
 	"github.com/censys/cencli/internal/app/view"
 	"github.com/censys/cencli/internal/config"
+	"github.com/censys/cencli/internal/config/templates"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
@@ -119,7 +120,7 @@ func (c *Context) PrintYAML(data any) cenclierrors.CencliError {
 }
 
 // PrintDataWithTemplate renders data through a template and writes the result to stdout.
-func (c *Context) PrintDataWithTemplate(entity config.TemplateEntity, data any) cenclierrors.CencliError {
+func (c *Context) PrintDataWithTemplate(entity templates.TemplateEntity, data any) cenclierrors.CencliError {
 	templateConfig, err := c.config.GetTemplate(entity)
 	if err != nil {
 		return err

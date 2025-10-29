@@ -1,6 +1,6 @@
 {{#each this}}
 Hostname: {{orange hostname}}:{{orange port}}
-Platform URL: {{platform_lookup_url "webproperty" (concat hostname ":" port)}}
+Platform URL: {{platform_lookup_url "webproperty" hostname}}
 
 {{#if cert}}
 Certificate:
