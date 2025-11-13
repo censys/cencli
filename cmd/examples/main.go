@@ -27,9 +27,15 @@ type recordableCommand interface {
 }
 
 func main() {
+	// Get absolute path to the locally built binary
+	binPath, err := filepath.Abs("./bin/censys")
+	if err != nil {
+		panic(err)
+	}
+
 	r, err := tape.NewTapeRecorder(
 		"vhs",
-		"censys",
+		binPath,
 		map[string]string{
 			"FORCE_COLOR": "1",
 		},

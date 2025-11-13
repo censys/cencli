@@ -18,13 +18,12 @@ Flags:
   -p, --max-pages int          maximum number of pages to fetch (-1 for all pages) (default 1)
   -o, --org-id string          override the configured organization ID
   -n, --page-size int          number of results to return per page (default 100)
-  -s, --short                  render data through a configurable template
 
 Global Flags:
       --debug                   enable debug logging
       --no-color                disable ANSI colors and styles
       --no-spinner              disable spinner during operations
-  -O, --output-format string    output format (json|yaml|ndjson|tree) (default "json")
+  -O, --output-format string    output format (json|yaml|ndjson|tree|short|template) (default "json")
   -q, --quiet                   suppress non-essential output
       --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
 

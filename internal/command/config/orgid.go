@@ -44,6 +44,14 @@ func (c *organizationIDCommand) Long() string {
 
 func (c *organizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
+func (c *organizationIDCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *organizationIDCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *organizationIDCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	var err cenclierrors.CencliError
 	c.accessible, err = c.flags.accessible.Value()

@@ -20,14 +20,16 @@ import (
 
 type testCommand struct {
 	*BaseCommand
-	useFn     func() string
-	shortFn   func() string
-	longFn    func() string
-	argsFn    func() PositionalArgs
-	preRunFn  func(cmd *cobra.Command, args []string) cenclierrors.CencliError
-	runFn     func(cmd *cobra.Command, args []string) cenclierrors.CencliError
-	postRunFn func(cmd *cobra.Command, args []string) cenclierrors.CencliError
-	initFn    func(c Command) error
+	useFn                  func() string
+	shortFn                func() string
+	longFn                 func() string
+	argsFn                 func() PositionalArgs
+	preRunFn               func(cmd *cobra.Command, args []string) cenclierrors.CencliError
+	runFn                  func(cmd *cobra.Command, args []string) cenclierrors.CencliError
+	postRunFn              func(cmd *cobra.Command, args []string) cenclierrors.CencliError
+	initFn                 func(c Command) error
+	defaultOutputTypeFn    func() OutputType
+	supportedOutputTypesFn func() []OutputType
 }
 
 var _ Command = &testCommand{}
@@ -48,6 +50,20 @@ func (c *testCommand) PostRun(cmd *cobra.Command, args []string) cenclierrors.Ce
 	return c.postRunFn(cmd, args)
 }
 func (c *testCommand) Init() error { return c.initFn(c) }
+
+func (c *testCommand) DefaultOutputType() OutputType {
+	if c.defaultOutputTypeFn != nil {
+		return c.defaultOutputTypeFn()
+	}
+	return c.BaseCommand.DefaultOutputType()
+}
+
+func (c *testCommand) SupportedOutputTypes() []OutputType {
+	if c.supportedOutputTypesFn != nil {
+		return c.supportedOutputTypesFn()
+	}
+	return c.BaseCommand.SupportedOutputTypes()
+}
 
 func newTestCommand(cmdContext *Context) *testCommand {
 	return &testCommand{
@@ -151,7 +167,7 @@ func TestCommand(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			require.NoError(t, config.BindGlobalFlags(rootCmd.PersistentFlags()))
+			require.NoError(t, config.BindGlobalFlags(rootCmd.PersistentFlags(), cfg))
 			rootCmd.SetArgs(tc.args)
 
 			var stdout, stderr bytes.Buffer

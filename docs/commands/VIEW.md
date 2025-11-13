@@ -89,28 +89,58 @@ View data as of a specific point in time. The timestamp must be in RFC3339 forma
 $ censys view 8.8.8.8 --at-time 2025-09-15T14:30:00Z
 ```
 
-### `--short`, `-s`
+## Output Formats
 
-Render output using templates for a concise, human-readable summary instead of raw output. See the [using templates](#using-templates) section for more details.
+The `view` command defaults to **`json`** output format (or the global config value). You can override this with the `--output-format` flag (or `-O`).
 
-**Type:** `boolean`  
-**Default:** `false`
+**Default:** `json` (or configured global default)  
+**Supported formats:** `json`, `yaml`, `ndjson`, `tree`, `short`, `template`
+
+### Format Descriptions
+
+- **`json`** - Structured JSON output (default)
+- **`yaml`** - Structured YAML output
+- **`ndjson`** - Newline-delimited JSON (one asset per line)
+- **`tree`** - Hierarchical tree view
+- **`short`** - Concise summary view of assets
+- **`template`** - Render using asset-specific Handlebars templates (see [Templates](#templates) section)
+
+### Examples
 
 ```bash
-$ censys view 8.8.8.8 --short
+# Default: JSON output
+$ censys view 8.8.8.8
+
+# Short format: concise summary
+$ censys view 8.8.8.8 --output-format short
+$ censys view 8.8.8.8 -O short
+
+# Template format: custom Handlebars rendering
+$ censys view 8.8.8.8 --output-format template
+$ censys view example.com:443 --output-format template
+
+# YAML output
+$ censys view 8.8.8.8 --output-format yaml
 ```
 
 ## Templates
 
-`cencli` supports enables template-based rendering of raw data, which allows you to define how you view your data. Templates are powered by **Handlebars v3** (via the [raymond](https://github.com/aymerick/raymond) Handlebars implementation).
+`cencli` supports template-based rendering of raw data using the `--output-format template` flag, which allows you to define how you view your data. Templates are powered by **Handlebars v3** (via the [raymond](https://github.com/aymerick/raymond) Handlebars implementation).
 
 ![view-short](../../examples/view/view-short.gif)
 
-When you first run `cencli`, default templates can be found in the configuration directory (typically `~/.config/censys/templates/`) and are automatically created with sensible defaults on first use. Each asset type has its own template:
+When you first run `cencli`, default templates can be found in the configuration directory (typically `~/.config/cencli/templates/`) and are automatically created with sensible defaults on first use. Each asset type has its own template:
 
 - **Host:** `host.hbs`
 - **Certificate:** `certificate.hbs`
 - **Web Property:** `webproperty.hbs`
+
+To use templates, specify `--output-format template` (or `-O template`) when running the `view` command:
+
+```bash
+$ censys view 8.8.8.8 --output-format template
+$ censys view example.com:443 -O template
+```
 
 ### Customizing Templates
 

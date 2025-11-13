@@ -30,6 +30,14 @@ func (c *Command) Args() command.PositionalArgs {
 	return command.RangeArgs(0, 0)
 }
 
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeData
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData}
+}
+
 func (c *Command) Init() error {
 	return nil
 }
@@ -40,5 +48,5 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 
 func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	info := appversion.BuildInfo()
-	return c.PrintData(info)
+	return c.PrintData(c, info)
 }

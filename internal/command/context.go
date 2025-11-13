@@ -108,9 +108,23 @@ func (c *Context) WithProgress(
 	return err
 }
 
-// PrintData renders data according to the configured output format.
-func (c *Context) PrintData(data any) cenclierrors.CencliError {
-	return cenclierrors.NewCencliError(formatter.PrintByFormat(data, c.config.OutputFormat, !c.colorDisabledStdout))
+func (c *Context) PrintData(cmd Command, data any) cenclierrors.CencliError {
+	switch c.config.OutputFormat {
+	case formatter.OutputFormatShort:
+		if c.colorDisabledStdout {
+			enable := styles.TemporarilyDisableStyles()
+			defer enable()
+		}
+		return cmd.RenderShort()
+	case formatter.OutputFormatTemplate:
+		if c.colorDisabledStdout {
+			enable := styles.TemporarilyDisableStyles()
+			defer enable()
+		}
+		return cmd.RenderTemplate()
+	default:
+		return formatter.PrintByFormat(data, c.config.OutputFormat, !c.colorDisabledStdout)
+	}
 }
 
 // PrintYAML renders data as YAML.

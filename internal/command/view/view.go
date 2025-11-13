@@ -17,6 +17,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
+	"github.com/censys/cencli/internal/pkg/formatter/short"
 	"github.com/censys/cencli/internal/pkg/input"
 	"github.com/censys/cencli/internal/pkg/tape"
 )
@@ -36,14 +37,14 @@ type Command struct {
 	assetType assets.AssetType
 	orgID     mo.Option[identifiers.OrganizationID]
 	atTime    mo.Option[time.Time]
-	short     bool
+	// result stores the asset result for rendering
+	result assetResult
 }
 
 type viewCommandFlags struct {
 	orgID     flags.OrgIDFlag
 	inputFile flags.FileFlag
 	atTime    flags.TimestampFlag
-	short     flags.BoolFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -77,7 +78,7 @@ func (c *Command) Examples() []string {
 		"--input-file hosts.txt",
 		"--input-file -  # read assets from STDIN",
 		"platform.censys.io:80 --at-time 2025-09-15T14:30:00Z",
-		"8.8.8.8 --short",
+		"8.8.8.8 --output-format short",
 	}
 }
 
@@ -88,12 +89,19 @@ func (c *Command) Init() error {
 	c.flags.atTime = flags.NewTimestampFlag(c.Flags(), false, "at-time", "", mo.None[time.Time](), "view data as of this time (certificates not supported)")
 	// add aliases: --at and -a
 	c.flags.atTime.AddAlias("at", "a", "Alias for --at-time")
-	c.flags.short = flags.NewShortFlag(c.Flags(), "")
 	return nil
 }
 
 func (c *Command) Args() command.PositionalArgs {
 	return command.RangeArgs(0, 1)
+}
+
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeData
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData, command.OutputTypeTemplate, command.OutputTypeShort}
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
@@ -102,9 +110,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return err
 	}
 	if err := c.parseOrgIDFlag(); err != nil {
-		return err
-	}
-	if err := c.parseShortFlag(); err != nil {
 		return err
 	}
 	// gather assets and classify
@@ -155,16 +160,6 @@ func (c *Command) parseOrgIDFlag() cenclierrors.CencliError {
 	return nil
 }
 
-// parseShortFlag parses the short flag into c.short.
-func (c *Command) parseShortFlag() cenclierrors.CencliError {
-	var err cenclierrors.CencliError
-	c.short, err = c.flags.short.Value()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // gatherRawAssets returns raw asset strings from file, stdin, or positional args.
 func (c *Command) gatherRawAssets(cmd *cobra.Command, args []string) ([]string, cenclierrors.CencliError) {
 	if c.flags.inputFile.IsSet() {
@@ -189,14 +184,13 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"count", count,
 	)
 
-	var result assetResult
 	err := c.WithProgress(
 		cmd.Context(),
 		logger,
 		"Fetching assets...",
 		func(ctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
-			result, fetchErr = c.fetchAssetResult(ctx)
+			c.result, fetchErr = c.fetchAssetResult(ctx)
 			return fetchErr
 		},
 	)
@@ -205,14 +199,16 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		return err
 	}
 
-	// Render the assets (even if partial)
-	if renderErr := c.renderAssets(result); renderErr != nil {
+	// Print response metadata
+	c.PrintAppResponseMeta(c.result.Meta)
+
+	if renderErr := c.PrintData(c, c.result.Data()); renderErr != nil {
 		return renderErr
 	}
 
 	// If there was a partial error, print it to stderr after rendering the data
-	if result.PartialError != nil {
-		formatter.PrintError(result.PartialError, cmd)
+	if c.result.PartialError != nil {
+		formatter.PrintError(c.result.PartialError, cmd)
 	}
 
 	return nil
@@ -244,13 +240,13 @@ func (r assetResult) Data() any {
 	}
 }
 
-// renderAssets prints response metadata and either a short summary or structured data.
-func (c *Command) renderAssets(res assetResult) cenclierrors.CencliError {
-	c.PrintAppResponseMeta(res.Meta)
-	if c.short {
-		return c.printShort(res)
+// RenderTemplate renders asset results using a handlebars template.
+func (c *Command) RenderTemplate() cenclierrors.CencliError {
+	templateEntity, err := templateEntityFromAssetType(c.result.Type)
+	if err != nil {
+		return err
 	}
-	return c.PrintData(res.Data())
+	return c.PrintDataWithTemplate(templateEntity, c.result.Data())
 }
 
 // assetInputCount returns the number of input assets based on the inferred asset type.
@@ -308,14 +304,6 @@ func (c *Command) fetchAssetResult(ctx context.Context) (assetResult, cenclierro
 	}
 }
 
-func (c *Command) printShort(res assetResult) cenclierrors.CencliError {
-	templateEntity, err := templateEntityFromAssetType(res.Type)
-	if err != nil {
-		return err
-	}
-	return c.PrintDataWithTemplate(templateEntity, res.Data())
-}
-
 func templateEntityFromAssetType(assetType assets.AssetType) (config.TemplateEntity, cenclierrors.CencliError) {
 	switch assetType {
 	case assets.AssetTypeHost:
@@ -327,6 +315,24 @@ func templateEntityFromAssetType(assetType assets.AssetType) (config.TemplateEnt
 	default:
 		return "", NewUnsupportedAssetTypeError(assetType, "templating not supported for this asset type")
 	}
+}
+
+func (c *Command) RenderShort() cenclierrors.CencliError {
+	var output string
+
+	switch c.result.Type {
+	case assets.AssetTypeWebProperty:
+		output = short.WebProperties(c.result.WebProperties)
+	case assets.AssetTypeHost:
+		output = short.Hosts(c.result.Hosts)
+	case assets.AssetTypeCertificate:
+		output = short.Certificates(c.result.Certificates)
+	default:
+		return NewUnsupportedAssetTypeError(c.result.Type, "short output not supported for this asset type")
+	}
+
+	formatter.Println(formatter.Stdout, output)
+	return nil
 }
 
 func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
@@ -354,17 +360,17 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 		tape.NewTape("view-short",
 			tallerConfig,
 			recorder.Type(
-				"view --short 8.8.8.8 ",
+				"view --output-format short 8.8.8.8 ",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),
 			recorder.Type(
-				"view --short platform.censys.io:80",
+				"view --output-format short platform.censys.io:80",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),
 			recorder.Type(
-				"view --short 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf",
+				"view --output-format short 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),

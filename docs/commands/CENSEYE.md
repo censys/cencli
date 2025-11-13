@@ -110,32 +110,43 @@ In interactive mode, you can:
 - Press Enter to open a query in your default browser
 - Search and filter within results
 
-**Note:** Cannot be used with `--raw`.
-
-### `--raw`, `-r`
-
-Output raw JSON data instead of a formatted table. This will respect the [output format](../GLOBAL_CONFIGURATION.md#--output-format--o) configuration.
-
-**Type:** `boolean`  
-**Default:** `false`
-
-```bash
-$ censys censeye 8.8.8.8 --raw
-```
-
-**Note:** Cannot be used with `--interactive`.
 
 ### `--include-url`
 
-Include the `search_url` field in the output, which provides a direct link to view the query results in the Censys Platform web UI. This is particularly useful when using `--raw` for scripting purposes.
+Include the `search_url` field in the output, which provides a direct link to view the query results in the Censys Platform web UI. This is particularly useful when using structured output formats (JSON, YAML) for scripting purposes.
 
 **Type:** `boolean`  
 **Default:** `false`
 
 ```bash
-$ censys censeye 8.8.8.8 --raw --include-url
+$ censys censeye 8.8.8.8 --output-format json --include-url
 ```
 
+## Output Formats
+
+The `censeye` command defaults to **`short`** output format, which displays results as a formatted table. You can override this with the `--output-format` flag (or `-O`).
+
+**Default:** `short` (table view)  
+**Supported formats:** `short`, `json`, `yaml`, `ndjson`, `tree`
+
+### Examples
+
+```bash
+# Default: formatted table view
+$ censys censeye 8.8.8.8
+
+# JSON output
+$ censys censeye 8.8.8.8 --output-format json
+$ censys censeye 8.8.8.8 -O json
+
+# YAML output
+$ censys censeye 8.8.8.8 --output-format yaml
+
+# Interactive table (works with short format)
+$ censys censeye 8.8.8.8 --interactive
+```
+
+**Note:** The `--interactive` flag provides an enhanced interactive table view when using the `short` output format.
 
 ## Understanding the Output
 

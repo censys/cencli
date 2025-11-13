@@ -84,6 +84,28 @@ Specify the organization ID to use for the request. This overrides the default o
 $ censys history 8.8.8.8 --org-id 00000000-0000-0000-0000-000000000001
 ```
 
+## Output Formats
+
+The `history` command defaults to **`json`** output format (or the global config value). Unlike other commands, history only supports structured data formats.
+
+**Default:** `json` (or configured global default)  
+**Supported formats:** `json`, `yaml`, `ndjson`, `tree`
+
+**Note:** The `short` and `template` output formats are **not supported** for the history command due to the time-series nature of the data.
+
+### Examples
+
+```bash
+# Default: JSON output
+$ censys history 8.8.8.8 --duration 30d
+
+# YAML output
+$ censys history 8.8.8.8 --duration 30d --output-format yaml
+
+# NDJSON output (one event per line)
+$ censys history 8.8.8.8 --duration 30d --output-format ndjson
+```
+
 ## Output Format
 
 The `history` command outputs raw JSON arrays containing the historical information. The structure varies by asset type:

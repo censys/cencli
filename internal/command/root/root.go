@@ -46,8 +46,16 @@ func (c *Command) Args() command.PositionalArgs {
 	return command.ExactArgs(0)
 }
 
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *Command) Init() error {
-	if err := config.BindGlobalFlags(c.PersistentFlags()); err != nil {
+	if err := config.BindGlobalFlags(c.PersistentFlags(), c.Config()); err != nil {
 		return fmt.Errorf("failed to bind global flags: %w", err)
 	}
 
@@ -140,7 +148,7 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 			),
 			// view with template output
 			recorder.Type(
-				"view platform.censys.io:80 --short",
+				"view platform.censys.io:80 --output-format short",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),

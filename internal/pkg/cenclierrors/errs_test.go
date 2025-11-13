@@ -55,3 +55,25 @@ func TestCencliError_AvoidDoubleWrapping(t *testing.T) {
 
 	assert.Equal(t, firstWrap, secondWrap)
 }
+
+func TestNewUsageError(t *testing.T) {
+	baseErr := errors.New("unknown flag: --invalid")
+	usageErr := NewUsageError(baseErr)
+
+	assert.NotNil(t, usageErr)
+	assert.Contains(t, usageErr.Error(), "unknown flag: --invalid")
+	assert.Equal(t, "Usage Error", usageErr.Title())
+	assert.True(t, usageErr.ShouldPrintUsage())
+}
+
+func TestUsageError_NilHandling(t *testing.T) {
+	usageErr := NewUsageError(nil)
+	assert.Nil(t, usageErr)
+}
+
+func TestUsageError_Unwrap(t *testing.T) {
+	baseErr := errors.New("test error")
+	usageErr := NewUsageError(baseErr)
+
+	assert.True(t, errors.Is(usageErr, baseErr))
+}

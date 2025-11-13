@@ -50,6 +50,14 @@ func (c *addOrganizationIDCommand) Long() string {
 
 func (c *addOrganizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
+func (c *addOrganizationIDCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *addOrganizationIDCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *addOrganizationIDCommand) Init() error {
 	c.flags.accessible = flags.NewBoolFlag(
 		c.Flags(),
@@ -212,6 +220,14 @@ func (c *deleteOrganizationIDCommand) Short() string { return "Delete a stored o
 
 func (c *deleteOrganizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
 
+func (c *deleteOrganizationIDCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *deleteOrganizationIDCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *deleteOrganizationIDCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	return nil
 }
@@ -257,6 +273,14 @@ func (c *activateOrganizationIDCommand) Use() string   { return "activate <id>" 
 func (c *activateOrganizationIDCommand) Short() string { return "Set the active organization ID" }
 
 func (c *activateOrganizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
+
+func (c *activateOrganizationIDCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *activateOrganizationIDCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
 
 func (c *activateOrganizationIDCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	return nil
