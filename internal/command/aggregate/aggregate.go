@@ -137,7 +137,10 @@ func (c *Command) Init() error {
 		false,
 		"output raw data",
 	)
-	return nil
+	// Add chart subcommand
+	return c.AddSubCommands(
+		newChartCommand(c.Context),
+	)
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {

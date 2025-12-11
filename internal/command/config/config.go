@@ -29,6 +29,7 @@ func (c *Command) Init() error {
 	return c.AddSubCommands(
 		newAuthCommand(c.Context),
 		newOrganizationIDCommand(c.Context),
+		newGeminiCommand(c.Context),
 		newPrintCommand(c.Context),
 	)
 }
