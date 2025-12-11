@@ -85,11 +85,13 @@ var ChartPrompts = map[string]string{
 	`,
 	"bubble": `
 		Represent the data as a bubble chart using uniformly styled circular bubbles.
-		Each bubble's area (not radius) should scale proportionally to its value to maintain accurate visual comparison.
-		Arrange the bubbles using a non-overlapping layout (e.g., force-directed packing) that preserves a clear visual hierarchy, with larger bubbles naturally drawing more attention. Keep spacing even and avoid visual clutter.
-		Style each bubble in soft apricot (#F4C495) with subtle transparency and a thin, neutral outline for definition.
-		Place legible labels inside or near each bubble showing the key and value, ensuring labels do not overlap and remain readable regardless of bubble size.
-		Use a minimalist, clean aesthetic: no gridlines, axes, or unnecessary decorations—focus on clarity, balance, and modern visual design.
+		Each bubble's area (not its radius) must scale proportionally to its value to ensure accurate visual comparison.
+		Arrange the bubbles using a non-overlapping layout (e.g., force-directed packing) that produces a clear visual hierarchy, with larger bubbles naturally drawing more attention. Maintain even spacing and avoid visual clutter.
+		Style each bubble in soft apricot (#F4C495) with subtle transparency and a thin neutral outline for definition.
+		Place all text labels (category name and value) fully inside each bubble.
+		Do NOT place any labels, badges, icons, or annotations outside the bubbles.
+		Ensure that labels remain legible, centered, and non-overlapping regardless of bubble size.
+		Use a minimalist, clean aesthetic: no gridlines, axes, or unnecessary decorations—prioritize clarity, balance, and modern visual design.
 	`,
 	"bar": `
 		Represent the data as a vertical bar chart, using only the top 8–10 categories ranked by value.
