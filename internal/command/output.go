@@ -209,7 +209,7 @@ func newUnsupportedOutputFormatError(provided string, supported []string) *unsup
 }
 
 func (e *unsupportedOutputFormatError) Error() string {
-	return fmt.Sprintf("output format '%q' is not supported by this command -- supported formats: %s", e.provided, strings.Join(e.supported, ", "))
+	return fmt.Sprintf("output format '%s' is not supported by this command -- supported formats: %s", e.provided, strings.Join(e.supported, ", "))
 }
 
 func (e *unsupportedOutputFormatError) Title() string {

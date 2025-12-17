@@ -119,6 +119,51 @@ func (mr *MockClientMockRecorder) GetHosts(ctx, orgID, hostIDs, atTime any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHosts", reflect.TypeOf((*MockClient)(nil).GetHosts), ctx, orgID, hostIDs, atTime)
 }
 
+// GetOrganizationCreditDetails mocks base method.
+func (m *MockClient) GetOrganizationCreditDetails(ctx context.Context, orgID string) (censys.Result[components.OrganizationCredits], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOrganizationCreditDetails", ctx, orgID)
+	ret0, _ := ret[0].(censys.Result[components.OrganizationCredits])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetOrganizationCreditDetails indicates an expected call of GetOrganizationCreditDetails.
+func (mr *MockClientMockRecorder) GetOrganizationCreditDetails(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationCreditDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationCreditDetails), ctx, orgID)
+}
+
+// GetOrganizationDetails mocks base method.
+func (m *MockClient) GetOrganizationDetails(ctx context.Context, orgID string) (censys.Result[components.OrganizationDetails], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOrganizationDetails", ctx, orgID)
+	ret0, _ := ret[0].(censys.Result[components.OrganizationDetails])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetOrganizationDetails indicates an expected call of GetOrganizationDetails.
+func (mr *MockClientMockRecorder) GetOrganizationDetails(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationDetails), ctx, orgID)
+}
+
+// GetUserCreditDetails mocks base method.
+func (m *MockClient) GetUserCreditDetails(ctx context.Context) (censys.Result[components.UserCredits], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserCreditDetails", ctx)
+	ret0, _ := ret[0].(censys.Result[components.UserCredits])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetUserCreditDetails indicates an expected call of GetUserCreditDetails.
+func (mr *MockClientMockRecorder) GetUserCreditDetails(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserCreditDetails", reflect.TypeOf((*MockClient)(nil).GetUserCreditDetails), ctx)
+}
+
 // GetValueCounts mocks base method.
 func (m *MockClient) GetValueCounts(ctx context.Context, orgID, query mo.Option[string], andCountConditions []components.CountCondition) (censys.Result[components.ValueCountsResponse], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -176,6 +221,21 @@ func (m *MockClient) HostTimeline(ctx context.Context, orgID mo.Option[string], 
 func (mr *MockClientMockRecorder) HostTimeline(ctx, orgID, hostID, fromTime, toTime any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HostTimeline", reflect.TypeOf((*MockClient)(nil).HostTimeline), ctx, orgID, hostID, fromTime, toTime)
+}
+
+// ListOrganizationMembers mocks base method.
+func (m *MockClient) ListOrganizationMembers(ctx context.Context, orgID string, pageSize mo.Option[int], pageToken mo.Option[string]) (censys.Result[components.OrganizationMembersList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOrganizationMembers", ctx, orgID, pageSize, pageToken)
+	ret0, _ := ret[0].(censys.Result[components.OrganizationMembersList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListOrganizationMembers indicates an expected call of ListOrganizationMembers.
+func (mr *MockClientMockRecorder) ListOrganizationMembers(ctx, orgID, pageSize, pageToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationMembers", reflect.TypeOf((*MockClient)(nil).ListOrganizationMembers), ctx, orgID, pageSize, pageToken)
 }
 
 // Search mocks base method.

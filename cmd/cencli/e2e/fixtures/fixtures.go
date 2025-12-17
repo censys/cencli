@@ -29,5 +29,7 @@ func Fixtures() map[string][]Fixture {
 		"search":    searchFixtures,
 		"censeye":   censeyeFixtures,
 		"history":   historyFixtures,
+		"credits":   creditsFixtures,
+		"org":       orgFixtures,
 	}
 }

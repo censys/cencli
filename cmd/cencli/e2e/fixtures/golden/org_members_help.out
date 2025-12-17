@@ -1,0 +1,31 @@
+List members in your organization.                                                        
+                                                                                          
+This command displays all members including their email, name, roles, and last login time.
+                                                                                          
+By default, the stored organization ID is used. Use --org-id to query a specific          
+organization.                                                                             
+Use --interactive for a navigable table view.                                             
+
+Usage:
+  censys org members [flags]
+
+Examples:
+  censys org members  # List members for your stored organization
+  censys org members --interactive # List members in an interactive table
+  censys org members --org-id <uuid> # List members for a specific organization
+  censys org members --output-format json # Output as JSON
+
+Flags:
+  -h, --help            help for members
+  -i, --interactive     display results in an interactive table (TUI)
+  -o, --org-id string   override the configured organization ID
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

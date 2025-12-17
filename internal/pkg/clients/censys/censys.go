@@ -22,6 +22,7 @@ type Client interface {
 	GlobalDataClient
 	CollectionsClient
 	ThreatHuntingClient
+	AccountManagementClient
 	HasOrgID() bool
 }
 
@@ -40,6 +41,7 @@ type censysSDKImpl struct {
 	GlobalDataClient
 	CollectionsClient
 	ThreatHuntingClient
+	AccountManagementClient
 }
 
 var _ Client = &censysSDKImpl{}
@@ -79,10 +81,11 @@ func NewCensysSDK(
 	}
 
 	return &censysSDKImpl{
-		censysSDK:           censysSDK,
-		GlobalDataClient:    newGlobalDataSDK(censysSDK),
-		CollectionsClient:   newCollectionsSDK(censysSDK),
-		ThreatHuntingClient: newThreatHuntingSDK(censysSDK),
+		censysSDK:               censysSDK,
+		GlobalDataClient:        newGlobalDataSDK(censysSDK),
+		CollectionsClient:       newCollectionsSDK(censysSDK),
+		ThreatHuntingClient:     newThreatHuntingSDK(censysSDK),
+		AccountManagementClient: newAccountManagementSDK(censysSDK),
 	}, nil
 }
 

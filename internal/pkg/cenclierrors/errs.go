@@ -209,3 +209,21 @@ func IsInterrupted(err error) bool {
 	}
 	return errors.Is(err, context.Canceled)
 }
+
+type noOrgIDError struct{}
+
+func (e *noOrgIDError) Error() string {
+	return "no organization ID configured. Use --org-id flag or run 'censys config org-id set <org-id>' to set a default"
+}
+
+func (e *noOrgIDError) Title() string {
+	return "No Organization ID"
+}
+
+func (e *noOrgIDError) ShouldPrintUsage() bool {
+	return true
+}
+
+func NewNoOrgIDError() CencliError {
+	return &noOrgIDError{}
+}
