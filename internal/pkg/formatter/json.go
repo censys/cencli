@@ -8,51 +8,60 @@ import (
 )
 
 // PrintJSON prints v as pretty JSON, optionally colored.
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
 func PrintJSON(v any, colored bool) error {
-	enc := newEncoder(colored, true)
-	return enc.Encode(v)
+	// Marshal with standard library first to support omitzero
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if colored {
+		// Re-encode the raw JSON with colors
+		enc := jsoncolor.NewEncoder(Stdout)
+		enc.SetColors(jsonColors())
+		enc.SetIndent("", "  ")
+		return enc.Encode(json.RawMessage(data))
+	}
+
+	_, err = Stdout.Write(append(data, '\n'))
+	return err
 }
 
 // PrintNDJSON prints one JSON object per line.
 // If v is a slice, it prints each element on its own line.
 // Otherwise, it prints v.
+// Uses the standard library for marshaling (to support omitzero).
 func PrintNDJSON(v any, colored bool) error {
-	enc := newEncoder(colored, false)
+	encode := func(item any) error {
+		// Marshal with standard library first to support omitzero
+		data, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+
+		if colored {
+			enc := jsoncolor.NewEncoder(Stdout)
+			enc.SetColors(jsonColors())
+			return enc.Encode(json.RawMessage(data))
+		}
+
+		_, err = Stdout.Write(append(data, '\n'))
+		return err
+	}
 
 	switch s := v.(type) {
 	case []any:
 		for _, item := range s {
-			if err := enc.Encode(item); err != nil {
+			if err := encode(item); err != nil {
 				return err
 			}
 		}
 		return nil
 	default:
-		return enc.Encode(v)
+		return encode(v)
 	}
-}
-
-// encoder is a type that can encode JSON.
-type jsonEncoder interface {
-	Encode(v any) error
-}
-
-// newEncoder creates either a plain or color encoder.
-// pretty controls whether SetIndent is applied.
-func newEncoder(colored, pretty bool) jsonEncoder {
-	if colored {
-		enc := jsoncolor.NewEncoder(Stdout)
-		enc.SetColors(jsonColors())
-		if pretty {
-			enc.SetIndent("", "  ")
-		}
-		return enc
-	}
-	enc := json.NewEncoder(Stdout)
-	if pretty {
-		enc.SetIndent("", "  ")
-	}
-	return enc
 }
 
 // jsonColors defines the color scheme for jsoncolor.

@@ -16,6 +16,7 @@ import (
 
 	censys "github.com/censys/cencli/internal/pkg/clients/censys"
 	components "github.com/censys/censys-sdk-go/models/components"
+	uuid "github.com/google/uuid"
 	mo "github.com/samber/mo"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -117,6 +118,36 @@ func (m *MockClient) GetHosts(ctx context.Context, orgID mo.Option[string], host
 func (mr *MockClientMockRecorder) GetHosts(ctx, orgID, hostIDs, atTime any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHosts", reflect.TypeOf((*MockClient)(nil).GetHosts), ctx, orgID, hostIDs, atTime)
+}
+
+// GetOrganizationCreditDetails mocks base method.
+func (m *MockClient) GetOrganizationCreditDetails(ctx context.Context, orgID uuid.UUID) (censys.Result[components.OrganizationCredits], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOrganizationCreditDetails", ctx, orgID)
+	ret0, _ := ret[0].(censys.Result[components.OrganizationCredits])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetOrganizationCreditDetails indicates an expected call of GetOrganizationCreditDetails.
+func (mr *MockClientMockRecorder) GetOrganizationCreditDetails(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationCreditDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationCreditDetails), ctx, orgID)
+}
+
+// GetUserCreditDetails mocks base method.
+func (m *MockClient) GetUserCreditDetails(ctx context.Context) (censys.Result[components.UserCredits], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserCreditDetails", ctx)
+	ret0, _ := ret[0].(censys.Result[components.UserCredits])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetUserCreditDetails indicates an expected call of GetUserCreditDetails.
+func (mr *MockClientMockRecorder) GetUserCreditDetails(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserCreditDetails", reflect.TypeOf((*MockClient)(nil).GetUserCreditDetails), ctx)
 }
 
 // GetValueCounts mocks base method.

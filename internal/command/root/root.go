@@ -12,6 +12,7 @@ import (
 	censeyecmd "github.com/censys/cencli/internal/command/censeye"
 	completioncmd "github.com/censys/cencli/internal/command/completion"
 	configcmd "github.com/censys/cencli/internal/command/config"
+	creditscmd "github.com/censys/cencli/internal/command/credits"
 	historycmd "github.com/censys/cencli/internal/command/history"
 	searchcmd "github.com/censys/cencli/internal/command/search"
 	versioncmd "github.com/censys/cencli/internal/command/versioncmd"
@@ -68,6 +69,7 @@ func (c *Command) Init() error {
 		searchcmd.NewSearchCommand(c.Context),
 		aggregatecmd.NewAggregateCommand(c.Context),
 		censeyecmd.NewCenseyeCommand(c.Context),
+		creditscmd.NewCreditsCommand(c.Context),
 	)
 }
 
