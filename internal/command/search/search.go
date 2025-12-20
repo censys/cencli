@@ -90,6 +90,10 @@ func (c *Command) SupportedOutputTypes() []command.OutputType {
 	return []command.OutputType{command.OutputTypeData, command.OutputTypeTemplate, command.OutputTypeShort}
 }
 
+func (c *Command) SupportsStreaming() bool {
+	return true
+}
+
 func (c *Command) Examples() []string {
 	return []string{
 		`"host.ip: 1.1.1.1/16"`,
@@ -187,8 +191,12 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		logger.Debug("fetching all pages", "message", msg)
 	}
 
+	// Set up streaming output (no-op for non-streaming formats)
+	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
+	defer stopStreaming(nil)
+
 	err := c.WithProgress(
-		cmd.Context(),
+		ctx,
 		logger,
 		"Fetching search results...",
 		func(pctx context.Context) cenclierrors.CencliError {
@@ -205,9 +213,8 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	// Print response metadata
 	c.PrintAppResponseMeta(c.result.Meta)
 
-	// Prepare data for rendering
+	// PrintData handles streaming vs buffered automatically
 	data := c.prepareSearchData()
-
 	if renderErr := c.PrintData(c, data); renderErr != nil {
 		return renderErr
 	}

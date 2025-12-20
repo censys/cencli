@@ -8,6 +8,7 @@ import (
 	"github.com/samber/mo"
 
 	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
@@ -48,7 +49,7 @@ func (s *historyService) GetWebPropertyHistory(
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if totalRequests > 0 {
+			if totalRequests > 0 || streaming.IsStreaming(ctx) {
 				latency := time.Since(start)
 				if lastMeta != nil {
 					lastMeta.Latency = latency
@@ -76,6 +77,7 @@ func (s *historyService) GetWebPropertyHistory(
 			mo.Some(current),
 		)
 
+		var snapshot *WebPropertySnapshot
 		if err != nil {
 			// If this is the first request, return the error immediately
 			if totalRequests == 1 {
@@ -89,11 +91,11 @@ func (s *historyService) GetWebPropertyHistory(
 				// Report the first error so users are aware something went wrong
 				progress.ReportError(ctx, progress.StageFetch, err)
 			}
-			allSnapshots = append(allSnapshots, &WebPropertySnapshot{
+			snapshot = &WebPropertySnapshot{
 				Time:   current,
 				Data:   nil,
 				Exists: false,
-			})
+			}
 		} else {
 			// store metadata from the last successful request
 			lastMeta = responsemeta.NewResponseMeta(res.Metadata.Request, res.Metadata.Response, res.Metadata.Latency, res.Metadata.Attempts)
@@ -107,11 +109,26 @@ func (s *historyService) GetWebPropertyHistory(
 				exists = webPropertyHasMeaningfulData(webProp)
 			}
 
-			allSnapshots = append(allSnapshots, &WebPropertySnapshot{
+			snapshot = &WebPropertySnapshot{
 				Time:   current,
 				Data:   webProp,
 				Exists: exists,
-			})
+			}
+		}
+
+		// Either stream or accumulate snapshot
+		var emitErr error
+		allSnapshots, emitErr = streaming.EmitOrCollect(ctx, snapshot, allSnapshots)
+		if emitErr != nil {
+			if lastMeta != nil {
+				lastMeta.Latency = time.Since(start)
+				lastMeta.PageCount = totalRequests
+			}
+			return WebPropertyHistoryResult{
+				Meta:         lastMeta,
+				Snapshots:    nil,
+				PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+			}, nil
 		}
 
 		// Move to next day

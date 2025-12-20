@@ -8,6 +8,7 @@ import (
 	"github.com/samber/mo"
 
 	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
@@ -54,7 +55,7 @@ func (s *historyService) GetHostHistory(
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if pages > 0 {
+			if pages > 0 || streaming.IsStreaming(ctx) {
 				latency := time.Since(start)
 				if lastMeta != nil {
 					lastMeta.Latency = latency
@@ -101,9 +102,22 @@ func (s *historyService) GetHostHistory(
 			break
 		}
 
-		// append events to result
+		// Either stream or accumulate events
 		for i := range events {
-			allEvents = append(allEvents, &events[i].Resource)
+			event := &events[i].Resource
+			var emitErr error
+			allEvents, emitErr = streaming.EmitOrCollect(ctx, event, allEvents)
+			if emitErr != nil {
+				if lastMeta != nil {
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = pages
+				}
+				return HostHistoryResult{
+					Meta:         lastMeta,
+					Events:       nil,
+					PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+				}, nil
+			}
 		}
 
 		// if we got fewer than maxEventsPerPage events, we've reached the end

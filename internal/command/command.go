@@ -72,8 +72,11 @@ type Command interface {
 	// DefaultOutputType returns the default output type for this command.
 	DefaultOutputType() OutputType
 	// SupportedOutputTypes returns the output types this command supports.
-	// OutputTypeData automatically includes json, yaml, ndjson, and tree formats.
+	// OutputTypeData includes json, yaml, and tree formats (buffered output).
 	SupportedOutputTypes() []OutputType
+	// SupportsStreaming returns true if this command supports streaming output mode.
+	// Commands that return true must use WithStreamingOutput in their Run implementation.
+	SupportsStreaming() bool
 	// RenderShort renders the command output in short format.
 	RenderShort() cenclierrors.CencliError
 	// RenderTemplate renders the command output using a template.

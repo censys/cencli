@@ -104,6 +104,10 @@ func (c *Command) SupportedOutputTypes() []command.OutputType {
 	return []command.OutputType{command.OutputTypeData, command.OutputTypeTemplate, command.OutputTypeShort}
 }
 
+func (c *Command) SupportsStreaming() bool {
+	return true
+}
+
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	// parse flags first (avoid resolving service before validation)
 	if err := c.parseAtTimeFlag(); err != nil {
@@ -184,13 +188,17 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"count", count,
 	)
 
+	// Set up streaming output (no-op for non-streaming formats)
+	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
+	defer stopStreaming(nil)
+
 	err := c.WithProgress(
-		cmd.Context(),
+		ctx,
 		logger,
 		"Fetching assets...",
-		func(ctx context.Context) cenclierrors.CencliError {
+		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
-			c.result, fetchErr = c.fetchAssetResult(ctx)
+			c.result, fetchErr = c.fetchAssetResult(pctx)
 			return fetchErr
 		},
 	)
@@ -202,6 +210,7 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	// Print response metadata
 	c.PrintAppResponseMeta(c.result.Meta)
 
+	// PrintData handles streaming vs buffered automatically
 	if renderErr := c.PrintData(c, c.result.Data()); renderErr != nil {
 		return renderErr
 	}

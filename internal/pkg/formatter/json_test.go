@@ -54,7 +54,7 @@ func TestPrintJSON(t *testing.T) {
 	}
 }
 
-func TestPrintNDJSON(t *testing.T) {
+func TestWriteNDJSONItem(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    any
@@ -62,33 +62,24 @@ func TestPrintNDJSON(t *testing.T) {
 		expected string
 	}{
 		{
-			name:    "slice of objects uncolored",
-			input:   []any{map[string]any{"id": 1}, map[string]any{"id": 2}},
-			colored: false,
-			expected: `{"id":1}
-{"id":2}
-`,
+			name:     "single object uncolored",
+			input:    map[string]any{"name": "test"},
+			colored:  false,
+			expected: "{\"name\":\"test\"}\n",
 		},
 		{
-			name:    "single object uncolored",
-			input:   map[string]any{"name": "test"},
-			colored: false,
-			expected: `{"name":"test"}
-`,
+			name:     "nested object uncolored",
+			input:    map[string]any{"id": 1, "nested": map[string]any{"value": "x"}},
+			colored:  false,
+			expected: "{\"id\":1,\"nested\":{\"value\":\"x\"}}\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Capture output
 			var buf bytes.Buffer
-			old := Stdout
-			Stdout = &buf
-			defer func() { Stdout = old }()
-
-			err := PrintNDJSON(tt.input, tt.colored)
+			err := WriteNDJSONItem(&buf, tt.input, tt.colored)
 			require.NoError(t, err)
-
 			assert.Equal(t, tt.expected, buf.String())
 		})
 	}

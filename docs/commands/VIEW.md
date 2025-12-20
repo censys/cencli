@@ -94,16 +94,19 @@ $ censys view 8.8.8.8 --at-time 2025-09-15T14:30:00Z
 The `view` command defaults to **`json`** output format (or the global config value). You can override this with the `--output-format` flag (or `-O`).
 
 **Default:** `json` (or configured global default)  
-**Supported formats:** `json`, `yaml`, `ndjson`, `tree`, `short`, `template`
+**Supported formats:** `json`, `yaml`, `tree`, `short`, `template`
 
 ### Format Descriptions
 
 - **`json`** - Structured JSON output (default)
 - **`yaml`** - Structured YAML output
-- **`ndjson`** - Newline-delimited JSON (one asset per line)
 - **`tree`** - Hierarchical tree view
 - **`short`** - Concise summary view of assets
 - **`template`** - Render using asset-specific Handlebars templates (see [Templates](#templates) section)
+
+### Streaming Output
+
+Use `--streaming` (or `-S`) to enable streaming mode, which outputs results as NDJSON (newline-delimited JSON) with one asset per line emitted immediately as data is fetched. This is useful when viewing many assets at once. See [global configuration](../GLOBAL_CONFIGURATION.md#--streaming--s) for more details.
 
 ### Examples
 

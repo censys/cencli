@@ -17,7 +17,8 @@ import (
 )
 
 type Config struct {
-	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|ndjson|tree)"`
+	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|tree)"`
+	Streaming     bool                              `yaml:"streaming" mapstructure:"streaming" doc:"Enable streaming output mode (NDJSON) for commands that support it"`
 	NoColor       bool                              `yaml:"no-color" mapstructure:"no-color" doc:"Disable ANSI colors and styles"`
 	Spinner       SpinnerConfig                     `yaml:"spinner" mapstructure:"spinner"`
 	Quiet         bool                              `yaml:"quiet" mapstructure:"quiet" doc:"Suppress non-essential output"`
@@ -31,6 +32,7 @@ type Config struct {
 
 var defaultConfig = &Config{
 	OutputFormat:  formatter.OutputFormatJSON,
+	Streaming:     false,
 	NoColor:       false,
 	Spinner:       defaultSpinnerConfig,
 	Quiet:         false,
@@ -48,6 +50,9 @@ const (
 	quietKey       = "quiet"
 	debugKey       = "debug"
 	timeoutHTTPKey = "timeout-http"
+
+	// StreamingFlagName is the name of the --streaming flag.
+	StreamingFlagName = "streaming"
 )
 
 func New(dataDir string) (*Config, cenclierrors.CencliError) {
@@ -152,6 +157,9 @@ func BindGlobalFlags(persistentFlags *pflag.FlagSet, cfg *Config) error {
 	}
 	if err := formatter.BindOutputFormat(persistentFlags, cfg.OutputFormat); err != nil {
 		return fmt.Errorf("failed to bind output-format flag: %w", err)
+	}
+	if err := addPersistentBoolAndBind(persistentFlags, StreamingFlagName, false, "enable streaming output mode (NDJSON) for commands that support it", "S"); err != nil {
+		return fmt.Errorf("failed to bind streaming flag: %w", err)
 	}
 	return nil
 }

@@ -30,6 +30,7 @@ type testCommand struct {
 	initFn                 func(c Command) error
 	defaultOutputTypeFn    func() OutputType
 	supportedOutputTypesFn func() []OutputType
+	supportsStreamingFn    func() bool
 }
 
 var _ Command = &testCommand{}
@@ -63,6 +64,13 @@ func (c *testCommand) SupportedOutputTypes() []OutputType {
 		return c.supportedOutputTypesFn()
 	}
 	return c.BaseCommand.SupportedOutputTypes()
+}
+
+func (c *testCommand) SupportsStreaming() bool {
+	if c.supportsStreamingFn != nil {
+		return c.supportsStreamingFn()
+	}
+	return c.BaseCommand.SupportsStreaming()
 }
 
 func newTestCommand(cmdContext *Context) *testCommand {

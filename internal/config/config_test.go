@@ -51,17 +51,17 @@ func TestConfig(t *testing.T) {
 				return os.WriteFile(configPath, []byte("output-format: yaml\n"), 0o644)
 			},
 			override: func() error {
-				viper.Set("output-format", "ndjson")
+				viper.Set("output-format", "tree")
 				return nil
 			},
 			assert: func(t *testing.T, cfg *Config, tempDir string) {
-				assert.Equal(t, formatter.OutputFormatNDJSON, cfg.OutputFormat)
-				assert.Equal(t, "ndjson", viper.GetString("output-format"))
+				assert.Equal(t, formatter.OutputFormatTree, cfg.OutputFormat)
+				assert.Equal(t, "tree", viper.GetString("output-format"))
 				configPath := filepath.Join(tempDir, "config.yaml")
 				fileContent, err := os.ReadFile(configPath)
 				require.NoError(t, err)
 				// After our fix, the updated config should be written back to the file
-				assert.Contains(t, string(fileContent), "output-format: ndjson")
+				assert.Contains(t, string(fileContent), "output-format: tree")
 			},
 		},
 		{
@@ -410,7 +410,7 @@ func TestConfig_DocComments_InitialCreation(t *testing.T) {
 	t.Logf("Generated config.yaml:\n%s", yamlStr)
 
 	// Verify that doc comments are present for top-level fields
-	assert.Contains(t, yamlStr, "# Default output format (json|yaml|ndjson|tree)")
+	assert.Contains(t, yamlStr, "# Default output format (json|yaml|tree)")
 	assert.Contains(t, yamlStr, "# Disable ANSI colors and styles")
 	assert.Contains(t, yamlStr, "# Disable spinner during operations")
 	assert.Contains(t, yamlStr, "# Show stopwatch in the spinner after this many seconds")

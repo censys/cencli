@@ -41,8 +41,6 @@ func (o *OutputFormat) UnmarshalText(text []byte) error {
 		*o = OutputFormatJSON
 	case OutputFormatYAML.String():
 		*o = OutputFormatYAML
-	case OutputFormatNDJSON.String():
-		*o = OutputFormatNDJSON
 	case OutputFormatTree.String():
 		*o = OutputFormatTree
 	case OutputFormatShort.String():
@@ -59,7 +57,6 @@ func AvailableOutputFormats() []string {
 	return []string{
 		OutputFormatJSON.String(),
 		OutputFormatYAML.String(),
-		OutputFormatNDJSON.String(),
 		OutputFormatTree.String(),
 		OutputFormatShort.String(),
 		OutputFormatTemplate.String(),
@@ -67,7 +64,7 @@ func AvailableOutputFormats() []string {
 }
 
 func BindOutputFormat(persistentFlags *pflag.FlagSet, defaultValue OutputFormat) error {
-	// Bind the global --output-format flag (no short form)
-	persistentFlags.StringP(OutputFormatFlagName, outputFormatFlagShort, defaultValue.String(), "output format (json|yaml|ndjson|tree|short|template)")
+	// Bind the global --output-format flag
+	persistentFlags.StringP(OutputFormatFlagName, outputFormatFlagShort, defaultValue.String(), "output format (json|yaml|tree|short|template)")
 	return viper.BindPFlag(OutputFormatFlagName, persistentFlags.Lookup(OutputFormatFlagName))
 }
