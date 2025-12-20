@@ -6,6 +6,8 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/assets"
 )
 
+// FIXME: make this perfect
+
 // SearchHits renders search hits in short format.
 // Renders hits in the order received, adding numbered separators with asset type.
 func SearchHits(hits []assets.Asset) string {

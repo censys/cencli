@@ -12,6 +12,8 @@ import (
 	"github.com/censys/cencli/internal/pkg/styles"
 )
 
+// FIXME: make this perfect
+
 // WebProperties renders web properties in short format
 func WebProperties(webProperties []*assets.WebProperty) string {
 	b := NewBlock()

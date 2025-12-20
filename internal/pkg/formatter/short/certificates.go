@@ -9,6 +9,8 @@ import (
 	"github.com/censys/cencli/internal/pkg/styles"
 )
 
+// FIXME: make this perfect
+
 // Certificates renders certificates in short format
 func Certificates(certificates []*assets.Certificate) string {
 	b := NewBlock()

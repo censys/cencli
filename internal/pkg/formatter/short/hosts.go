@@ -12,6 +12,8 @@ import (
 	"github.com/censys/cencli/internal/pkg/styles"
 )
 
+// FIXME: make this perfect
+
 // Hosts renders hosts in short format.
 func Hosts(hosts []*assets.Host) string {
 	b := NewBlock()
