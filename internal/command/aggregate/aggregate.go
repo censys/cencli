@@ -44,7 +44,8 @@ type Command struct {
 	countByLevel  mo.Option[aggregate.CountByLevel]
 	filterByQuery bool
 	interactive   bool
-	raw           bool
+	// result stores the fetched aggregation data for rendering
+	result aggregate.Result
 }
 
 type aggregateCommandFlags struct {
@@ -54,7 +55,6 @@ type aggregateCommandFlags struct {
 	countByLevel  flags.StringFlag
 	filterByQuery flags.BoolFlag
 	interactive   flags.BoolFlag
-	raw           flags.BoolFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -85,7 +85,16 @@ func (c *Command) Examples() []string {
 	return []string{
 		`"host.services.protocol=SSH" "host.services.port"`,
 		`-c <your-collection-id> "services.service_name:HTTP" "services.port"`,
+		`"services.service_name:HTTP" "services.port" --output-format json`,
 	}
+}
+
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData, command.OutputTypeShort}
 }
 
 func (c *Command) Init() error {
@@ -129,13 +138,6 @@ func (c *Command) Init() error {
 		"i",
 		false,
 		"display results in an interactive table (TUI)",
-	)
-	c.flags.raw = flags.NewBoolFlag(
-		c.Flags(),
-		"raw",
-		"r",
-		false,
-		"output raw data",
 	)
 	return nil
 }
@@ -188,15 +190,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	// validate raw (if present)
-	c.raw, err = c.flags.raw.Value()
-	if err != nil {
-		return err
-	}
-	// validate that raw and interactive are not both set
-	if c.raw && c.interactive {
-		return flags.NewConflictingFlagsError("raw", "interactive")
-	}
 	return nil
 }
 
@@ -210,14 +203,13 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"countByLevel_set", c.countByLevel.IsPresent(),
 		"filterByQuery", c.filterByQuery,
 	)
-	var result aggregate.Result
 	err := c.WithProgress(
 		cmd.Context(),
 		logger,
 		"Fetching aggregation results...",
 		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
-			result, fetchErr = c.fetchAggregateResult(pctx)
+			c.result, fetchErr = c.fetchAggregateResult(pctx)
 			return fetchErr
 		},
 	)
@@ -225,7 +217,11 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		logger.Debug("fetch failed", "error", err)
 		return err
 	}
-	return c.renderAggregateResult(result)
+
+	// Print response metadata
+	c.PrintAppResponseMeta(c.result.Meta)
+
+	return c.PrintData(c, c.result.Buckets)
 }
 
 func (c *Command) fetchAggregateResult(ctx context.Context) (aggregate.Result, cenclierrors.CencliError) {
@@ -250,17 +246,12 @@ func (c *Command) buildAggregateParams() aggregate.Params {
 	}
 }
 
-func (c *Command) renderAggregateResult(result aggregate.Result) cenclierrors.CencliError {
-	c.PrintAppResponseMeta(result.Meta)
+func (c *Command) RenderShort() cenclierrors.CencliError {
 	if c.interactive {
-		return c.showInteractiveTable(result)
-	}
-	if c.raw {
-		c.PrintAppResponseMeta(result.Meta)
-		return c.PrintData(result.Buckets)
+		return c.showInteractiveTable(c.result)
 	}
 	// Default: show raw table
-	return c.showRawTable(result)
+	return c.showRawTable(c.result)
 }
 
 // buildTableTitle constructs a title string that includes the query, count-by-level, and filter-by-query settings.
@@ -354,7 +345,7 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 				tape.WithClearAfter(),
 			),
 			recorder.Type(
-				"aggregate 'host.services.port=22' host.services.protocol --raw",
+				"aggregate 'host.services.port=22' host.services.protocol --output-format json",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),

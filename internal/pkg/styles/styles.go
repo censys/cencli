@@ -115,7 +115,13 @@ func ColorForced() bool {
 }
 
 func isTestEnvironment() bool {
-	return strings.HasSuffix(os.Args[0], ".test")
+	if strings.HasSuffix(os.Args[0], ".test") {
+		return true
+	}
+	if len(os.Args) > 1 && os.Args[1] == "-test.run" {
+		return true
+	}
+	return false
 }
 
 // DisableStyles disables ANSI styling by switching to an ASCII color profile.

@@ -7,6 +7,7 @@ Usage:
 Examples:
   censys aggregate "host.services.protocol=SSH" "host.services.port"
   censys aggregate -c <your-collection-id> "services.service_name:HTTP" "services.port"
+  censys aggregate "services.service_name:HTTP" "services.port" --output-format json
 
 Flags:
   -c, --collection-id string    collection to aggregate within (optional)
@@ -16,13 +17,12 @@ Flags:
   -i, --interactive             display results in an interactive table (TUI)
   -n, --num-buckets int         number of buckets to split results into (default 25)
   -o, --org-id string           override the configured organization ID
-  -r, --raw                     output raw data
 
 Global Flags:
       --debug                   enable debug logging
       --no-color                disable ANSI colors and styles
       --no-spinner              disable spinner during operations
-  -O, --output-format string    output format (json|yaml|ndjson|tree) (default "json")
+  -O, --output-format string    output format (json|yaml|ndjson|tree|short|template) (default "short")
   -q, --quiet                   suppress non-essential output
       --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
 

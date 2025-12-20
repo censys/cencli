@@ -18,7 +18,6 @@ import (
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
-	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/store"
 )
@@ -501,7 +500,7 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Output format tests
 		{
-			name: "success - raw flag outputs JSON",
+			name: "success - output-format json outputs JSON",
 			store: func(ctrl *gomock.Controller) store.Store {
 				return storemocks.NewMockStore(ctrl)
 			},
@@ -519,7 +518,7 @@ func TestAggregateCommand(t *testing.T) {
 				}, nil)
 				return mockSvc
 			},
-			args: []string{"--raw", "services.service_name:HTTP", "services.port"},
+			args: []string{"--output-format", "json", "services.service_name:HTTP", "services.port"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Should contain JSON output
@@ -530,7 +529,7 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - raw flag short form outputs JSON",
+			name: "success - output-format json short form outputs JSON",
 			store: func(ctrl *gomock.Controller) store.Store {
 				return storemocks.NewMockStore(ctrl)
 			},
@@ -547,7 +546,7 @@ func TestAggregateCommand(t *testing.T) {
 				}, nil)
 				return mockSvc
 			},
-			args: []string{"-r", "protocol:SSH", "port"},
+			args: []string{"-O", "json", "protocol:SSH", "port"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Should contain JSON output
@@ -557,7 +556,7 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - default outputs raw table",
+			name: "success - default outputs short table",
 			store: func(ctrl *gomock.Controller) store.Store {
 				return storemocks.NewMockStore(ctrl)
 			},
@@ -667,36 +666,6 @@ func TestAggregateCommand(t *testing.T) {
 				require.Contains(t, stdout, "query: host.services.port=22")
 				require.Contains(t, stdout, "count by: service")
 				require.Contains(t, stdout, "filtered: false")
-			},
-		},
-
-		// Flag conflict tests
-		{
-			name: "error - raw and interactive flags together",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
-			service: func(ctrl *gomock.Controller) aggregate.Service {
-				return aggregatemocks.NewMockAggregateService(ctrl)
-			},
-			args: []string{"--raw", "--interactive", "query", "field"},
-			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.Error(t, err)
-				require.Equal(t, flags.NewConflictingFlagsError("raw", "interactive"), err)
-			},
-		},
-		{
-			name: "error - raw and interactive flags together (short form)",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
-			service: func(ctrl *gomock.Controller) aggregate.Service {
-				return aggregatemocks.NewMockAggregateService(ctrl)
-			},
-			args: []string{"-r", "-i", "query", "field"},
-			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "cannot use --raw and --interactive flags together")
 			},
 		},
 	}

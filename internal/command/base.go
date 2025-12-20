@@ -31,6 +31,8 @@ func (b *BaseCommand) Flags() *pflag.FlagSet { return b.rootCmd.Flags() }
 
 func (b *BaseCommand) PersistentFlags() *pflag.FlagSet { return b.rootCmd.PersistentFlags() }
 
+func (b *BaseCommand) InheritedFlags() *pflag.FlagSet { return b.rootCmd.InheritedFlags() }
+
 func (b *BaseCommand) AddSubCommands(cmds ...Command) error {
 	for _, cmd := range cmds {
 		c, err := toCobra(cmd)
@@ -38,6 +40,10 @@ func (b *BaseCommand) AddSubCommands(cmds ...Command) error {
 			return fmt.Errorf("failed to build command %s: %w", cmd.Use(), err)
 		}
 		b.rootCmd.AddCommand(c)
+
+		if err := applyOutputFormatDefaultsRecursive(c, cmd); err != nil {
+			return fmt.Errorf("failed to apply output format defaults for %s: %w", cmd.Use(), err)
+		}
 	}
 	return nil
 }
@@ -66,12 +72,41 @@ func (b *BaseCommand) Examples() []string { return []string{} }
 
 func (b *BaseCommand) Long() string { return "" }
 
+func (b *BaseCommand) DefaultOutputType() OutputType {
+	return OutputTypeData
+}
+
+func (b *BaseCommand) SupportedOutputTypes() []OutputType {
+	return []OutputType{OutputTypeData}
+}
+
+func (b *BaseCommand) RenderShort() cenclierrors.CencliError {
+	// this should theoretically never happen, since the command should not be executed if the output format is not supported
+	return cenclierrors.NewCencliError(fmt.Errorf("short output not supported for this command"))
+}
+
+func (b *BaseCommand) RenderTemplate() cenclierrors.CencliError {
+	// this should theoretically never happen, since the command should not be executed if the output format is not supported
+	return cenclierrors.NewCencliError(fmt.Errorf("template output not supported for this command"))
+}
+
 func (b *BaseCommand) init(cmd Command) {
 	b.rootCmd.PersistentPreRunE = func(cobraCmd *cobra.Command, args []string) error {
 		// unmarshal the config so it is available to the command
 		if err := b.Config().Unmarshal(); err != nil {
 			return err
 		}
+
+		// special case for output format
+		// we need to manually inspect the command's flags to see if the user explicitly set the output format
+		// since there are some shenanigans with the flag binding and the default value being set after unmarshal
+		b.config.OutputFormat = getOutputFormatValue(cobraCmd, cmd, b.config.OutputFormat)
+
+		// Validate output format before command execution
+		if err := validateOutputFormat(b.config.OutputFormat, cmd); err != nil {
+			return err
+		}
+
 		// set the logger
 		b.SetLogger(applog.New(b.Config().Debug, nil))
 		return nil

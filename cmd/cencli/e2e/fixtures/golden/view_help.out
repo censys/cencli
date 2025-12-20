@@ -13,7 +13,7 @@ Examples:
   censys view --input-file hosts.txt
   censys view --input-file - # read assets from STDIN
   censys view platform.censys.io:80 --at-time 2025-09-15T14:30:00Z
-  censys view 8.8.8.8 --short
+  censys view 8.8.8.8 --output-format short
 
 Flags:
   -a, --at string           Alias for --at-time
@@ -21,13 +21,12 @@ Flags:
   -h, --help                help for view
   -i, --input-file string   file to read the assets from. Overrides the positional argument.
   -o, --org-id string       override the configured organization ID
-  -s, --short               render data through a configurable template
 
 Global Flags:
       --debug                   enable debug logging
       --no-color                disable ANSI colors and styles
       --no-spinner              disable spinner during operations
-  -O, --output-format string    output format (json|yaml|ndjson|tree) (default "json")
+  -O, --output-format string    output format (json|yaml|ndjson|tree|short|template) (default "json")
   -q, --quiet                   suppress non-essential output
       --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
 

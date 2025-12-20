@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/term"
 )
 
@@ -32,18 +33,21 @@ func Println(w io.Writer, a ...any) {
 
 // PrintByFormat prints data to stdout according to the provided output format.
 // Falls back to JSON when format is unrecognized.
-func PrintByFormat(data any, format OutputFormat, colored bool) error {
-	switch format.String() {
-	case OutputFormatJSON.String():
-		return PrintJSON(data, colored)
-	case OutputFormatNDJSON.String():
-		return PrintNDJSON(asAnySlice(data), colored)
-	case OutputFormatYAML.String():
-		return PrintYAML(data, colored)
-	case OutputFormatTree.String():
-		return PrintTree(data, colored)
+func PrintByFormat(data any, format OutputFormat, colored bool) cenclierrors.CencliError {
+	switch format {
+	case OutputFormatJSON:
+		return cenclierrors.NewCencliError(PrintJSON(data, colored))
+	case OutputFormatNDJSON:
+		return cenclierrors.NewCencliError(PrintNDJSON(asAnySlice(data), colored))
+	case OutputFormatYAML:
+		return cenclierrors.NewCencliError(PrintYAML(data, colored))
+	case OutputFormatTree:
+		return cenclierrors.NewCencliError(PrintTree(data, colored))
+	case OutputFormatShort, OutputFormatTemplate:
+		// these will be handled by the command
+		return cenclierrors.NewCencliError(fmt.Errorf("output format %s not supported", format))
 	default:
-		return PrintJSON(data, colored)
+		return cenclierrors.NewCencliError(PrintJSON(data, colored))
 	}
 }
 

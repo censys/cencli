@@ -127,7 +127,7 @@ func TestCenseyeCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - raw output",
+			name: "success - json output",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				ms := viewmocks.NewMockViewService(ctrl)
 				hostID, _ := assets.NewHostID("8.8.8.8")
@@ -156,7 +156,7 @@ func TestCenseyeCommand(t *testing.T) {
 				ms.EXPECT().InvestigateHost(gomock.Any(), mo.None[identifiers.OrganizationID](), gomock.Any(), uint64(2), uint64(100)).Return(result, nil)
 				return ms
 			},
-			args: []string{"8.8.8.8", "--raw"},
+			args: []string{"8.8.8.8", "--output-format", "json"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Verify valid JSON
@@ -167,12 +167,10 @@ func TestCenseyeCommand(t *testing.T) {
 				require.Equal(t, int64(10), entries[0].Count)
 				require.Equal(t, `services.port=80`, entries[0].Query)
 				require.True(t, entries[0].Interesting)
-				// search_url should be stripped in raw output by default
-				require.Empty(t, entries[0].SearchURL)
 			},
 		},
 		{
-			name: "success - raw output with url",
+			name: "success - json output with url",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				ms := viewmocks.NewMockViewService(ctrl)
 				hostID, _ := assets.NewHostID("8.8.8.8")
@@ -201,7 +199,7 @@ func TestCenseyeCommand(t *testing.T) {
 				ms.EXPECT().InvestigateHost(gomock.Any(), mo.None[identifiers.OrganizationID](), gomock.Any(), uint64(2), uint64(100)).Return(result, nil)
 				return ms
 			},
-			args: []string{"8.8.8.8", "--raw", "--include-url"},
+			args: []string{"8.8.8.8", "--output-format", "json", "--include-url"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Verify valid JSON
@@ -531,7 +529,7 @@ func TestCenseyeCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "help message",
+			name: "help message - no raw flag",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				return viewmocks.NewMockViewService(ctrl)
 			},
@@ -545,14 +543,15 @@ func TestCenseyeCommand(t *testing.T) {
 				require.Contains(t, stdout, "censeye <asset>")
 				require.Contains(t, stdout, "rarity-min")
 				require.Contains(t, stdout, "rarity-max")
-				require.Contains(t, stdout, "raw")
 				require.Contains(t, stdout, "include-url")
+				// Should not have --raw flag anymore
+				require.NotContains(t, stdout, "--raw")
 			},
 		},
 
 		// Output format tests
 		{
-			name: "success - raw flag outputs JSON",
+			name: "success - output-format json flag outputs JSON",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				ms := viewmocks.NewMockViewService(ctrl)
 				hostID, _ := assets.NewHostID("8.8.8.8")
@@ -581,7 +580,7 @@ func TestCenseyeCommand(t *testing.T) {
 				ms.EXPECT().InvestigateHost(gomock.Any(), mo.None[identifiers.OrganizationID](), gomock.Any(), uint64(2), uint64(100)).Return(result, nil)
 				return ms
 			},
-			args: []string{"--raw", "8.8.8.8"},
+			args: []string{"--output-format", "json", "8.8.8.8"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Should contain JSON output
@@ -596,7 +595,7 @@ func TestCenseyeCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - raw flag with include-url",
+			name: "success - output-format json with include-url",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				ms := viewmocks.NewMockViewService(ctrl)
 				hostID, _ := assets.NewHostID("8.8.8.8")
@@ -625,7 +624,7 @@ func TestCenseyeCommand(t *testing.T) {
 				ms.EXPECT().InvestigateHost(gomock.Any(), mo.None[identifiers.OrganizationID](), gomock.Any(), uint64(2), uint64(100)).Return(result, nil)
 				return ms
 			},
-			args: []string{"--raw", "--include-url", "8.8.8.8"},
+			args: []string{"--output-format", "json", "--include-url", "8.8.8.8"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Should contain JSON output with search_url
@@ -637,7 +636,7 @@ func TestCenseyeCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - default outputs raw table",
+			name: "success - default outputs short table",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				ms := viewmocks.NewMockViewService(ctrl)
 				hostID, _ := assets.NewHostID("8.8.8.8")
@@ -680,23 +679,8 @@ func TestCenseyeCommand(t *testing.T) {
 			},
 		},
 
-		// Flag conflict tests
 		{
-			name: "error - raw and interactive flags together",
-			viewSvc: func(ctrl *gomock.Controller) view.Service {
-				return viewmocks.NewMockViewService(ctrl)
-			},
-			censeyeSvc: func(ctrl *gomock.Controller) censeye.Service {
-				return censeyemocks.NewMockCenseyeService(ctrl)
-			},
-			args: []string{"--raw", "--interactive", "8.8.8.8"},
-			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.Error(t, err)
-				require.Equal(t, flags.NewConflictingFlagsError("raw", "interactive"), err)
-			},
-		},
-		{
-			name: "success - raw flag with input-file short form",
+			name: "success - output-format json with input-file short form",
 			viewSvc: func(ctrl *gomock.Controller) view.Service {
 				ms := viewmocks.NewMockViewService(ctrl)
 				hostID, _ := assets.NewHostID("8.8.8.8")
@@ -724,7 +708,7 @@ func TestCenseyeCommand(t *testing.T) {
 				require.NoError(t, os.WriteFile(tempDir+"/test.txt", []byte("8.8.8.8\n"), 0o644))
 				(*args)[len(*args)-1] = tempDir + "/test.txt"
 			},
-			args: []string{"-r", "-i", "test.txt"},
+			args: []string{"--output-format", "json", "-i", "test.txt"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				var entries []censeye.ReportEntry

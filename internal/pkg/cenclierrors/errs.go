@@ -89,6 +89,36 @@ func (e *partialError) Unwrap() error {
 	return e.err
 }
 
+// NewUsageError creates a CencliError for command usage errors.
+// This should be used for errors like invalid flags, missing arguments, etc.
+// These errors will trigger usage information to be printed.
+func NewUsageError(err error) CencliError {
+	if err == nil {
+		return nil
+	}
+	return &usageError{err: err}
+}
+
+type usageError struct {
+	err error
+}
+
+func (e *usageError) Error() string {
+	return e.err.Error()
+}
+
+func (e *usageError) Title() string {
+	return "Usage Error"
+}
+
+func (e *usageError) ShouldPrintUsage() bool {
+	return true
+}
+
+func (e *usageError) Unwrap() error {
+	return e.err
+}
+
 // NewInterruptedError creates a CencliError for interrupted operations.
 // This should used exclusively for context.Canceled errors.
 func NewInterruptedError() CencliError {

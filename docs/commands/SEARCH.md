@@ -84,16 +84,40 @@ $ censys search "services.service_name: HTTP" --max-pages -1  # fetch all result
 
 **Note:** Using `--max-pages -1` will fetch all available results, which may result in many API calls and take considerable time depending on the query.
 
-### `--short`, `-s`
+## Output Formats
 
-Render output using templates for a concise, human-readable summary instead of raw output. See the [using templates](#using-templates) section for more details.
+The `search` command defaults to **`json`** output format (or the global config value). You can override this with the `--output-format` flag (or `-O`).
 
-**Type:** `boolean`  
-**Default:** `false`
+**Default:** `json` (or configured global default)  
+**Supported formats:** `json`, `yaml`, `ndjson`, `tree`, `short`, `template`
+
+### Format Descriptions
+
+- **`json`** - Structured JSON output (default)
+- **`yaml`** - Structured YAML output
+- **`ndjson`** - Newline-delimited JSON (one result per line)
+- **`tree`** - Hierarchical tree view
+- **`short`** - Concise summary view of search results
+- **`template`** - Render using Handlebars templates
+
+### Examples
 
 ```bash
-$ censys search "services.port: 443" --short
+# Default: JSON output
+$ censys search "services.port: 443"
+
+# Short format: concise summary
+$ censys search "services.port: 443" --output-format short
+$ censys search "services.port: 443" -O short
+
+# Template format: custom Handlebars rendering
+$ censys search "services.port: 443" --output-format template
+
+# YAML output
+$ censys search "services.port: 443" --output-format yaml
 ```
+
+For more information on customizing templates, see the [view command templates documentation](VIEW.md#templates).
 
 ## Configuration
 

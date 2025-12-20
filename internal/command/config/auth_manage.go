@@ -47,6 +47,14 @@ func (c *addAuthCommand) Long() string  { return "Add a new personal access toke
 
 func (c *addAuthCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
 
+func (c *addAuthCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *addAuthCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *addAuthCommand) Init() error {
 	c.flags.accessible = flags.NewBoolFlag(
 		c.Flags(),
@@ -207,6 +215,14 @@ func (c *deleteAuthCommand) Short() string { return "Delete a personal access to
 
 func (c *deleteAuthCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
 
+func (c *deleteAuthCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *deleteAuthCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *deleteAuthCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	return nil
 }
@@ -243,6 +259,14 @@ func (c *activateAuthCommand) Use() string   { return "activate <id>" }
 func (c *activateAuthCommand) Short() string { return "Set the active personal access token" }
 
 func (c *activateAuthCommand) Args() command.PositionalArgs { return command.ExactArgs(1) }
+
+func (c *activateAuthCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *activateAuthCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
 
 func (c *activateAuthCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	return nil

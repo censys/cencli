@@ -9,7 +9,8 @@ Usage:
 Examples:
   censys censeye 8.8.8.8
   censys censeye --rarity-min 2 --rarity-max 25 1.1.1.1
-  censys censeye --raw --include-url 192.168.1.1
+  censys censeye --interactive 192.168.1.1
+  censys censeye --output-format json --include-url 192.168.1.1
 
 Flags:
   -h, --help                help for censeye
@@ -19,13 +20,12 @@ Flags:
   -o, --org-id string       override the configured organization ID
   -M, --rarity-max int      maximum host count for interesting results (must be non-zero) (default 100)
   -m, --rarity-min int      minimum host count for interesting results (must be non-zero) (default 2)
-  -r, --raw                 output raw data
 
 Global Flags:
       --debug                   enable debug logging
       --no-color                disable ANSI colors and styles
       --no-spinner              disable spinner during operations
-  -O, --output-format string    output format (json|yaml|ndjson|tree) (default "json")
+  -O, --output-format string    output format (json|yaml|ndjson|tree|short|template) (default "short")
   -q, --quiet                   suppress non-essential output
       --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
 

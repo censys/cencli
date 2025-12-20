@@ -25,6 +25,14 @@ func (c *printCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.Ce
 	return nil
 }
 
+func (c *printCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeData
+}
+
+func (c *printCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData}
+}
+
 func (c *printCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	return c.PrintYAML(c.Config())
 }

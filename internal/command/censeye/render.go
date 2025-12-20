@@ -16,26 +16,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/ui/table"
 )
 
-// renderResult prints response metadata and routes to the appropriate rendering method
-// based on the configured output mode (interactive, raw, or default table).
-func (c *Command) renderResult(result censeye.InvestigateHostResult) cenclierrors.CencliError {
-	c.PrintAppResponseMeta(result.Meta)
-	if c.interactive {
-		return c.showInteractiveTable(result)
-	}
-	if c.raw {
-		entries := result.Entries
-		if !c.includeURL {
-			for i := range entries {
-				entries[i].SearchURL = ""
-			}
-		}
-		return c.PrintData(entries)
-	}
-	// Default: show raw table
-	return c.showRawTable(result)
-}
-
 // showInteractiveTable displays an interactive table where users can navigate with arrow keys
 // and open queries in their browser by pressing Enter.
 func (c *Command) showInteractiveTable(result censeye.InvestigateHostResult) cenclierrors.CencliError {

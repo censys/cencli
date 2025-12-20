@@ -29,6 +29,14 @@ func (c *Command) Args() command.PositionalArgs {
 	return command.RangeArgs(1, 1)
 }
 
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	return nil
 }

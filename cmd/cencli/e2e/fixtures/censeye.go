@@ -35,8 +35,21 @@ var censeyeFixtures = []Fixture{
 		},
 	},
 	{
-		Name:      "basic-raw",
-		Args:      []string{"145.131.8.169", "--raw"},
+		Name:      "output-short-default",
+		Args:      []string{"145.131.8.169", "--rarity-min", "2", "--rarity-max", "125"},
+		ExitCode:  0,
+		Timeout:   12 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Default output is short format (table), just verify it has content
+			assert.Greater(t, len(stdout), 0)
+			assert.Contains(t, string(stdout), "=== CensEye Results for 145.131.8.169 ===")
+		},
+	},
+	{
+		Name:      "output-json",
+		Args:      []string{"145.131.8.169", "--output-format", "json"},
 		ExitCode:  0,
 		Timeout:   12 * time.Second,
 		NeedsAuth: true,
@@ -48,6 +61,18 @@ var censeyeFixtures = []Fixture{
 				Interesting bool   `json:"interesting"`
 			}](t, stdout)
 			assert.Greater(t, len(v), 1)
+		},
+	},
+	{
+		Name:      "output-template-unsupported",
+		Args:      []string{"145.131.8.169", "--output-format", "template"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			// Should fail with error about unsupported output format
+			assert.Contains(t, string(stderr), "template")
+			assert.Contains(t, string(stderr), "not supported")
 		},
 	},
 }

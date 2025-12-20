@@ -55,6 +55,15 @@ func (c *authCommand) Init() error {
 }
 
 func (c *authCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }
+
+func (c *authCommand) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *authCommand) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *authCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	var err cenclierrors.CencliError
 	c.accessible, err = c.flags.accessible.Value()

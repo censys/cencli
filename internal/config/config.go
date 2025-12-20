@@ -132,7 +132,7 @@ func (c *Config) Unmarshal() cenclierrors.CencliError {
 
 // BindGlobalFlags binds all global configuration flags to viper.
 // This should be called on the root command.
-func BindGlobalFlags(persistentFlags *pflag.FlagSet) error {
+func BindGlobalFlags(persistentFlags *pflag.FlagSet, cfg *Config) error {
 	if err := addPersistentBoolAndBind(persistentFlags, noColorKey, false, "disable ANSI colors and styles", ""); err != nil {
 		return fmt.Errorf("failed to bind no-color flag: %w", err)
 	}
@@ -150,7 +150,7 @@ func BindGlobalFlags(persistentFlags *pflag.FlagSet) error {
 	if err := addPersistentDurationAndBindToPath(persistentFlags, timeoutHTTPKey, "timeouts.http", defaultConfig.Timeouts.HTTP, "per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable"); err != nil {
 		return fmt.Errorf("failed to bind timeout-http flag: %w", err)
 	}
-	if err := formatter.BindOutputFormat(persistentFlags); err != nil {
+	if err := formatter.BindOutputFormat(persistentFlags, cfg.OutputFormat); err != nil {
 		return fmt.Errorf("failed to bind output-format flag: %w", err)
 	}
 	return nil
