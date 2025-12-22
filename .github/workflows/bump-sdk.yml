@@ -1,0 +1,71 @@
+name: Bump SDK and Create PR
+
+on:
+  schedule:
+    - cron: "0 2 * * *"  # daily at 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.CENSYS_ARTIFACT_RELEASER_APP_ID }}
+          private-key: ${{ secrets.CENSYS_ARTIFACT_RELEASER_PRIVATE_KEY }}
+          repositories: |
+            cencli
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Configure git
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - name: Create branch and bump SDK
+        id: bump
+        run: |
+          BRANCH="bump-sdk-$(date +%Y%m%d%H%M%S)"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          git checkout -b $BRANCH
+          
+          go get github.com/censys/censys-sdk-go@latest
+          go mod tidy
+          
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.bump.outputs.has_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git add go.mod go.sum
+          git commit -m "chore: bump SDK version"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin HEAD
+
+      - name: Create pull request
+        if: steps.bump.outputs.has_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr create \
+            --base main \
+            --head ${{ steps.bump.outputs.branch }} \
+            --title "chore: bump SDK version" \
+            --body "Automated bump of SDK version"
