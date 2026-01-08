@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -56,7 +57,19 @@ func newYamlSerializer() *yamlSerializer {
 }
 
 func (s *yamlSerializer) serialize(v any, colored bool) (string, error) {
-	b, err := yaml.Marshal(v)
+	// there isn't really a good way to drop null values from YAML,
+	// so we pass it through the JSON marshaller first
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+
+	var cleaned any
+	if err := json.Unmarshal(jsonBytes, &cleaned); err != nil {
+		return "", err
+	}
+
+	b, err := yaml.Marshal(cleaned)
 	if err != nil {
 		return "", err
 	}
