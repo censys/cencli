@@ -10,6 +10,7 @@ import (
 	"github.com/censys/censys-sdk-go/models/components"
 
 	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
@@ -106,7 +107,7 @@ func (s *searchService) searchWithPagination(
 				}
 				return Result{
 					Meta:         lastMeta,
-					Hits:         allHits,
+					Hits:         allHits, // empty if streaming
 					TotalHits:    totalHits,
 					PartialError: cenclierrors.ToPartialError(contextErr),
 				}, nil
@@ -139,9 +140,29 @@ func (s *searchService) searchWithPagination(
 		}
 
 		pageHits := parseHits(result.Data.Hits)
-		allHits = append(allHits, pageHits...)
-		totalHits = int64(result.Data.TotalHits)
 
+		// Either stream (with asset type wrapping) or accumulate hits
+		if streaming.IsStreaming(ctx) {
+			for _, hit := range pageHits {
+				wrapped := map[string]any{hit.AssetType().String(): hit}
+				if emitErr := streaming.Emit(ctx, wrapped); emitErr != nil {
+					if lastMeta != nil {
+						lastMeta.Latency = time.Since(start)
+						lastMeta.PageCount = pagesProcessed
+					}
+					return Result{
+						Meta:         lastMeta,
+						Hits:         nil,
+						TotalHits:    totalHits,
+						PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+					}, nil
+				}
+			}
+		} else {
+			allHits = append(allHits, pageHits...)
+		}
+
+		totalHits = int64(result.Data.TotalHits)
 		pagesProcessed++
 
 		nextPageToken := result.Data.GetNextPageToken()
@@ -163,7 +184,7 @@ func (s *searchService) searchWithPagination(
 
 	return Result{
 		Meta:         lastMeta,
-		Hits:         allHits,
+		Hits:         allHits, // empty if streaming
 		TotalHits:    totalHits,
 		PartialError: cenclierrors.ToPartialError(firstError),
 	}, nil

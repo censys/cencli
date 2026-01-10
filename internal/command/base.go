@@ -80,6 +80,10 @@ func (b *BaseCommand) SupportedOutputTypes() []OutputType {
 	return []OutputType{OutputTypeData}
 }
 
+func (b *BaseCommand) SupportsStreaming() bool {
+	return false
+}
+
 func (b *BaseCommand) RenderShort() cenclierrors.CencliError {
 	// this should theoretically never happen, since the command should not be executed if the output format is not supported
 	return cenclierrors.NewCencliError(fmt.Errorf("short output not supported for this command"))
@@ -94,6 +98,11 @@ func (b *BaseCommand) init(cmd Command) {
 	b.rootCmd.PersistentPreRunE = func(cobraCmd *cobra.Command, args []string) error {
 		// unmarshal the config so it is available to the command
 		if err := b.Config().Unmarshal(); err != nil {
+			return err
+		}
+
+		// Validate streaming mode for conflicts and support
+		if err := validateStreamingMode(cobraCmd, cmd, b.config.Streaming); err != nil {
 			return err
 		}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -251,6 +252,143 @@ func TestOutputFormatBinding(t *testing.T) {
 			// Optional assertions after unmarshal
 			if tc.assertAfterUnmarshal != nil {
 				tc.assertAfterUnmarshal(t, cfg)
+			}
+		})
+	}
+}
+
+// TestValidateStreamingMode tests the streaming mode validation logic
+func TestValidateStreamingMode(t *testing.T) {
+	tests := []struct {
+		name                string
+		streamingFromConfig bool
+		streamingFlag       mo.Option[bool] // None = flag not set, Some(true/false) = flag set to value
+		outputFormatFlag    mo.Option[bool] // None = flag not set, Some(true) = flag explicitly set
+		supportsStreaming   bool
+		expectError         bool
+		errorType           string // "conflict" or "not_supported"
+	}{
+		{
+			name:                "no streaming - no error",
+			streamingFromConfig: false,
+			streamingFlag:       mo.None[bool](),
+			outputFormatFlag:    mo.None[bool](),
+			supportsStreaming:   false,
+			expectError:         false,
+		},
+		{
+			name:                "streaming config on non-streaming command - silently ignored",
+			streamingFromConfig: true,
+			streamingFlag:       mo.None[bool](),
+			outputFormatFlag:    mo.None[bool](),
+			supportsStreaming:   false,
+			expectError:         false,
+		},
+		{
+			name:                "streaming flag on non-streaming command - error",
+			streamingFromConfig: false,
+			streamingFlag:       mo.Some(true),
+			outputFormatFlag:    mo.None[bool](),
+			supportsStreaming:   false,
+			expectError:         true,
+			errorType:           "not_supported",
+		},
+		{
+			name:                "streaming flag on streaming command - no error",
+			streamingFromConfig: false,
+			streamingFlag:       mo.Some(true),
+			outputFormatFlag:    mo.None[bool](),
+			supportsStreaming:   true,
+			expectError:         false,
+		},
+		{
+			name:                "streaming config + explicit output format - conflict error",
+			streamingFromConfig: true,
+			streamingFlag:       mo.None[bool](),
+			outputFormatFlag:    mo.Some(true),
+			supportsStreaming:   true,
+			expectError:         true,
+			errorType:           "conflict",
+		},
+		{
+			name:                "streaming flag + explicit output format - conflict error",
+			streamingFromConfig: false,
+			streamingFlag:       mo.Some(true),
+			outputFormatFlag:    mo.Some(true),
+			supportsStreaming:   true,
+			expectError:         true,
+			errorType:           "conflict",
+		},
+		{
+			name:                "streaming flag false - no error",
+			streamingFromConfig: false,
+			streamingFlag:       mo.Some(false),
+			outputFormatFlag:    mo.None[bool](),
+			supportsStreaming:   false,
+			expectError:         false,
+		},
+		{
+			name:                "streaming flag false + output format - no error",
+			streamingFromConfig: false,
+			streamingFlag:       mo.Some(false),
+			outputFormatFlag:    mo.Some(true),
+			supportsStreaming:   true,
+			expectError:         false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a minimal cobra command with the flags we need
+			cobraCmd := &cobra.Command{Use: "test"}
+			cobraCmd.Flags().Bool(config.StreamingFlagName, false, "")
+			cobraCmd.Flags().String(formatter.OutputFormatFlagName, "json", "")
+
+			// Set flag values if specified
+			if tc.streamingFlag.IsPresent() {
+				value := "false"
+				if tc.streamingFlag.MustGet() {
+					value = "true"
+				}
+				err := cobraCmd.Flags().Set(config.StreamingFlagName, value)
+				require.NoError(t, err)
+			}
+			if tc.outputFormatFlag.IsPresent() {
+				err := cobraCmd.Flags().Set(formatter.OutputFormatFlagName, "yaml")
+				require.NoError(t, err)
+			}
+
+			// Create a test command with the specified streaming support
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockStore := storemocks.NewMockStore(ctrl)
+
+			tempDir := t.TempDir()
+			viper.Reset()
+			cfg, err := config.New(tempDir)
+			require.NoError(t, err)
+
+			cmdContext := NewCommandContext(cfg, mockStore)
+			testCmd := newTestCommand(cmdContext)
+			testCmd.supportsStreamingFn = func() bool {
+				return tc.supportsStreaming
+			}
+
+			// Call validateStreamingMode
+			result := validateStreamingMode(cobraCmd, testCmd, tc.streamingFromConfig)
+
+			if tc.expectError {
+				require.NotNil(t, result, "expected error but got nil")
+				switch tc.errorType {
+				case "conflict":
+					_, ok := result.(*streamingConflictError)
+					assert.True(t, ok, "expected streamingConflictError, got %T", result)
+				case "not_supported":
+					_, ok := result.(*streamingNotSupportedError)
+					assert.True(t, ok, "expected streamingNotSupportedError, got %T", result)
+				}
+			} else {
+				assert.Nil(t, result, "expected no error but got: %v", result)
 			}
 		})
 	}

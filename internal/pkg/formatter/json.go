@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"encoding/json"
+	"io"
 
 	"github.com/censys/cencli/internal/pkg/styles"
 	jsoncolor "github.com/neilotoole/jsoncolor"
@@ -9,50 +10,13 @@ import (
 
 // PrintJSON prints v as pretty JSON, optionally colored.
 func PrintJSON(v any, colored bool) error {
-	enc := newEncoder(colored, true)
+	enc := newEncoderForWriter(Stdout, colored, true)
 	return enc.Encode(v)
 }
 
-// PrintNDJSON prints one JSON object per line.
-// If v is a slice, it prints each element on its own line.
-// Otherwise, it prints v.
-func PrintNDJSON(v any, colored bool) error {
-	enc := newEncoder(colored, false)
-
-	switch s := v.(type) {
-	case []any:
-		for _, item := range s {
-			if err := enc.Encode(item); err != nil {
-				return err
-			}
-		}
-		return nil
-	default:
-		return enc.Encode(v)
-	}
-}
-
-// encoder is a type that can encode JSON.
+// jsonEncoder is a type that can encode JSON.
 type jsonEncoder interface {
 	Encode(v any) error
-}
-
-// newEncoder creates either a plain or color encoder.
-// pretty controls whether SetIndent is applied.
-func newEncoder(colored, pretty bool) jsonEncoder {
-	if colored {
-		enc := jsoncolor.NewEncoder(Stdout)
-		enc.SetColors(jsonColors())
-		if pretty {
-			enc.SetIndent("", "  ")
-		}
-		return enc
-	}
-	enc := json.NewEncoder(Stdout)
-	if pretty {
-		enc.SetIndent("", "  ")
-	}
-	return enc
 }
 
 // jsonColors defines the color scheme for jsoncolor.
@@ -69,4 +33,31 @@ func jsonColors() *jsoncolor.Colors {
 	res.Punc = styles.ANSIPrefix(styles.NewStyle(styles.ColorOffWhite))        // jq = white
 	res.TextMarshaler = styles.ANSIPrefix(styles.NewStyle(styles.ColorOrange)) // jq = white
 	return res
+}
+
+// WriteNDJSONItem encodes a single item as NDJSON (one line of JSON) to the provided writer.
+// This enables true streaming output where each item is written immediately.
+// The item is encoded without pretty-printing (compact JSON on a single line).
+func WriteNDJSONItem(w io.Writer, item any, colored bool) error {
+	enc := newEncoderForWriter(w, colored, false)
+	return enc.Encode(item)
+}
+
+// newEncoderForWriter creates a JSON encoder for a specific writer.
+// If colored is true, output will include ANSI color codes.
+// If pretty is true, output will be indented.
+func newEncoderForWriter(w io.Writer, colored, pretty bool) jsonEncoder {
+	if colored {
+		enc := jsoncolor.NewEncoder(w)
+		enc.SetColors(jsonColors())
+		if pretty {
+			enc.SetIndent("", "  ")
+		}
+		return enc
+	}
+	enc := json.NewEncoder(w)
+	if pretty {
+		enc.SetIndent("", "  ")
+	}
+	return enc
 }

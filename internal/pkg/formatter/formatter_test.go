@@ -41,22 +41,6 @@ func TestPrintByFormat(t *testing.T) {
 			contains: []string{"key1: value1", "key2: value2"},
 		},
 		{
-			name:           "NDJSON format single item",
-			format:         OutputFormatNDJSON,
-			data:           testData,
-			expectedInJSON: true,
-			contains:       []string{"key1", "value1"},
-		},
-		{
-			name:   "NDJSON format array",
-			format: OutputFormatNDJSON,
-			data: []map[string]string{
-				{"id": "1", "name": "first"},
-				{"id": "2", "name": "second"},
-			},
-			contains: []string{`"id":"1"`, `"name":"first"`, `"id":"2"`, `"name":"second"`},
-		},
-		{
 			name:           "Unknown format defaults to JSON",
 			format:         OutputFormat("unknown"),
 			data:           testData,
@@ -141,4 +125,13 @@ func TestPrintf(t *testing.T) {
 	Printf(Stdout, "Number: %d, String: %s", 42, "test")
 
 	assert.Equal(t, "Number: 42, String: test", buf.String())
+}
+
+func TestPrintByFormat_NDJSONReturnsError(t *testing.T) {
+	// NDJSON requires streaming and should not be used through PrintByFormat
+	testData := map[string]string{"key": "value"}
+
+	err := PrintByFormat(testData, OutputFormatNDJSON, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ndjson format requires streaming output")
 }

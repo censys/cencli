@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
@@ -21,7 +22,7 @@ type OutputSupport struct {
 type OutputType int
 
 const (
-	// OutputTypeData is the output type for commands that output raw data (json, yaml, ndjson, tree)
+	// OutputTypeData is the output type for commands that output buffered raw data (json, yaml, tree)
 	OutputTypeData OutputType = iota
 	// OutputTypeShort is the output type for commands that output a short view (i.e. a custom rendering)
 	OutputTypeShort
@@ -30,28 +31,9 @@ const (
 )
 
 func validateOutputFormat(format formatter.OutputFormat, cmd Command) cenclierrors.CencliError {
-	validFormats := formatter.AvailableOutputFormats()
-	var requestedOutputType OutputType
-	switch format {
-	case formatter.OutputFormatJSON, formatter.OutputFormatYAML,
-		formatter.OutputFormatNDJSON, formatter.OutputFormatTree:
-		requestedOutputType = OutputTypeData
-	case formatter.OutputFormatShort:
-		requestedOutputType = OutputTypeShort
-	case formatter.OutputFormatTemplate:
-		requestedOutputType = OutputTypeTemplate
-	default:
-		return newInvalidOutputFormatError(format.String(), validFormats)
-	}
-
 	supportedTypes := cmd.SupportedOutputTypes()
 
-	// Check if command supports this type
-	if slices.Contains(supportedTypes, requestedOutputType) {
-		return nil
-	}
-
-	// Build error message with supported formats
+	// Build list of supported formats for this command
 	var supportedFormats []string
 	for _, t := range supportedTypes {
 		switch t {
@@ -59,7 +41,6 @@ func validateOutputFormat(format formatter.OutputFormat, cmd Command) cenclierro
 			supportedFormats = append(supportedFormats,
 				formatter.OutputFormatJSON.String(),
 				formatter.OutputFormatYAML.String(),
-				formatter.OutputFormatNDJSON.String(),
 				formatter.OutputFormatTree.String(),
 			)
 		case OutputTypeShort:
@@ -69,6 +50,25 @@ func validateOutputFormat(format formatter.OutputFormat, cmd Command) cenclierro
 		}
 	}
 
+	var requestedOutputType OutputType
+	switch format {
+	case formatter.OutputFormatJSON, formatter.OutputFormatYAML, formatter.OutputFormatTree:
+		requestedOutputType = OutputTypeData
+	case formatter.OutputFormatShort:
+		requestedOutputType = OutputTypeShort
+	case formatter.OutputFormatTemplate:
+		requestedOutputType = OutputTypeTemplate
+	default:
+		// Invalid format - show only formats supported by this command
+		return newInvalidOutputFormatError(format.String(), supportedFormats)
+	}
+
+	// Check if command supports this type
+	if slices.Contains(supportedTypes, requestedOutputType) {
+		return nil
+	}
+
+	// Valid format but not supported by this command
 	return newUnsupportedOutputFormatError(format.String(), supportedFormats)
 }
 
@@ -217,5 +217,74 @@ func (e *unsupportedOutputFormatError) Title() string {
 }
 
 func (e *unsupportedOutputFormatError) ShouldPrintUsage() bool {
+	return true
+}
+
+// validateStreamingMode checks for conflicts between streaming mode and output format flags.
+// Returns an error if:
+// - streaming is enabled (via config or flag) AND output format flag is explicitly set
+// - streaming flag is explicitly set but command doesn't support streaming
+func validateStreamingMode(cobraCmd *cobra.Command, cmd Command, streamingFromConfig bool) cenclierrors.CencliError {
+	streamingFlag := cobraCmd.Flag(config.StreamingFlagName)
+	outputFormatFlag := cobraCmd.Flag(formatter.OutputFormatFlagName)
+
+	// Determine if streaming is enabled (flag takes precedence over config)
+	streamingEnabled := streamingFromConfig
+	streamingFlagExplicit := streamingFlag != nil && streamingFlag.Changed
+	if streamingFlagExplicit {
+		streamingEnabled = streamingFlag.Value.String() == "true"
+	}
+
+	// Check for conflict: streaming enabled + explicit output format
+	outputFormatExplicit := outputFormatFlag != nil && outputFormatFlag.Changed
+	if streamingEnabled && outputFormatExplicit {
+		return newStreamingConflictError()
+	}
+
+	// Check if streaming flag was explicitly set on a command that doesn't support it
+	if streamingFlagExplicit && streamingEnabled && !cmd.SupportsStreaming() {
+		return newStreamingNotSupportedError()
+	}
+
+	return nil
+}
+
+type streamingConflictError struct{}
+
+var _ cenclierrors.CencliError = &streamingConflictError{}
+
+func newStreamingConflictError() *streamingConflictError {
+	return &streamingConflictError{}
+}
+
+func (e *streamingConflictError) Error() string {
+	return fmt.Sprintf("--%s and --%s cannot be used together; streaming mode uses NDJSON output", config.StreamingFlagName, formatter.OutputFormatFlagName)
+}
+
+func (e *streamingConflictError) Title() string {
+	return "Conflicting Flags"
+}
+
+func (e *streamingConflictError) ShouldPrintUsage() bool {
+	return true
+}
+
+type streamingNotSupportedError struct{}
+
+var _ cenclierrors.CencliError = &streamingNotSupportedError{}
+
+func newStreamingNotSupportedError() *streamingNotSupportedError {
+	return &streamingNotSupportedError{}
+}
+
+func (e *streamingNotSupportedError) Error() string {
+	return "this command does not support streaming output"
+}
+
+func (e *streamingNotSupportedError) Title() string {
+	return "Streaming Not Supported"
+}
+
+func (e *streamingNotSupportedError) ShouldPrintUsage() bool {
 	return true
 }

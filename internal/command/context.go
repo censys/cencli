@@ -3,11 +3,13 @@ package command
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
 	"github.com/censys/cencli/internal/app/history"
 	"github.com/censys/cencli/internal/app/search"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/app/view"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -109,6 +111,11 @@ func (c *Context) WithProgress(
 }
 
 func (c *Context) PrintData(cmd Command, data any) cenclierrors.CencliError {
+	// Streaming formats are handled by WithStreamingOutput - nothing to do here
+	if c.config.Streaming {
+		return nil
+	}
+
 	switch c.config.OutputFormat {
 	case formatter.OutputFormatShort:
 		if c.colorDisabledStdout {
@@ -148,6 +155,58 @@ func (c *Context) PrintAppResponseMeta(meta *responsemeta.ResponseMeta) {
 	if !c.config.Quiet && meta != nil {
 		formatter.PrintAppResponseMeta(styles.GlobalStyles, meta, c.config.Debug, !c.colorDisabledStderr)
 	}
+}
+
+// WithStreamingOutput sets up streaming output infrastructure when streaming mode is enabled.
+// For non-streaming mode, this is a no-op.
+//
+// Returns a context with a streaming emitter attached (if streaming) and a stop function
+// that must be called to properly clean up resources. The stop function should be deferred
+// immediately after calling WithStreamingOutput.
+//
+// Example usage:
+//
+//	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
+//	defer stopStreaming(nil)
+func (c *Context) WithStreamingOutput(
+	ctx context.Context,
+	logger *slog.Logger,
+) (context.Context, func(error)) {
+	// No-op for non-streaming formats
+	if !c.config.Streaming {
+		return ctx, func(error) {}
+	}
+
+	emitter, items := streaming.NewChannelEmitter(1)
+	ctx = streaming.WithEmitter(ctx, emitter)
+
+	// Start goroutine to consume and write items immediately
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for item := range items {
+			if item.Done {
+				break
+			}
+			if item.Err != nil {
+				logger.Debug("streaming item error", "error", item.Err)
+				continue
+			}
+			if err := formatter.WriteNDJSONItem(formatter.Stdout, item.Data, !c.colorDisabledStdout); err != nil {
+				logger.Debug("failed to write streaming item", "error", err)
+			}
+		}
+	}()
+
+	var once sync.Once
+	stop := func(finalErr error) {
+		once.Do(func() {
+			emitter.Close(finalErr)
+			<-done
+		})
+	}
+
+	return ctx, stop
 }
 
 // =====================

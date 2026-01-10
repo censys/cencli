@@ -274,7 +274,7 @@ var viewFixtures = []Fixture{
 	// Output format tests
 	{
 		Name:      "output-ndjson",
-		Args:      []string{"1.1.1.1", "--output-format", "ndjson"},
+		Args:      []string{"1.1.1.1", "--streaming"},
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
