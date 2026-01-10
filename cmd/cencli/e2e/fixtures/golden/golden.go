@@ -17,4 +17,14 @@ var (
 	HistoryHelpStdout []byte
 	//go:embed root.out
 	RootStdout []byte
+	//go:embed credits_help.out
+	CreditsHelpStdout []byte
+	//go:embed org_details_help.out
+	OrgDetailsHelpStdout []byte
+	//go:embed org_members_help.out
+	OrgMembersHelpStdout []byte
+	//go:embed org_credits_help.out
+	OrgCreditsHelpStdout []byte
+	//go:embed org_help.out
+	OrgHelpStdout []byte
 )

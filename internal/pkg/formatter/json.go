@@ -9,14 +9,39 @@ import (
 )
 
 // PrintJSON prints v as pretty JSON, optionally colored.
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
 func PrintJSON(v any, colored bool) error {
-	enc := newEncoderForWriter(Stdout, colored, true)
-	return enc.Encode(v)
+	return writeJSON(Stdout, v, colored, true)
 }
 
-// jsonEncoder is a type that can encode JSON.
-type jsonEncoder interface {
-	Encode(v any) error
+// writeJSON writes v as JSON to w, optionally colored and pretty-printed.
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
+func writeJSON(w io.Writer, v any, colored, pretty bool) error {
+	var data []byte
+	var err error
+	if pretty {
+		data, err = json.MarshalIndent(v, "", "  ")
+	} else {
+		data, err = json.Marshal(v)
+	}
+	if err != nil {
+		return err
+	}
+
+	if colored {
+		// Re-encode the raw JSON with colors
+		enc := jsoncolor.NewEncoder(w)
+		enc.SetColors(jsonColors())
+		if pretty {
+			enc.SetIndent("", "  ")
+		}
+		return enc.Encode(json.RawMessage(data))
+	}
+
+	_, err = w.Write(append(data, '\n'))
+	return err
 }
 
 // jsonColors defines the color scheme for jsoncolor.
@@ -38,26 +63,8 @@ func jsonColors() *jsoncolor.Colors {
 // WriteNDJSONItem encodes a single item as NDJSON (one line of JSON) to the provided writer.
 // This enables true streaming output where each item is written immediately.
 // The item is encoded without pretty-printing (compact JSON on a single line).
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
 func WriteNDJSONItem(w io.Writer, item any, colored bool) error {
-	enc := newEncoderForWriter(w, colored, false)
-	return enc.Encode(item)
-}
-
-// newEncoderForWriter creates a JSON encoder for a specific writer.
-// If colored is true, output will include ANSI color codes.
-// If pretty is true, output will be indented.
-func newEncoderForWriter(w io.Writer, colored, pretty bool) jsonEncoder {
-	if colored {
-		enc := jsoncolor.NewEncoder(w)
-		enc.SetColors(jsonColors())
-		if pretty {
-			enc.SetIndent("", "  ")
-		}
-		return enc
-	}
-	enc := json.NewEncoder(w)
-	if pretty {
-		enc.SetIndent("", "  ")
-	}
-	return enc
+	return writeJSON(w, item, colored, false)
 }

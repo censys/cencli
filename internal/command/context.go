@@ -2,18 +2,25 @@ package command
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 
+	"github.com/google/uuid"
+	"github.com/samber/mo"
+
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
+	"github.com/censys/cencli/internal/app/credits"
 	"github.com/censys/cencli/internal/app/history"
+	"github.com/censys/cencli/internal/app/organizations"
 	"github.com/censys/cencli/internal/app/search"
 	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/app/view"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
+	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
@@ -34,6 +41,8 @@ type Context struct {
 	aggregateSvc aggregate.Service
 	historySvc   history.Service
 	censeyeSvc   censeye.Service
+	creditsSvc   credits.Service
+	orgSvc       organizations.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -73,6 +82,29 @@ func (c *Context) SetLogger(l *slog.Logger) { c.logger = l }
 
 // SetClient sets the Context's client so that it can be used to initialize services.
 func (c *Context) SetCensysClient(cli client.Client) { c.censysClient = cli }
+
+// HasOrgID returns true if the context has a configured organization ID.
+func (c *Context) HasOrgID() bool {
+	return c.censysClient != nil && c.censysClient.HasOrgID()
+}
+
+// GetStoredOrgID retrieves the stored organization ID from the store.
+// Returns the org ID if found, or None if not configured.
+func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
+	zero := mo.None[identifiers.OrganizationID]()
+	storedOrgID, err := c.store.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
+	if err != nil {
+		if errors.Is(err, store.ErrGlobalNotFound) {
+			return zero, nil
+		}
+		return zero, cenclierrors.NewCencliError(err)
+	}
+	parsedUUID, parseErr := uuid.Parse(storedOrgID.Value)
+	if parseErr != nil {
+		return zero, cenclierrors.NewCencliError(parseErr)
+	}
+	return mo.Some(identifiers.NewOrganizationID(parsedUUID)), nil
+}
 
 // Logger returns a logger pre-populated with the command name field.
 func (c *Context) Logger(cmdName string) *slog.Logger {
@@ -314,4 +346,46 @@ func (c *Context) AggregateService() (aggregate.Service, cenclierrors.CencliErro
 // the AggregateService will be instantiated on demand.
 func WithAggregateService(svc aggregate.Service) ContextOpts {
 	return func(c *Context) { c.aggregateSvc = svc }
+}
+
+// CreditsService attempts to provide a CreditsService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) CreditsService() (credits.Service, cenclierrors.CencliError) {
+	if c.creditsSvc != nil {
+		return c.creditsSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.creditsSvc = credits.New(c.censysClient)
+	return c.creditsSvc, nil
+}
+
+// WithCreditsService injects an instantiated CreditsService to the Context.
+// This should only be used in tests, as in the application,
+// the CreditsService will be instantiated on demand.
+func WithCreditsService(svc credits.Service) ContextOpts {
+	return func(c *Context) { c.creditsSvc = svc }
+}
+
+// OrganizationsService attempts to provide an OrganizationsService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) OrganizationsService() (organizations.Service, cenclierrors.CencliError) {
+	if c.orgSvc != nil {
+		return c.orgSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.orgSvc = organizations.New(c.censysClient)
+	return c.orgSvc, nil
+}
+
+// WithOrganizationsService injects an instantiated OrganizationsService to the Context.
+// This should only be used in tests, as in the application,
+// the OrganizationsService will be instantiated on demand.
+func WithOrganizationsService(svc organizations.Service) ContextOpts {
+	return func(c *Context) { c.orgSvc = svc }
 }

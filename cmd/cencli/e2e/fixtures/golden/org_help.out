@@ -1,0 +1,30 @@
+Manage and view organization details including credits, members, and organization       
+information.                                                                            
+                                                                                        
+By default, these commands use your stored organization ID. If no organization ID is    
+stored,                                                                                 
+or you want to query a different organization, use the --org-id flag on each subcommand.
+                                                                                        
+To set your default organization ID, run: censys config org-id set <org-id>             
+
+Usage:
+  censys org [flags]
+  censys org [command]
+
+Available Commands:
+  credits     Display credit details for your organization
+  details     Display organization details
+  members     List organization members
+
+Flags:
+  -h, --help   help for org
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

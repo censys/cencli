@@ -20,6 +20,11 @@ echo "Updating golden fixtures..."
 "$BINARY" search --help > search_help.out
 "$BINARY" censeye --help > censeye_help.out
 "$BINARY" history --help > history_help.out
+"$BINARY" credits --help > credits_help.out
+"$BINARY" org details --help > org_details_help.out
+"$BINARY" org members --help > org_members_help.out
+"$BINARY" org credits --help > org_credits_help.out
+"$BINARY" org --help > org_help.out
 "$BINARY" > root.out
 
 echo "✅ All golden fixtures updated"
