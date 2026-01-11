@@ -101,6 +101,9 @@ func (b *BaseCommand) init(cmd Command) {
 			return err
 		}
 
+		// Update color settings after config is re-unmarshaled to respect command-line flags
+		b.Context.updateColorSettings()
+
 		// Validate streaming mode for conflicts and support
 		if err := validateStreamingMode(cobraCmd, cmd, b.config.Streaming); err != nil {
 			return err

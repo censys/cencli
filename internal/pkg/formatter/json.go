@@ -31,13 +31,16 @@ func writeJSON(w io.Writer, v any, colored, pretty bool) error {
 	}
 
 	if colored {
-		// Re-encode the raw JSON with colors
+		var unmarshaled any
+		if err := json.Unmarshal(data, &unmarshaled); err != nil {
+			return err
+		}
 		enc := jsoncolor.NewEncoder(w)
 		enc.SetColors(jsonColors())
 		if pretty {
 			enc.SetIndent("", "  ")
 		}
-		return enc.Encode(json.RawMessage(data))
+		return enc.Encode(unmarshaled)
 	}
 
 	_, err = w.Write(append(data, '\n'))

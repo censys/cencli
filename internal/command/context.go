@@ -57,6 +57,13 @@ func NewCommandContext(
 	for _, opt := range opts {
 		opt(c)
 	}
+	c.updateColorSettings()
+	return c
+}
+
+// updateColorSettings evaluates and updates the color settings based on current config.
+// This should be called after config is loaded or re-unmarshaled.
+func (c *Context) updateColorSettings() {
 	if c.config.NoColor || styles.ColorDisabled() {
 		// globally disable lipgloss styles
 		styles.DisableStyles()
@@ -66,12 +73,15 @@ func NewCommandContext(
 	} else {
 		if c.config.NoColor || styles.ColorDisabled() || !formatter.StdoutIsTTY() {
 			c.colorDisabledStdout = true
+		} else {
+			c.colorDisabledStdout = false
 		}
 		if c.config.NoColor || styles.ColorDisabled() || !formatter.StderrIsTTY() {
 			c.colorDisabledStderr = true
+		} else {
+			c.colorDisabledStderr = false
 		}
 	}
-	return c
 }
 
 func (c *Context) Config() *config.Config { return c.config }

@@ -253,7 +253,6 @@ func (c *Command) prepareSearchData() []any {
 
 // RenderTemplate renders search results using a handlebars template.
 func (c *Command) RenderTemplate() cenclierrors.CencliError {
-	// TODO eeeeee
 	data := c.prepareSearchData()
 	return c.PrintDataWithTemplate(config.TemplateEntitySearchResult, data)
 }
