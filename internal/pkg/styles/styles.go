@@ -23,12 +23,67 @@ const (
 	forceColorEnvVar = "FORCE_COLOR"
 )
 
+type Color = lipgloss.AdaptiveColor
+
+// Color variables initialized from the active color scheme.
+// These can be used throughout the codebase.
+var (
+	ColorOrange   Color
+	ColorOffWhite Color
+	ColorSage     Color
+	ColorTeal     Color
+	ColorAqua     Color
+	ColorGold     Color
+	ColorRed      Color
+	ColorGray     Color
+
+	// Additional basic colors
+	ColorBlack = Color{Light: "#000000", Dark: "#000000"}
+	ColorBlue  = Color{Light: "#3BBFDE", Dark: "#3BBFDE"}
+)
+
+// DefaultColorScheme returns the default Censys-themed color scheme.
+// To use a custom color scheme, replace DefaultColorScheme() with your own implementation.
+func DefaultColorScheme() ColorScheme {
+	return CensysColorScheme{}
+}
+
 func init() {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	if isTestEnvironment() {
 		lipgloss.SetColorProfile(termenv.Ascii)
 	}
-	GlobalStyles = DefaultStyles()
+	scheme := DefaultColorScheme()
+	GlobalStyles = NewStyles(scheme)
+
+	ColorOrange = scheme.Signature()
+	ColorOffWhite = scheme.Primary()
+	ColorSage = scheme.Secondary()
+	ColorTeal = scheme.Tertiary()
+	ColorAqua = scheme.Info()
+	ColorGold = scheme.Warning()
+	ColorRed = scheme.Danger()
+	ColorGray = scheme.Comment()
+}
+
+// ColorScheme defines the interface for providing colors to the CLI.
+type ColorScheme interface {
+	// Signature color is used for branding and signatures
+	Signature() lipgloss.AdaptiveColor
+	// Primary color is used for main content
+	Primary() lipgloss.AdaptiveColor
+	// Secondary color is used for supporting content
+	Secondary() lipgloss.AdaptiveColor
+	// Tertiary color is used for additional accents
+	Tertiary() lipgloss.AdaptiveColor
+	// Info color is used for informational messages
+	Info() lipgloss.AdaptiveColor
+	// Warning color is used for warning messages
+	Warning() lipgloss.AdaptiveColor
+	// Danger color is used for error messages
+	Danger() lipgloss.AdaptiveColor
+	// Comment color is used for less important text
+	Comment() lipgloss.AdaptiveColor
 }
 
 // Styles describes the color palette and layout styles used by the CLI.
@@ -46,55 +101,21 @@ type Styles struct {
 	Indent8   lipgloss.Style
 }
 
-// DefaultStyles returns the default Censys-themed style palette.
-func DefaultStyles() *Styles {
+// NewStyles creates a new Styles instance from a ColorScheme.
+func NewStyles(scheme ColorScheme) *Styles {
 	return &Styles{
-		Signature: lipgloss.NewStyle().Foreground(ColorOrange),
-		Primary:   lipgloss.NewStyle().Foreground(ColorOffWhite),
-		Secondary: lipgloss.NewStyle().Foreground(ColorSage),
-		Tertiary:  lipgloss.NewStyle().Foreground(ColorTeal),
-		Info:      lipgloss.NewStyle().Foreground(ColorAqua),
-		Warning:   lipgloss.NewStyle().Foreground(ColorGold),
-		Danger:    lipgloss.NewStyle().Foreground(ColorRed),
-		Comment:   lipgloss.NewStyle().Foreground(ColorGray),
+		Signature: lipgloss.NewStyle().Foreground(scheme.Signature()),
+		Primary:   lipgloss.NewStyle().Foreground(scheme.Primary()),
+		Secondary: lipgloss.NewStyle().Foreground(scheme.Secondary()),
+		Tertiary:  lipgloss.NewStyle().Foreground(scheme.Tertiary()),
+		Info:      lipgloss.NewStyle().Foreground(scheme.Info()),
+		Warning:   lipgloss.NewStyle().Foreground(scheme.Warning()),
+		Danger:    lipgloss.NewStyle().Foreground(scheme.Danger()),
+		Comment:   lipgloss.NewStyle().Foreground(scheme.Comment()),
 		Indent4:   lipgloss.NewStyle().PaddingLeft(4),
 		Indent8:   lipgloss.NewStyle().PaddingLeft(8),
 	}
 }
-
-type Color = lipgloss.AdaptiveColor
-
-var (
-	ColorOrange   = Color{Light: censysOrangeDarker, Dark: censysOrange}
-	ColorOffWhite = Color{Light: black, Dark: censysOffWhite}
-	ColorSage     = Color{Light: censysSageDarker, Dark: censysSage}
-	ColorTeal     = Color{Light: censysTeal, Dark: censysTeal}
-	ColorAqua     = Color{Light: censysAqua, Dark: censysAqua}
-	ColorGold     = Color{Light: censysGoldDarker, Dark: censysGold}
-
-	ColorRed   = Color{Light: red, Dark: red}
-	ColorGray  = Color{Light: gray, Dark: gray}
-	ColorBlack = Color{Light: black, Dark: black}
-	ColorBlue  = Color{Light: blue, Dark: blue}
-)
-
-const (
-	red   = "#dc322f"
-	blue  = "#3BBFDE"
-	gray  = "#808080"
-	black = "#000000"
-
-	censysOrange       = "#FFAD5B"
-	censysOrangeDarker = "#ed9134"
-	censysTeal         = "#387782"
-	censysAqua         = "#38a7ab"
-	censysGold         = "#BCB480"
-	censysGoldDarker   = "#a39a5f"
-	censysSage         = "#B6D5D4"
-	censysSageDarker   = "#53b8b4"
-	censysBlue         = "#3BBFDE"
-	censysOffWhite     = "#FBFAF6"
-)
 
 // ColorDisabled returns true if colored output should be disabled.
 // This function is not responsible for determining if output is a TTY.
