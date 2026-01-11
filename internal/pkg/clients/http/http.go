@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -10,7 +11,9 @@ type Client struct {
 	http.Client
 }
 
-func New(requestTimeout time.Duration, userAgent string) *Client {
+// New creates an HTTP client configured for CLI usage.
+// If logger is non-nil, requests and responses will be logged at Debug level.
+func New(requestTimeout time.Duration, userAgent string, logger *slog.Logger) *Client {
 	// Custom base transport tuned for CLI usage
 	base := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -31,6 +34,7 @@ func New(requestTimeout time.Duration, userAgent string) *Client {
 			Transport: &roundTripper{
 				RoundTripper: base,
 				userAgent:    userAgent,
+				logger:       logger,
 			},
 			Timeout: requestTimeout,
 		},
@@ -40,6 +44,7 @@ func New(requestTimeout time.Duration, userAgent string) *Client {
 type roundTripper struct {
 	http.RoundTripper
 	userAgent string
+	logger    *slog.Logger
 }
 
 func (r roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -49,5 +54,22 @@ func (r roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	} else {
 		req.Header.Set("User-Agent", existingUserAgent+" "+r.userAgent)
 	}
-	return r.RoundTripper.RoundTrip(req)
+
+	if r.logger != nil {
+		r.logger.Debug("http request", "method", req.Method, "url", req.URL.String())
+	}
+
+	start := time.Now()
+	resp, err := r.RoundTripper.RoundTrip(req)
+	duration := time.Since(start)
+
+	if r.logger != nil {
+		if err != nil {
+			r.logger.Debug("http error", "method", req.Method, "url", req.URL.String(), "error", err, "duration", duration)
+		} else {
+			r.logger.Debug("http response", "method", req.Method, "url", req.URL.String(), "status", resp.StatusCode, "duration", duration)
+		}
+	}
+
+	return resp, err
 }

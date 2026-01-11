@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	clienthttp "github.com/censys/cencli/internal/pkg/clients/http"
 	authdom "github.com/censys/cencli/internal/pkg/domain/auth"
+	applog "github.com/censys/cencli/internal/pkg/log"
 	"github.com/censys/cencli/internal/store"
 	"github.com/censys/cencli/internal/version"
 )
@@ -30,6 +32,7 @@ type censysSDK struct {
 	client        *censys.SDK
 	retryStrategy config.RetryStrategy
 	hasOrgID      bool
+	logger        *slog.Logger
 }
 
 func (c *censysSDK) HasOrgID() bool {
@@ -51,9 +54,16 @@ func NewCensysSDK(
 	ds store.Store,
 	httpRequestTimeout time.Duration,
 	retryStrategy config.RetryStrategy,
+	debug bool,
 ) (Client, error) {
+	// Create logger for HTTP and retry debugging (only logs when debug=true)
+	var logger *slog.Logger
+	if debug {
+		logger = applog.New(debug, nil)
+	}
+
 	sdkOpts := []censys.SDKOption{
-		censys.WithClient(clienthttp.New(httpRequestTimeout, buildUserAgent())),
+		censys.WithClient(clienthttp.New(httpRequestTimeout, buildUserAgent(), logger)),
 	}
 
 	storedPAT, err := ds.GetLastUsedAuthByName(ctx, config.AuthName)
@@ -78,6 +88,7 @@ func NewCensysSDK(
 		client:        censys.New(sdkOpts...),
 		retryStrategy: retryStrategy,
 		hasOrgID:      hasOrgID,
+		logger:        logger,
 	}
 
 	return &censysSDKImpl{
@@ -125,6 +136,13 @@ func (c *censysSDK) executeWithRetry(ctx context.Context, operationFn func() Cli
 		}
 
 		delay := calculateRetryDelay(baseDelay, c.retryStrategy.MaxDelay, c.retryStrategy.Backoff, attempt)
+		if c.logger != nil {
+			var statusCode int64
+			if lastErr.StatusCode().IsPresent() {
+				statusCode = lastErr.StatusCode().MustGet()
+			}
+			c.logger.Debug("retrying request", "attempt", attempt, "max_attempts", maxAttempts, "status", statusCode, "delay", delay)
+		}
 		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
