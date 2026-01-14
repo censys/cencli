@@ -2,14 +2,14 @@ package short
 
 import (
 	"fmt"
-	"sort"
 	"strings"
+	"time"
 
+	"github.com/censys/cencli/internal/pkg/censyscopy"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
+	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
 )
-
-// FIXME: make this perfect
 
 // Certificates renders certificates in short format
 func Certificates(certificates []*assets.Certificate) string {
@@ -33,38 +33,42 @@ func renderCertificateShort(cert *assets.Certificate) string {
 	// Header
 	out.WriteString(certHeader(cert))
 
-	// Issuer
+	// Issuer and Subject DN
 	out.WriteString(certIssuer(cert))
 
 	// Validity
 	out.WriteString(certValidity(cert))
 
-	// Fingerprints
-	out.WriteString(certFingerprints(cert))
+	// TODO: Add labels section
 
 	// Subject Alternative Names
 	out.WriteString(certSubjectAltNames(cert))
 
-	// CT Log Entries
-	out.WriteString(certCTLogEntries(cert))
-
-	// Validation Level and Parse Status
+	// Validation Level
 	out.WriteString(certMetadata(cert))
 
 	return out.String()
 }
 
-// certHeader renders the certificate subject common name
+// certHeader renders the certificate SHA256 fingerprint as the main header
 func certHeader(cert *assets.Certificate) string {
-	var subjectCN string
-	if cert.Parsed != nil && cert.Parsed.Subject != nil && len(cert.Parsed.Subject.CommonName) > 0 {
-		subjectCN = cert.Parsed.Subject.CommonName[0]
-	}
+	fingerprint := Val(cert.FingerprintSha256, "")
+	link := censyscopy.CensysCertificateLookupLink(fingerprint)
 
 	line := NewLine(
 		WithLabelStyle(styles.GlobalStyles.Signature),
 	)
-	line.Write("Certificate for", subjectCN)
+
+	if formatter.StdoutIsTTY() {
+		// Make fingerprint an underlined clickable link
+		underlinedFP := styles.GlobalStyles.Signature.Underline(true).Render(fingerprint)
+		line.Write("Certificate", link.Render(underlinedFP))
+	} else {
+		// Plain fingerprint with separate Platform URL line
+		line.Write("Certificate", fingerprint)
+		line.Write("Platform URL", link.String())
+	}
+
 	return line.String()
 }
 
@@ -74,30 +78,12 @@ func certIssuer(cert *assets.Certificate) string {
 		return ""
 	}
 
-	var org, cn string
-	if len(cert.Parsed.Issuer.Organization) > 0 {
-		org = cert.Parsed.Issuer.Organization[0]
-	}
-	if len(cert.Parsed.Issuer.CommonName) > 0 {
-		cn = cert.Parsed.Issuer.CommonName[0]
-	}
-
-	if org == "" && cn == "" {
-		return ""
-	}
-
-	issuerStr := org
-	if cn != "" {
-		if org != "" {
-			issuerStr = fmt.Sprintf("%s (%s)", org, cn)
-		} else {
-			issuerStr = cn
-		}
-	}
-
-	line := NewLine()
-	line.Write("Issuer", issuerStr)
-	return line.String()
+	issuerLine := NewLine(WithLabelStyle(styles.GlobalStyles.Primary))
+	issuerLine.Newline()
+	issuerLine.Write("Issuer DN", Val(cert.Parsed.IssuerDn, ""))
+	subjectLine := NewLine()
+	subjectLine.Write("Subject DN", Val(cert.Parsed.SubjectDn, ""))
+	return issuerLine.String() + subjectLine.String()
 }
 
 // certValidity renders the validity period
@@ -113,24 +99,38 @@ func certValidity(cert *assets.Certificate) string {
 		return ""
 	}
 
-	validityStr := fmt.Sprintf("%s → %s", notBefore, notAfter)
+	// Format dates nicely
+	notBeforeFormatted := formatCertDate(notBefore)
+	notAfterFormatted := formatCertDate(notAfter)
+
+	validityStr := fmt.Sprintf("%s → %s", notBeforeFormatted, notAfterFormatted)
 	line := NewLine()
 	line.Write("Validity", validityStr)
 	return line.String()
 }
 
-// certFingerprints renders the fingerprints section
-func certFingerprints(cert *assets.Certificate) string {
-	var out strings.Builder
-	out.WriteString("\nFingerprints:\n")
+// formatCertDate formats a certificate date string into a human-readable format
+func formatCertDate(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
 
-	b := NewBlock(WithValueStyle(styles.GlobalStyles.Warning))
-	b.Field("SHA256", Val(cert.FingerprintSha256, ""))
-	b.Field("SHA1", Val(cert.FingerprintSha1, ""))
-	b.Field("MD5", Val(cert.FingerprintMd5, ""))
+	// Try parsing common certificate date formats
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05Z",
+		"2006-01-02 15:04:05 UTC",
+		"2006-01-02",
+	}
 
-	out.WriteString(b.String())
-	return out.String()
+	for _, format := range formats {
+		if t, err := time.Parse(format, dateStr); err == nil {
+			return t.Format("Jan 02, 2006")
+		}
+	}
+
+	// Return original if parsing fails
+	return dateStr
 }
 
 // certSubjectAltNames renders the subject alternative names section
@@ -154,33 +154,6 @@ func certSubjectAltNames(cert *assets.Certificate) string {
 	return out.String()
 }
 
-// certCTLogEntries renders the CT log entries section
-func certCTLogEntries(cert *assets.Certificate) string {
-	if cert.Ct == nil || len(cert.Ct.Entries) == 0 {
-		return ""
-	}
-
-	var out strings.Builder
-	out.WriteString("\nCT Log Entries:\n")
-
-	// Sort keys for deterministic output
-	keys := make([]string, 0, len(cert.Ct.Entries))
-	for k := range cert.Ct.Entries {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, logName := range keys {
-		entry := cert.Ct.Entries[logName]
-		addedAt := Val(entry.AddedToCtAt, "")
-		out.WriteString(fmt.Sprintf("  - %s |  Added: %s\n",
-			styles.GlobalStyles.Tertiary.Render(logName),
-			styles.GlobalStyles.Tertiary.Render(addedAt)))
-	}
-
-	return out.String()
-}
-
 // certMetadata renders validation level and parse status
 func certMetadata(cert *assets.Certificate) string {
 	var out strings.Builder
@@ -189,12 +162,6 @@ func certMetadata(cert *assets.Certificate) string {
 		out.WriteString("\n")
 		line := NewLine()
 		line.Write("Validation Level", string(*cert.ValidationLevel))
-		out.WriteString(line.String())
-	}
-
-	if cert.ParseStatus != nil {
-		line := NewLine()
-		line.Write("Parse Status", string(*cert.ParseStatus))
 		out.WriteString(line.String())
 	}
 

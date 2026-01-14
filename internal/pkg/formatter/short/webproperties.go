@@ -12,8 +12,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/styles"
 )
 
-// FIXME: make this perfect
-
 // WebProperties renders web properties in short format
 func WebProperties(webProperties []*assets.WebProperty) string {
 	b := NewBlock()
@@ -70,21 +68,21 @@ func wpHeader(wp *assets.WebProperty) string {
 	hostname := Val(wp.Hostname, "")
 	port := Val(wp.Port, 0)
 	hostPort := fmt.Sprintf("%s:%d", hostname, port)
+	link := censyscopy.CensysWebPropertyLookupLink(hostPort)
 
 	line := NewLine(
 		WithLabelStyle(styles.GlobalStyles.Signature),
 	)
-	line.Write("Hostname", hostPort)
 
-	// Platform URL
-	link := censyscopy.CensysWebPropertyLookupLink(hostPort)
-	var linkStr string
 	if formatter.StdoutIsTTY() {
-		linkStr = link.Render("")
+		// Make hostname:port an underlined clickable link
+		underlinedHostPort := styles.GlobalStyles.Signature.Underline(true).Render(hostPort)
+		line.Write("Hostname", link.Render(underlinedHostPort))
 	} else {
-		linkStr = link.String()
+		// Plain hostname:port with separate Platform URL line
+		line.Write("Hostname", hostPort)
+		line.Write("Platform URL", link.String())
 	}
-	line.Write("Platform URL", linkStr)
 
 	return line.String()
 }
@@ -120,7 +118,6 @@ func wpLabels(labels []components.Label) string {
 	}
 
 	line := NewLine()
-	line.Newline()
 	line.Write("Labels", labelValues)
 	return line.String()
 }
@@ -133,7 +130,6 @@ func wpComponents(name string, components []components.Attribute) string {
 	}
 
 	line := NewLine()
-	line.Newline()
 	line.Write(name, rendered)
 	return line.String()
 }
@@ -141,7 +137,6 @@ func wpComponents(name string, components []components.Attribute) string {
 // wpEndpoints renders the endpoints section
 func wpEndpoints(endpoints []components.EndpointScanState) string {
 	b := NewBlock()
-	b.Newline()
 
 	// Header line
 	line := NewLine()
