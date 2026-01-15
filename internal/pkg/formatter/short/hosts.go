@@ -9,6 +9,7 @@ import (
 
 	"github.com/censys/cencli/internal/pkg/censyscopy"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
+	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
 )
 
@@ -37,6 +38,9 @@ func renderHostShort(host *assets.Host) string {
 	// ASN / WHOIS / Location
 	out.WriteString(hostMetadata(host))
 
+	// Labels
+	out.WriteString(hostLabels(host.Labels))
+
 	// Reverse / Forward DNS
 	out.WriteString(hostDNS(host))
 
@@ -54,19 +58,21 @@ func renderHostShort(host *assets.Host) string {
 // hostHeader renders IP and platform link.
 func hostHeader(host *assets.Host) string {
 	ip := Val(host.IP, "")
+	link := censyscopy.CensysHostLookupLink(ip)
 
-	// IP line (no clickable in short output)
-	line := NewLine(WithLabelStyle(styles.GlobalStyles.Primary))
-	line.Write("IP", ip)
+	line := NewLine(WithLabelStyle(styles.GlobalStyles.Signature))
 
-	// Platform URL (plain)
-	link := censyscopy.CensysHostLookupLink(ip).String()
-	link = strings.TrimPrefix(link, "https://")
+	if formatter.StdoutIsTTY() {
+		// Make IP an underlined clickable link
+		underlinedIP := styles.GlobalStyles.Signature.Underline(true).Render(ip)
+		line.Write("IP", link.Render(underlinedIP))
+	} else {
+		// Plain IP with separate Platform URL line
+		line.Write("IP", ip)
+		line.Write("Platform URL", link.String())
+	}
 
-	platform := NewLine(WithLabelStyle(styles.GlobalStyles.Primary))
-	platform.Write("Platform URL", link)
-
-	return line.String() + platform.String()
+	return line.String()
 }
 
 // hostMetadata renders ASN, WHOIS org, and location.
@@ -168,6 +174,28 @@ func hostDNS(host *assets.Host) string {
 	return out.String()
 }
 
+// hostLabels renders the labels section
+func hostLabels(labels []components.Label) string {
+	if len(labels) == 0 {
+		return ""
+	}
+
+	values := make([]string, 0, len(labels))
+	for _, label := range labels {
+		if label.Value != nil {
+			values = append(values, *label.Value)
+		}
+	}
+
+	if len(values) == 0 {
+		return ""
+	}
+
+	line := NewLine()
+	line.Write("Labels", strings.Join(values, ", "))
+	return line.String()
+}
+
 // renderListWithLimit renders up to limit items, appending "..." if more remain.
 func renderListWithLimit(items []string, limit int) string {
 	var out strings.Builder
@@ -202,6 +230,22 @@ func renderServices(services []components.Service) string {
 		title := fmt.Sprintf("%s %d/%s", styles.GlobalStyles.Signature.Render(proto), port, transport)
 		b.Item(title)
 
+		// Software (limit to first 5 to avoid extremely long lists)
+		if len(svc.Software) > 0 {
+			softwareStr := renderServiceComponents(svc.Software, 5)
+			if softwareStr != "" {
+				b.ItemField("Software", softwareStr)
+			}
+		}
+
+		// Hardware (limit to first 5 to avoid extremely long lists)
+		if len(svc.Hardware) > 0 {
+			hardwareStr := renderServiceComponents(svc.Hardware, 5)
+			if hardwareStr != "" {
+				b.ItemField("Hardware", hardwareStr)
+			}
+		}
+
 		// TLS cert summary from service cert
 		if svc.Cert != nil && svc.Cert.Parsed != nil {
 			subj := Val(svc.Cert.Parsed.SubjectDn, "")
@@ -223,4 +267,22 @@ func renderServices(services []components.Service) string {
 
 	out.WriteString(b.String())
 	return out.String()
+}
+
+// renderServiceComponents renders software/hardware components with a limit
+func renderServiceComponents(attrs []components.Attribute, limit int) string {
+	parts := make([]string, 0, len(attrs))
+
+	for i, attr := range attrs {
+		if i >= limit {
+			parts = append(parts, "...")
+			break
+		}
+		formatted := formatAttribute(attr)
+		if formatted != "" {
+			parts = append(parts, formatted)
+		}
+	}
+
+	return strings.Join(parts, ", ")
 }

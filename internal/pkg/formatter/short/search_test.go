@@ -52,21 +52,19 @@ func TestSearchHits(t *testing.T) {
 			expectedOutput: `
 ---------------------- Hit #1 (host) -----------------------
 IP: 1.1.1.1
-Platform URL: platform.censys.io/hosts/1.1.1.1
+Platform URL: https://platform.censys.io/hosts/1.1.1.1
 
 Services (0):
 
 ---------------------- Hit #2 (host) -----------------------
 IP: 2.2.2.2
-Platform URL: platform.censys.io/hosts/2.2.2.2
+Platform URL: https://platform.censys.io/hosts/2.2.2.2
 
 Services (0):
 
 ------------------- Hit #3 (certificate) -------------------
-Certificate for: test.com
-
-Fingerprints:
-  SHA256: abc123
+Certificate: abc123
+Platform URL: https://platform.censys.io/certificates/abc123
 
 ------------------ Hit #4 (web property) -------------------
 Hostname: example.com:443
@@ -85,7 +83,7 @@ Platform URL: https://platform.censys.io/web/example.com:443
 			expectedOutput: `
 ---------------------- Hit #1 (host) -----------------------
 IP: 3.3.3.3
-Platform URL: platform.censys.io/hosts/3.3.3.3
+Platform URL: https://platform.censys.io/hosts/3.3.3.3
 
 Services (0):
 `,
