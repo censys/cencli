@@ -21,12 +21,28 @@ Use `censys config auth add` to open an interactive prompt to add a token. Use `
 There also exists a non-interactive mode for adding tokens, where you can provide the token value, name, and optionally activate the token.
 
 ```bash
-$ censys config auth -a                                    # list all tokens
+$ censys config auth                                              # view/manage tokens (interactive TUI)
 $ censys config auth add --value "your-token" --name "my-token"   # add a token (non-interactive)
 $ censys config auth add --value-file token.txt --name "my-token" # add from file
-$ censys config auth activate <id>                          # activate a specific token by ID
-$ censys config auth delete <id>                            # delete a token by ID
+$ censys config auth activate <id>                                # activate a specific token by ID
+$ censys config auth delete <id>                                  # delete a token by ID
 ```
+
+#### Flags for `config auth`
+
+**`--accessible`, `-a`**: Enable accessible mode (non-redrawing). This disables animations and screen updates that may not work well with screen readers or certain terminal configurations.
+
+#### Flags for `config auth add`
+
+**`--value`**: The personal access token value (for non-interactive mode).
+
+**`--value-file`**: Read the token value from a file, or use `-` to read from stdin.
+
+**`--name`, `-n`**: A friendly name/description for this token. **Default:** `"ci"`
+
+**`--activate`**: Mark the added token as active immediately. **Default:** `true`
+
+**`--accessible`, `-a`**: Enable accessible mode (non-redrawing).
 
 ### `config org-id`
 
@@ -37,13 +53,28 @@ Use `censys config org-id add` to open an interactive prompt to add an organizat
 There also exists a non-interactive mode for adding organization IDs, where you can provide the organization ID value, name, and optionally activate the organization ID.
 
 ```bash
-$ censys config org-id -a                                              # list all org IDs
+$ censys config org-id                                                  # view/manage org IDs (interactive TUI)
 $ censys config org-id add --value "uuid" --name "production"           # add an org ID (non-interactive)
 $ censys config org-id add --value-file orgid.txt --name "production"   # add from file
 $ censys config org-id activate <id>                                    # activate a specific org ID by ID
 $ censys config org-id delete <id>                                      # delete an org ID by ID
 ```
 
+#### Flags for `config org-id`
+
+**`--accessible`, `-a`**: Enable accessible mode (non-redrawing). This disables animations and screen updates that may not work well with screen readers or certain terminal configurations.
+
+#### Flags for `config org-id add`
+
+**`--value`**: The organization ID value (UUID format, for non-interactive mode).
+
+**`--value-file`**: Read the organization ID value from a file, or use `-` to read from stdin.
+
+**`--name`, `-n`**: A friendly name/description for this organization ID. **Default:** `"ci"`
+
+**`--activate`**: Mark the added organization ID as active immediately. **Default:** `true`
+
+**`--accessible`, `-a`**: Enable accessible mode (non-redrawing).
 
 **Note:** If no organization ID is configured, requests will use your free-user wallet by default. You can also override the active organization ID for individual commands using the `--org-id` flag.
 

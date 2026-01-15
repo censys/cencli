@@ -127,7 +127,7 @@ $ censys censeye 8.8.8.8 --output-format json --include-url
 The `censeye` command defaults to **`short`** output format, which displays results as a formatted table. You can override this with the `--output-format` flag (or `-O`).
 
 **Default:** `short` (table view)  
-**Supported formats:** `short`, `json`, `yaml`, `ndjson`, `tree`
+**Supported formats:** `json`, `yaml`, `tree`, `short`
 
 ### Examples
 

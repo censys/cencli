@@ -134,15 +134,17 @@ $ censys view 8.8.8.8 --output-format yaml
 
 When you first run `cencli`, default templates can be found in the configuration directory (typically `~/.config/cencli/templates/`) and are automatically created with sensible defaults on first use. Each asset type has its own template:
 
-- **Host:** `host.hbs`
-- **Certificate:** `certificate.hbs`
-- **Web Property:** `webproperty.hbs`
+- **Host:** `host.hbs` (used by `view` command)
+- **Certificate:** `certificate.hbs` (used by `view` command)
+- **Web Property:** `webproperty.hbs` (used by `view` command)
+- **Search Result:** `searchresult.hbs` (used by `search` command)
 
-To use templates, specify `--output-format template` (or `-O template`) when running the `view` command:
+To use templates, specify `--output-format template` (or `-O template`) when running the `view` or `search` commands:
 
 ```bash
 $ censys view 8.8.8.8 --output-format template
 $ censys view example.com:443 -O template
+$ censys search "services.port: 443" -O template
 ```
 
 ### Customizing Templates

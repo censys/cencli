@@ -90,7 +90,7 @@ The `view` command allows you to fetch information about a particular host, cert
 
 ![view](examples/view/view.gif)
 
-You can also use the `--short` flag to render output using templates, which can be customized. See the [templating documentation](./docs/commands/VIEW.md#templates) for more details.
+You can also use `-O short` (or `--output-format short`) to render output using templates, which can be customized. See the [templating documentation](./docs/commands/VIEW.md#templates) for more details.
 
 ### Search
 
@@ -116,6 +116,8 @@ This is a WIP. See the [history command docs](./docs/commands/HISTORY.md) for mo
 
 ### Other Commands
 
+- `$ censys org`: manage and view organization details. See the [org command docs](./docs/commands/ORG.md) for more details.
+- `$ censys credits`: display credit details for your free user Censys account. See the [credits command docs](./docs/commands/CREDITS.md) for more details.
 - `$ censys completion <bash|zsh|fish|powershell>`: generates shell completion scripts
 - `$ censys version`: prints version information
 
