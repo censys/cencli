@@ -62,26 +62,19 @@ func TestCertificates(t *testing.T) {
 			},
 			expectedOutput: `
 ---------------------- Certificate #1 ----------------------
-Certificate for: example.com
-Issuer: Let's Encrypt (Let's Encrypt Authority X3)
-Validity: 2024-01-01T00:00:00Z → 2024-12-31T23:59:59Z
+Certificate: abc123def456
+Platform URL: https://platform.censys.io/certificates/abc123def456
 
-Fingerprints:
-  SHA256: abc123def456
-  SHA1: abc123
-  MD5: def456
+Issuer DN
+Subject DN
+Validity: Jan 01, 2024 → Dec 31, 2024
 
 Subject Alternative Names:
   - example.com
   - www.example.com
   - api.example.com
 
-CT Log Entries:
-  - cloudflare_nimbus2023 |  Added: 2024-01-01T12:05:00Z
-  - google_xenon2023 |  Added: 2024-01-01T12:00:00Z
-
 Validation Level: dv
-Parse Status: success
 `,
 		},
 		{
@@ -98,10 +91,8 @@ Parse Status: success
 			},
 			expectedOutput: `
 ---------------------- Certificate #1 ----------------------
-Certificate for: minimal.com
-
-Fingerprints:
-  SHA256: minimal123
+Certificate: minimal123
+Platform URL: https://platform.censys.io/certificates/minimal123
 `,
 		},
 	}

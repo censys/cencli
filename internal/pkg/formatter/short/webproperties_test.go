@@ -82,13 +82,9 @@ Certificate:
   Issuer: CN=Test Issuer
   Subject: CN=example.com
   Names: example.com, www.example.com
-
 Labels: production, external
-
 Software: Nginx Webserver 1.2.3
-
 Hardware: Supermicro X10dri rev2
-
 Endpoints: (1)
   - / (HTTP)
       IP: 203.0.113.10

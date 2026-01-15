@@ -106,7 +106,7 @@ func TestHosts(t *testing.T) {
 			expectedOutput: `
 ------------------------- Host #1 --------------------------
 IP: 1.1.1.1
-Platform URL: platform.censys.io/hosts/1.1.1.1
+Platform URL: https://platform.censys.io/hosts/1.1.1.1
 ASN: 13335 (CLOUDFLARE)
 WHOIS Org: Cloudflare
 Location: Mountain View, California, United States (US)
@@ -153,7 +153,7 @@ Services (4):
 			expectedOutput: `
 ------------------------- Host #1 --------------------------
 IP: 2.2.2.2
-Platform URL: platform.censys.io/hosts/2.2.2.2
+Platform URL: https://platform.censys.io/hosts/2.2.2.2
 
 Services (0):
 `,
