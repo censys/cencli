@@ -104,7 +104,7 @@ $ censys aggregate "host.services.port=22" "host.services.protocol" --interactiv
 The `aggregate` command defaults to **`short`** output format, which displays results as a formatted table. You can override this with the `--output-format` flag (or `-O`).
 
 **Default:** `short` (table view)  
-**Supported formats:** `short`, `json`, `yaml`, `ndjson`, `tree`
+**Supported formats:** `json`, `yaml`, `tree`, `short`
 
 ### Examples
 

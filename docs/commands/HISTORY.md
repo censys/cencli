@@ -2,6 +2,8 @@
 
 The `history` command allows you to retrieve historical data for hosts, web properties, and certificates from the Censys Platform. This command provides time-series data showing how assets have changed over time.
 
+**Note:** To retrieve certificate history, you must have access to the Threat Hunting module.
+
 ![history](../../examples/history/history.gif)
 
 ## Usage
@@ -18,7 +20,7 @@ The `history` command automatically detects the asset type based on the input fo
 
 ## Flags
 
-This section describes the flags available for the `history` command. To see global flags and how they might affect this command, see the [global configuration docs](mdc:../GLOBAL_CONFIGURATION.md).
+This section describes the flags available for the `history` command. To see global flags and how they might affect this command, see the [global configuration docs](../GLOBAL_CONFIGURATION.md).
 
 ### `--start`, `-s`
 

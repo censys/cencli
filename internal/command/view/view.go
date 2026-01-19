@@ -369,17 +369,17 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 		tape.NewTape("view-short",
 			tallerConfig,
 			recorder.Type(
-				"view --output-format short 8.8.8.8 ",
+				"view -O short 8.8.8.8 ",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),
 			recorder.Type(
-				"view --output-format short platform.censys.io:80",
+				"view -O short platform.censys.io:80",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),
 			recorder.Type(
-				"view --output-format short 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf",
+				"view -O short 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),

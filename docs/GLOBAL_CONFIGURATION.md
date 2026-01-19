@@ -218,7 +218,32 @@ For the complete, authoritative list of supported timezones, see [timezones.go](
 
 ## Templates
 
-Template paths for formatted output. Each asset type has its own template file. See [the view command docs](commands/VIEW.md#templates) for more details.
+Template paths for formatted output using `--output-format template`. Templates are stored in `~/.config/cencli/templates/` (or `$CENCLI_DATA_DIR/templates/`) and are automatically created with sensible defaults on first use.
+
+Each template corresponds to a specific data type:
+
+| Template | File | Used By |
+|----------|------|---------|
+| Host | `host.hbs` | `view` command (host assets) |
+| Certificate | `certificate.hbs` | `view` command (certificate assets) |
+| Web Property | `webproperty.hbs` | `view` command (web property assets) |
+| Search Result | `searchresult.hbs` | `search` command |
+
+You can customize templates by editing the files in your templates directory. The path to each template can also be overridden in `config.yaml`:
+
+```yaml
+templates:
+  host:
+    path: /path/to/custom/host.hbs
+  certificate:
+    path: /path/to/custom/certificate.hbs
+  webproperty:
+    path: /path/to/custom/webproperty.hbs
+  searchresult:
+    path: /path/to/custom/searchresult.hbs
+```
+
+See [the view command docs](commands/VIEW.md#templates) for more details on creating and customizing templates.
 
 ## Standard Environment Variables
 
