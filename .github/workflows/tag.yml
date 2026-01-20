@@ -9,6 +9,15 @@ on:
         description: 'Branch to tag and release from'
         required: true
         default: 'main'
+      version_bump:
+        description: 'Version bump type (patch: v1.2.3→v1.2.4, minor: v1.2.3→v1.3.0, major: v1.2.3→v2.0.0)'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
@@ -112,8 +121,14 @@ jobs:
       - name: Compute next semver tag
         id: tag
         if: steps.select.outputs.should_release == 'true'
+        env:
+          VERSION_BUMP: ${{ github.event.inputs.version_bump }}
         run: |
           set -euo pipefail
+          
+          # Default to patch for automatic weekly releases
+          bump_type="${VERSION_BUMP:-patch}"
+          
           last=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1 || true)
           if [ -z "$last" ]; then
             new_tag="v0.0.1"
@@ -124,10 +139,21 @@ jobs:
             if [ -z "${maj:-}" ] || [ -z "${min:-}" ] || [ -z "${pat:-}" ]; then
               new_tag="v0.0.1"
             else
-              new_tag="v${maj}.${min}.$((pat + 1))"
+              case "$bump_type" in
+                major)
+                  new_tag="v$((maj + 1)).0.0"
+                  ;;
+                minor)
+                  new_tag="v${maj}.$((min + 1)).0"
+                  ;;
+                patch|*)
+                  new_tag="v${maj}.${min}.$((pat + 1))"
+                  ;;
+              esac
             fi
           fi
           echo "tag=${new_tag}" >> "$GITHUB_OUTPUT"
+          echo "Creating tag: ${new_tag} (from ${last:-none} with ${bump_type} bump)"
 
       - name: Create and push tag
         if: steps.select.outputs.should_release == 'true'
@@ -136,8 +162,15 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           SHA: ${{ steps.select.outputs.sha }}
           BRANCH: ${{ steps.select.outputs.branch }}
+          VERSION_BUMP: ${{ github.event.inputs.version_bump }}
         run: |
           set -euo pipefail
-          git tag -a "${TAG}" "${SHA}" -m "Automated weekly release ${TAG} from ${BRANCH}"
+          bump_type="${VERSION_BUMP:-patch}"
+          if [ -n "${VERSION_BUMP:-}" ]; then
+            msg="Manual ${bump_type} release ${TAG} from ${BRANCH}"
+          else
+            msg="Automated weekly release ${TAG} from ${BRANCH}"
+          fi
+          git tag -a "${TAG}" "${SHA}" -m "${msg}"
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push origin "${TAG}"
