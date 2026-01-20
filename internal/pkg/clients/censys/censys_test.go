@@ -39,7 +39,7 @@ func TestNewCensysSDK(t *testing.T) {
 			LastUsedAt: time.Now(),
 		}, nil)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{})
+		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.True(t, client.HasOrgID())
@@ -59,7 +59,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{})
+		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.False(t, client.HasOrgID())
@@ -73,7 +73,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{})
+		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.True(t, errors.Is(err, authdom.ErrAuthNotFound))
@@ -87,7 +87,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), errors.New("db error"))
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{})
+		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to get last used auth")
@@ -107,7 +107,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), errors.New("db error"))
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{})
+		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to get last used orgID")

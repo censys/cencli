@@ -65,6 +65,22 @@ type Command interface {
 	// Used for modifying persistent flags on the command.
 	// Should not be implemented.
 	PersistentFlags() *pflag.FlagSet
+	// InheritedFlags returns the underlying inherited flag set for the command.
+	// Used for modifying inherited flags on the command.
+	// Should not be implemented.
+	InheritedFlags() *pflag.FlagSet
+	// DefaultOutputType returns the default output type for this command.
+	DefaultOutputType() OutputType
+	// SupportedOutputTypes returns the output types this command supports.
+	// OutputTypeData includes json, yaml, and tree formats (buffered output).
+	SupportedOutputTypes() []OutputType
+	// SupportsStreaming returns true if this command supports streaming output mode.
+	// Commands that return true must use WithStreamingOutput in their Run implementation.
+	SupportsStreaming() bool
+	// RenderShort renders the command output in short format.
+	RenderShort() cenclierrors.CencliError
+	// RenderTemplate renders the command output using a template.
+	RenderTemplate() cenclierrors.CencliError
 	// init is used to internally initialize the command.
 	// For example, it will set the persistent pre-run function to unmarshal the config
 	// so it is available to the command.
@@ -93,10 +109,20 @@ func toCobra(cmd Command) (*cobra.Command, error) {
 		return nil
 	})
 
+	// Custom flag error handler to wrap flag parsing errors as CencliError
+	// This ensures usage information is printed for flag errors like unknown flags
+	cobraCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		return cenclierrors.NewUsageError(err)
+	})
+
 	if err := cmd.Init(); err != nil {
 		return nil, fmt.Errorf("failed during Init(): %w", err)
 	}
 	cmd.init(cmd)
+
+	if err := applyOutputFormatDefaults(cobraCmd, cmd); err != nil {
+		return nil, fmt.Errorf("failed to apply output format defaults: %w", err)
+	}
 
 	cobraCmd.Use = cmd.Use()
 	if cobraCmd.Use == "" {

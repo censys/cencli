@@ -43,9 +43,10 @@ type Command struct {
 	rarityMin   uint64
 	rarityMax   uint64
 	interactive bool
-	raw         bool
 	includeURL  bool
 	hostID      string
+	// result stored for rendering
+	result censeye.InvestigateHostResult
 }
 
 type censeyeCommandFlags struct {
@@ -54,7 +55,6 @@ type censeyeCommandFlags struct {
 	rarityMin   flags.IntegerFlag
 	rarityMax   flags.IntegerFlag
 	interactive flags.BoolFlag
-	raw         flags.BoolFlag
 	includeURL  flags.BoolFlag
 }
 
@@ -81,7 +81,8 @@ func (c *Command) Examples() []string {
 	return []string{
 		"8.8.8.8",
 		"--rarity-min 2 --rarity-max 25 1.1.1.1",
-		"--raw --include-url 192.168.1.1",
+		"--interactive 192.168.1.1",
+		"--output-format json --include-url 192.168.1.1",
 	}
 }
 
@@ -121,13 +122,6 @@ func (c *Command) Init() error {
 		false,
 		"display results in an interactive table (TUI)",
 	)
-	c.flags.raw = flags.NewBoolFlag(
-		c.Flags(),
-		"raw",
-		"r",
-		false,
-		"output raw data",
-	)
 	c.flags.includeURL = flags.NewBoolFlag(
 		c.Flags(),
 		"include-url",
@@ -136,6 +130,14 @@ func (c *Command) Init() error {
 		"include a Platform search URL in the output",
 	)
 	return nil
+}
+
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData, command.OutputTypeShort}
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
@@ -189,19 +191,10 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	// validate raw (if present)
-	c.raw, err = c.flags.raw.Value()
-	if err != nil {
-		return err
-	}
 	// validate includeURL (if present)
 	c.includeURL, err = c.flags.includeURL.Value()
 	if err != nil {
 		return err
-	}
-	// validate that raw and interactive are not both set
-	if c.raw && c.interactive {
-		return flags.NewConflictingFlagsError("raw", "interactive")
 	}
 	// resolve services
 	err = c.resolveServices()
@@ -214,7 +207,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	logger := c.Logger(cmdName).With("hostID", c.hostID)
 
-	var result censeye.InvestigateHostResult
 	if err := c.WithProgress(
 		cmd.Context(),
 		logger,
@@ -234,14 +226,28 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 			if investigateErr != nil {
 				return investigateErr
 			}
-			result = res
+			c.result = res
 			return nil
 		},
 	); err != nil {
 		return err
 	}
 
-	return c.renderResult(result)
+	// Print response metadata
+	c.PrintAppResponseMeta(c.result.Meta)
+
+	return c.PrintData(c, c.result.Entries)
+}
+
+// RenderShort renders the censeye results as a human-readable table.
+// If the interactive flag is set, displays an interactive TUI table.
+// Otherwise, displays a static styled table with pivots.
+func (c *Command) RenderShort() cenclierrors.CencliError {
+	if c.interactive {
+		return c.showInteractiveTable(c.result)
+	}
+	// Default: show raw table
+	return c.showRawTable(c.result)
 }
 
 func (c *Command) resolveServices() cenclierrors.CencliError {
@@ -316,10 +322,10 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 			recorder.SpamPress("j", 50),
 			recorder.Sleep(5),
 		),
-		tape.NewTape("censeye-raw",
+		tape.NewTape("censeye-json",
 			tape.DefaultTapeConfig(),
 			recorder.Type(
-				"censeye 145.131.8.169 --raw --include-url",
+				"censeye 145.131.8.169 --output-format json --include-url",
 				tape.WithSleepAfter(15),
 			),
 		),

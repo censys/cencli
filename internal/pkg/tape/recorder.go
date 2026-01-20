@@ -31,9 +31,30 @@ func NewTapeRecorder(
 	if err != nil {
 		return nil, fmt.Errorf("%s not found in PATH: %w", vhsPath, err)
 	}
-	err = ensureBinary(cliPath)
-	if err != nil {
-		return nil, fmt.Errorf("%s not found in PATH: %w", cliPath, err)
+
+	// If cliPath is an absolute path, temporarily add its directory to PATH
+	// so VHS can execute it by name only
+	cliName := cliPath
+	if filepath.IsAbs(cliPath) {
+		// Check if the file exists
+		if _, err := os.Stat(cliPath); err != nil {
+			return nil, fmt.Errorf("CLI binary not found at %s: %w", cliPath, err)
+		}
+		// Add the directory to PATH
+		binDir := filepath.Dir(cliPath)
+		currentPath := os.Getenv("PATH")
+		newPath := binDir + string(filepath.ListSeparator) + currentPath
+		if err := os.Setenv("PATH", newPath); err != nil {
+			return nil, fmt.Errorf("failed to update PATH: %w", err)
+		}
+		// Use just the basename for the command
+		cliName = filepath.Base(cliPath)
+	} else {
+		// For relative paths or names, check if it's in PATH
+		err = ensureBinary(cliPath)
+		if err != nil {
+			return nil, fmt.Errorf("%s not found in PATH: %w", cliPath, err)
+		}
 	}
 
 	for key, value := range env {
@@ -44,7 +65,7 @@ func NewTapeRecorder(
 	}
 	e := &Recorder{
 		vhsPath: vhsPath,
-		cliPath: cliPath,
+		cliPath: cliName,
 	}
 	return e, nil
 }

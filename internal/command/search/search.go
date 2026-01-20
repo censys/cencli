@@ -15,6 +15,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
+	"github.com/censys/cencli/internal/pkg/formatter/short"
 	"github.com/censys/cencli/internal/pkg/styles"
 	"github.com/censys/cencli/internal/pkg/tape"
 )
@@ -43,7 +44,8 @@ type Command struct {
 	orgID        mo.Option[identifiers.OrganizationID]
 	pageSize     mo.Option[uint64]
 	maxPages     mo.Option[uint64]
-	short        bool
+	// result stores the search result for rendering
+	result search.Result
 }
 
 // searchCommandFlags contains all flag handles used by the search command.
@@ -53,7 +55,6 @@ type searchCommandFlags struct {
 	fields       flags.StringSliceFlag
 	pageSize     flags.IntegerFlag
 	maxPages     flags.IntegerFlag
-	short        flags.BoolFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -79,6 +80,18 @@ func (c *Command) Short() string {
 
 func (c *Command) Args() command.PositionalArgs {
 	return command.ExactArgs(1)
+}
+
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeData
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData, command.OutputTypeTemplate, command.OutputTypeShort}
+}
+
+func (c *Command) SupportsStreaming() bool {
+	return true
 }
 
 func (c *Command) Examples() []string {
@@ -139,7 +152,6 @@ func (c *Command) Init() error {
 		mo.None[int64](), // allow custom validation in PreRun (to support -1)
 		mo.None[int64](), // no maximum
 	)
-	c.flags.short = flags.NewShortFlag(c.Flags(), "")
 	return nil
 }
 
@@ -158,9 +170,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return err
 	}
 	if err := c.parseFieldsFlag(); err != nil {
-		return err
-	}
-	if err := c.parseShortFlag(); err != nil {
 		return err
 	}
 	return c.resolveSearchService()
@@ -182,15 +191,17 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		logger.Debug("fetching all pages", "message", msg)
 	}
 
-	var result search.Result
+	// Set up streaming output (no-op for non-streaming formats)
+	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
+	defer stopStreaming(nil)
 
 	err := c.WithProgress(
-		cmd.Context(),
+		ctx,
 		logger,
 		"Fetching search results...",
 		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
-			result, fetchErr = c.fetchSearchResult(pctx)
+			c.result, fetchErr = c.fetchSearchResult(pctx)
 			return fetchErr
 		},
 	)
@@ -199,14 +210,18 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		return err
 	}
 
-	// Render the search results (even if partial)
-	if renderErr := c.renderSearchResult(result); renderErr != nil {
+	// Print response metadata
+	c.PrintAppResponseMeta(c.result.Meta)
+
+	// PrintData handles streaming vs buffered automatically
+	data := c.prepareSearchData()
+	if renderErr := c.PrintData(c, data); renderErr != nil {
 		return renderErr
 	}
 
 	// If there was a partial error, print it to stderr after rendering the data
-	if result.PartialError != nil {
-		formatter.PrintError(result.PartialError, cmd)
+	if c.result.PartialError != nil {
+		formatter.PrintError(c.result.PartialError, cmd)
 	}
 
 	return nil
@@ -225,20 +240,28 @@ func (c *Command) fetchSearchResult(ctx context.Context) (search.Result, cenclie
 	return c.searchSvc.Search(ctx, params)
 }
 
-// renderSearchResult prints response metadata and the results, using a short template when requested.
-func (c *Command) renderSearchResult(result search.Result) cenclierrors.CencliError {
-	c.PrintAppResponseMeta(result.Meta)
-	// wrap each hit with the type it is, to help differentiate in the output
-	data := make([]any, len(result.Hits))
-	for i, hit := range result.Hits {
+// prepareSearchData wraps each hit with its type to help differentiate in the output.
+func (c *Command) prepareSearchData() []any {
+	data := make([]any, len(c.result.Hits))
+	for i, hit := range c.result.Hits {
 		data[i] = map[string]any{
 			hit.AssetType().String(): hit,
 		}
 	}
-	if c.short && !c.Config().Quiet {
-		return c.PrintDataWithTemplate(config.TemplateEntitySearchResult, data)
-	}
-	return c.PrintData(data)
+	return data
+}
+
+// RenderTemplate renders search results using a handlebars template.
+func (c *Command) RenderTemplate() cenclierrors.CencliError {
+	data := c.prepareSearchData()
+	return c.PrintDataWithTemplate(config.TemplateEntitySearchResult, data)
+}
+
+// RenderShort renders search results in short format.
+func (c *Command) RenderShort() cenclierrors.CencliError {
+	output := short.SearchHits(c.result.Hits)
+	formatter.Println(formatter.Stdout, output)
+	return nil
 }
 
 // resolveSearchService initializes the search service from the command context.
@@ -307,16 +330,6 @@ func (c *Command) parsePaginationFlags() cenclierrors.CencliError {
 func (c *Command) parseFieldsFlag() cenclierrors.CencliError {
 	var err cenclierrors.CencliError
 	c.fields, err = c.flags.fields.Value()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// parseShortFlag parses the short flag into c.short.
-func (c *Command) parseShortFlag() cenclierrors.CencliError {
-	var err cenclierrors.CencliError
-	c.short, err = c.flags.short.Value()
 	if err != nil {
 		return err
 	}

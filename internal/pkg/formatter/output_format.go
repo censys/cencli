@@ -10,17 +10,19 @@ import (
 )
 
 const (
-	outputFormatKey   = "output-format"
-	outputFormatShort = "O"
+	OutputFormatFlagName  = "output-format"
+	outputFormatFlagShort = "O"
 )
 
 type OutputFormat string
 
 const (
-	OutputFormatJSON   OutputFormat = "json"
-	OutputFormatYAML   OutputFormat = "yaml"
-	OutputFormatNDJSON OutputFormat = "ndjson"
-	OutputFormatTree   OutputFormat = "tree"
+	OutputFormatJSON     OutputFormat = "json"
+	OutputFormatYAML     OutputFormat = "yaml"
+	OutputFormatNDJSON   OutputFormat = "ndjson"
+	OutputFormatTree     OutputFormat = "tree"
+	OutputFormatShort    OutputFormat = "short"
+	OutputFormatTemplate OutputFormat = "template"
 )
 
 // ErrInvalidOutputFormat is returned when the provided output format is unsupported.
@@ -39,18 +41,30 @@ func (o *OutputFormat) UnmarshalText(text []byte) error {
 		*o = OutputFormatJSON
 	case OutputFormatYAML.String():
 		*o = OutputFormatYAML
-	case OutputFormatNDJSON.String():
-		*o = OutputFormatNDJSON
 	case OutputFormatTree.String():
 		*o = OutputFormatTree
+	case OutputFormatShort.String():
+		*o = OutputFormatShort
+	case OutputFormatTemplate.String():
+		*o = OutputFormatTemplate
 	default:
 		return fmt.Errorf("%w: %s", ErrInvalidOutputFormat, s)
 	}
 	return nil
 }
 
-func BindOutputFormat(persistentFlags *pflag.FlagSet) error {
-	// Bind the global --output-format flag (no short form)
-	persistentFlags.StringP(outputFormatKey, outputFormatShort, OutputFormatJSON.String(), "output format (json|yaml|ndjson|tree)")
-	return viper.BindPFlag(outputFormatKey, persistentFlags.Lookup(outputFormatKey))
+func AvailableOutputFormats() []string {
+	return []string{
+		OutputFormatJSON.String(),
+		OutputFormatYAML.String(),
+		OutputFormatTree.String(),
+		OutputFormatShort.String(),
+		OutputFormatTemplate.String(),
+	}
+}
+
+func BindOutputFormat(persistentFlags *pflag.FlagSet, defaultValue OutputFormat) error {
+	// Bind the global --output-format flag
+	persistentFlags.StringP(OutputFormatFlagName, outputFormatFlagShort, defaultValue.String(), "output format (json|yaml|tree|short|template)")
+	return viper.BindPFlag(OutputFormatFlagName, persistentFlags.Lookup(OutputFormatFlagName))
 }

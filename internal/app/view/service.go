@@ -8,6 +8,7 @@ import (
 	"github.com/samber/mo"
 
 	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
@@ -67,7 +68,7 @@ func (s *viewService) GetHosts(
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if len(allHosts) > 0 {
+			if len(allHosts) > 0 || streaming.IsStreaming(ctx) {
 				if lastMeta != nil {
 					lastMeta.Latency = time.Since(start)
 					lastMeta.PageCount = uint64(batchesProcessed)
@@ -114,10 +115,22 @@ func (s *viewService) GetHosts(
 		// Store metadata from the last successful request
 		lastMeta = responsemeta.NewResponseMeta(res.Metadata.Request, res.Metadata.Response, res.Metadata.Latency, res.Metadata.Attempts)
 
-		// Convert and append to results
+		// Convert and either stream or accumulate results
 		for _, host := range *res.Data {
 			domainHost := assets.NewHost(host)
-			allHosts = append(allHosts, &domainHost)
+			var emitErr error
+			allHosts, emitErr = streaming.EmitOrCollect(ctx, &domainHost, allHosts)
+			if emitErr != nil {
+				if lastMeta != nil {
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = uint64(batchesProcessed)
+				}
+				return HostsResult{
+					Meta:         lastMeta,
+					Hosts:        nil,
+					PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+				}, nil
+			}
 		}
 
 		batchesProcessed++
@@ -159,7 +172,7 @@ func (s *viewService) GetCertificates(
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if len(allCertificates) > 0 {
+			if len(allCertificates) > 0 || streaming.IsStreaming(ctx) {
 				if lastMeta != nil {
 					lastMeta.Latency = time.Since(start)
 					lastMeta.PageCount = uint64(batchesProcessed)
@@ -197,10 +210,22 @@ func (s *viewService) GetCertificates(
 		// Store metadata from the last successful request
 		lastMeta = responsemeta.NewResponseMeta(res.Metadata.Request, res.Metadata.Response, res.Metadata.Latency, res.Metadata.Attempts)
 
-		// Convert and append to results
+		// Convert and either stream or accumulate results
 		for _, certificate := range *res.Data {
 			domainCertificate := assets.NewCertificate(certificate)
-			allCertificates = append(allCertificates, &domainCertificate)
+			var emitErr error
+			allCertificates, emitErr = streaming.EmitOrCollect(ctx, &domainCertificate, allCertificates)
+			if emitErr != nil {
+				if lastMeta != nil {
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = uint64(batchesProcessed)
+				}
+				return CertificatesResult{
+					Meta:         lastMeta,
+					Certificates: nil,
+					PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+				}, nil
+			}
 		}
 
 		batchesProcessed++
@@ -243,7 +268,7 @@ func (s *viewService) GetWebProperties(
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if len(allWebProperties) > 0 {
+			if len(allWebProperties) > 0 || streaming.IsStreaming(ctx) {
 				if lastMeta != nil {
 					lastMeta.Latency = time.Since(start)
 					lastMeta.PageCount = uint64(batchesProcessed)
@@ -289,10 +314,22 @@ func (s *viewService) GetWebProperties(
 		// Store metadata from the last successful request
 		lastMeta = responsemeta.NewResponseMeta(res.Metadata.Request, res.Metadata.Response, res.Metadata.Latency, res.Metadata.Attempts)
 
-		// Convert and append to results
+		// Convert and either stream or accumulate results
 		for _, webProperty := range *res.Data {
 			domainWebProperty := assets.NewWebProperty(webProperty)
-			allWebProperties = append(allWebProperties, &domainWebProperty)
+			var emitErr error
+			allWebProperties, emitErr = streaming.EmitOrCollect(ctx, &domainWebProperty, allWebProperties)
+			if emitErr != nil {
+				if lastMeta != nil {
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = uint64(batchesProcessed)
+				}
+				return WebPropertiesResult{
+					Meta:          lastMeta,
+					WebProperties: nil,
+					PartialError:  cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+				}, nil
+			}
 		}
 
 		batchesProcessed++

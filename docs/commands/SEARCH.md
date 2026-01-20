@@ -84,16 +84,76 @@ $ censys search "services.service_name: HTTP" --max-pages -1  # fetch all result
 
 **Note:** Using `--max-pages -1` will fetch all available results, which may result in many API calls and take considerable time depending on the query.
 
-### `--short`, `-s`
+## Output Formats
 
-Render output using templates for a concise, human-readable summary instead of raw output. See the [using templates](#using-templates) section for more details.
+The `search` command defaults to **`json`** output format (or the global config value). You can override this with the `--output-format` flag (or `-O`).
 
-**Type:** `boolean`  
-**Default:** `false`
+**Default:** `json` (or configured global default)  
+**Supported formats:** `json`, `yaml`, `tree`, `short`, `template`
+
+### Format Descriptions
+
+- **`json`** - Structured JSON output (default)
+- **`yaml`** - Structured YAML output
+- **`tree`** - Hierarchical tree view
+- **`short`** - Concise summary view of search results
+- **`template`** - Render using Handlebars templates
+
+### Examples
 
 ```bash
-$ censys search "services.port: 443" --short
+# Default: JSON output
+$ censys search "services.port: 443"
+
+# Short format: concise summary
+$ censys search "services.port: 443" --output-format short
+$ censys search "services.port: 443" -O short
+
+# Template format: custom Handlebars rendering
+$ censys search "services.port: 443" --output-format template
+
+# YAML output
+$ censys search "services.port: 443" --output-format yaml
 ```
+
+For more information on customizing templates, see the [view command templates documentation](VIEW.md#templates).
+
+## Streaming Output
+
+When using `--streaming` (or `-S`), results are **streamed immediately** as NDJSON (newline-delimited JSON) as they are fetched from the API. This provides several benefits for large result sets:
+
+- **Output begins before all pages are fetched** - You see results as soon as the first page is retrieved
+- **Memory usage stays bounded** - Results are written immediately rather than accumulated in memory
+- **Partial results are preserved on interruption** - If you press Ctrl-C or an error occurs, all previously emitted records remain intact
+- **Safe for large queries** - Ideal for use with `--max-pages -1` when fetching potentially unbounded result sets
+
+### Streaming Example
+
+```bash
+# Stream all SSH hosts to a file
+$ censys search "services.port: 22" --max-pages -1 --streaming > ssh_hosts.jsonl
+
+# Process results as they arrive using jq
+$ censys search "services.port: 443" --max-pages 10 -S | jq -r '.host.ip'
+
+# Count results without storing them all in memory
+$ censys search "services.service_name: HTTP" --max-pages -1 -S | wc -l
+```
+
+### When to Use Streaming
+
+Use `--streaming` when:
+- Fetching many pages of results (`--max-pages -1` or large values)
+- Piping output to other tools that process line-by-line
+- Writing large result sets to files
+- You want to see results as they arrive rather than waiting for completion
+
+Use other formats (`json`, `yaml`, `tree`) when:
+- Working with small, bounded result sets
+- You need the complete data structure (e.g., for JSON array processing)
+- Displaying results in a terminal for human reading
+
+**Note:** `--streaming` cannot be used together with `--output-format`. You can also enable streaming globally by setting `streaming: true` in your config file.
 
 ## Configuration
 

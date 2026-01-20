@@ -1,0 +1,29 @@
+Display details about your organization.                                        
+                                                                                
+This command shows organization information including name, ID, creation date,  
+and member counts.                                                              
+                                                                                
+By default, the stored organization ID is used. Use --org-id to query a specific
+organization.                                                                   
+
+Usage:
+  censys org details [flags]
+
+Examples:
+  censys org details  # Show details for your stored organization
+  censys org details --org-id <uuid> # Show details for a specific organization
+  censys org details --output-format json # Output as JSON
+
+Flags:
+  -h, --help            help for details
+  -o, --org-id string   override the configured organization ID
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

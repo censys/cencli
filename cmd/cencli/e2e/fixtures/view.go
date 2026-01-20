@@ -41,16 +41,16 @@ var viewFixtures = []Fixture{
 	// Host fixtures
 	// ================================================
 	{
-		Name:      "host-basic",
+		Name:      "host-json-default",
 		Args:      []string{"1.1.1.1"},
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
 			v := unmarshalJSONAny[[]map[string]any](t, stdout)
 			assert.Len(t, v, 1)
 			assert.Equal(t, "1.1.1.1", v[0]["ip"])
-			assertHas200(t, stderr)
 		},
 	},
 	{
@@ -68,7 +68,20 @@ var viewFixtures = []Fixture{
 	},
 	{
 		Name:      "host-short",
-		Args:      []string{"1.1.1.1", "--short"},
+		Args:      []string{"1.1.1.1", "--output-format", "short"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Just verify short output exists
+			assert.Greater(t, len(stdout), 0)
+			assert.Contains(t, string(stdout), "1.1.1.1")
+		},
+	},
+	{
+		Name:      "host-template",
+		Args:      []string{"1.1.1.1", "--output-format", "template"},
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
@@ -124,7 +137,19 @@ var viewFixtures = []Fixture{
 	},
 	{
 		Name:      "certificate-short",
-		Args:      []string{"3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf", "--short"},
+		Args:      []string{"3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf", "--output-format", "short"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Just verify short output exists
+			assert.Greater(t, len(stdout), 0)
+		},
+	},
+	{
+		Name:      "certificate-template",
+		Args:      []string{"3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf", "--output-format", "template"},
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
@@ -195,13 +220,25 @@ var viewFixtures = []Fixture{
 	},
 	{
 		Name:      "web-property-short",
-		Args:      []string{"platform.censys.io:80", "--short"},
+		Args:      []string{"platform.censys.io:80", "--output-format", "short"},
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assertRenderedTemplate(t, templates.WebPropertyTemplate, stdout)
 			assertHas200(t, stderr)
+			// Just verify short output exists
+			assert.Greater(t, len(stdout), 0)
+		},
+	},
+	{
+		Name:      "web-property-template",
+		Args:      []string{"platform.censys.io:80", "--output-format", "template"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			assertRenderedTemplate(t, templates.WebPropertyTemplate, stdout)
 		},
 	},
 	{
@@ -232,6 +269,20 @@ var viewFixtures = []Fixture{
 			assert.Equal(t, "platform.censys.io", v[0]["hostname"])
 			assert.Equal(t, float64(443), v[0]["port"])
 			assertHas200(t, stderr)
+		},
+	},
+	// Output format tests
+	{
+		Name:      "output-ndjson",
+		Args:      []string{"1.1.1.1", "--streaming"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Verify NDJSON format (one JSON object per line)
+			lines := strings.Split(strings.TrimSpace(string(stdout)), "\n")
+			assert.Equal(t, 1, len(lines))
 		},
 	},
 }

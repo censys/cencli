@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/censys/cencli/internal/command/aggregate"
@@ -27,9 +29,15 @@ type recordableCommand interface {
 }
 
 func main() {
+	// Get absolute path to the locally built binary
+	binPath, err := filepath.Abs("./bin/censys")
+	if err != nil {
+		panic(err)
+	}
+
 	r, err := tape.NewTapeRecorder(
 		"vhs",
-		"censys",
+		binPath,
 		map[string]string{
 			"FORCE_COLOR": "1",
 		},
@@ -65,6 +73,9 @@ func main() {
 		targetCommands = commands
 	}
 
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+
 	for dir, cmd := range targetCommands {
 		outputDir := filepath.Join(baseDir, dir)
 		// special case for root command
@@ -72,7 +83,7 @@ func main() {
 			outputDir = baseDir
 		}
 		for _, t := range cmd.Tapes(r) {
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			ctx, cancel := context.WithTimeout(sigCtx, timeout)
 			stop := spinner.Start(ctx.Done(), false, spinner.WithMessage(fmt.Sprintf("Recording tape for %s...", t.Name)))
 			err = r.CreateTape(ctx, t, outputDir)
 			cancel()

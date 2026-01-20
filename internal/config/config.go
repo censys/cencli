@@ -17,7 +17,8 @@ import (
 )
 
 type Config struct {
-	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|ndjson|tree)"`
+	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|tree)"`
+	Streaming     bool                              `yaml:"streaming" mapstructure:"streaming" doc:"Enable streaming output mode (NDJSON) for commands that support it"`
 	NoColor       bool                              `yaml:"no-color" mapstructure:"no-color" doc:"Disable ANSI colors and styles"`
 	Spinner       SpinnerConfig                     `yaml:"spinner" mapstructure:"spinner"`
 	Quiet         bool                              `yaml:"quiet" mapstructure:"quiet" doc:"Suppress non-essential output"`
@@ -31,6 +32,7 @@ type Config struct {
 
 var defaultConfig = &Config{
 	OutputFormat:  formatter.OutputFormatJSON,
+	Streaming:     false,
 	NoColor:       false,
 	Spinner:       defaultSpinnerConfig,
 	Quiet:         false,
@@ -48,6 +50,9 @@ const (
 	quietKey       = "quiet"
 	debugKey       = "debug"
 	timeoutHTTPKey = "timeout-http"
+
+	// StreamingFlagName is the name of the --streaming flag.
+	StreamingFlagName = "streaming"
 )
 
 func New(dataDir string) (*Config, cenclierrors.CencliError) {
@@ -132,7 +137,7 @@ func (c *Config) Unmarshal() cenclierrors.CencliError {
 
 // BindGlobalFlags binds all global configuration flags to viper.
 // This should be called on the root command.
-func BindGlobalFlags(persistentFlags *pflag.FlagSet) error {
+func BindGlobalFlags(persistentFlags *pflag.FlagSet, cfg *Config) error {
 	if err := addPersistentBoolAndBind(persistentFlags, noColorKey, false, "disable ANSI colors and styles", ""); err != nil {
 		return fmt.Errorf("failed to bind no-color flag: %w", err)
 	}
@@ -150,8 +155,11 @@ func BindGlobalFlags(persistentFlags *pflag.FlagSet) error {
 	if err := addPersistentDurationAndBindToPath(persistentFlags, timeoutHTTPKey, "timeouts.http", defaultConfig.Timeouts.HTTP, "per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable"); err != nil {
 		return fmt.Errorf("failed to bind timeout-http flag: %w", err)
 	}
-	if err := formatter.BindOutputFormat(persistentFlags); err != nil {
+	if err := formatter.BindOutputFormat(persistentFlags, cfg.OutputFormat); err != nil {
 		return fmt.Errorf("failed to bind output-format flag: %w", err)
+	}
+	if err := addPersistentBoolAndBind(persistentFlags, StreamingFlagName, false, "enable streaming output mode (NDJSON) for commands that support it", "S"); err != nil {
+		return fmt.Errorf("failed to bind streaming flag: %w", err)
 	}
 	return nil
 }

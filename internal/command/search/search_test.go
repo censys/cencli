@@ -504,3 +504,57 @@ func TestSearchCommand_PartialError(t *testing.T) {
 		require.Contains(t, stderr.String(), "some data was successfully retrieved", "should include partial error message")
 	})
 }
+
+func TestSearchCommand_Streaming(t *testing.T) {
+	t.Run("streams output with streaming config", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := storemocks.NewMockStore(ctrl)
+		mockSvc := searchmocks.NewMockSearchService(ctrl)
+
+		// Service returns multiple results
+		mockSvc.EXPECT().Search(
+			gomock.Any(),
+			gomock.AssignableToTypeOf(search.Params{}),
+		).Return(
+			search.Result{
+				Meta: &responsemeta.ResponseMeta{
+					Method:  "POST",
+					URL:     "https://api.censys.io/v1/search",
+					Status:  200,
+					Latency: 100 * time.Millisecond,
+				},
+				// When streaming, hits are emitted through channel, not returned here
+				Hits:      nil,
+				TotalHits: 2,
+			}, nil)
+
+		tempDir := t.TempDir()
+		viper.Reset()
+		cfg, err := config.New(tempDir)
+		require.NoError(t, err)
+		// Enable streaming mode
+		cfg.Streaming = true
+
+		cmdContext := command.NewCommandContext(cfg, mockStore, command.WithSearchService(mockSvc))
+
+		searchCmd := NewSearchCommand(cmdContext)
+		rootCmd, err := command.RootCommandToCobra(searchCmd)
+		require.NoError(t, err)
+
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		rootCmd.SetOut(stdout)
+		rootCmd.SetErr(stderr)
+		formatter.Stdout = stdout
+		formatter.Stderr = stderr
+
+		rootCmd.SetArgs([]string{"host.ip: 127.0.0.1"})
+		cmdErr := rootCmd.Execute()
+
+		require.NoError(t, cmdErr)
+		// In streaming mode, the service emits via channels, so the result.Hits is empty
+		// This test verifies that the command runs successfully with streaming mode
+	})
+}

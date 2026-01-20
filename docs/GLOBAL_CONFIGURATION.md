@@ -28,10 +28,38 @@ Default output format for command results.
 **Flag:** `--output-format`, `-O`  
 **Environment Variable:** `CENCLI_OUTPUT_FORMAT`  
 **Type:** `string`  
-**Default:** `json`  
-**Valid Values:** `json`, `yaml`, `ndjson`, `tree`
+**Default:** `json` (globally), but individual commands may default to `short`  
+**Valid Values:** `json`, `yaml`, `tree`, `short`, `template`
 
-Controls how data is formatted when printed to stdout. The `tree` format provides a hierarchical view of nested data structures.
+Controls how data is formatted when printed to stdout:
+
+- **`json`** - Structured JSON output (default for most commands)
+- **`yaml`** - Structured YAML output
+- **`tree`** - Hierarchical tree view of nested data structures
+- **`short`** - Human-readable formatted output (available on select commands like `aggregate`, `censeye`, `search`, `view`)
+- **`template`** - Render using custom Handlebars templates (available on `search` and `view` commands)
+
+**Note:** Some commands default to `short` output instead of `json` to provide a better user experience. For example, the `aggregate` and `censeye` commands show formatted tables by default. You can always override this with `--output-format json` or another format.
+
+### `--streaming`, `-S`
+
+Enable streaming output mode.
+
+**Flag:** `--streaming`, `-S`  
+**Environment Variable:** `CENCLI_STREAMING`  
+**Type:** `boolean`  
+**Default:** `false`
+
+When enabled, commands that support streaming will output results as NDJSON (newline-delimited JSON) with each record emitted immediately as data is fetched. This provides several benefits for large result sets:
+
+- **Output begins before all pages are fetched** - You see results as soon as the first page is retrieved
+- **Memory usage stays bounded** - Results are written immediately rather than accumulated in memory
+- **Partial results are preserved on interruption** - If you press Ctrl-C or an error occurs, all previously emitted records remain intact
+- **Safe for large queries** - Ideal for use with `--max-pages -1` when fetching potentially unbounded result sets
+
+**Supported commands:** `search`, `view`, `history`
+
+**Note:** `--streaming` cannot be used together with `--output-format`. When streaming mode is enabled, output is always NDJSON. If you set `streaming: true` in your config file, it will be silently ignored for commands that don't support streaming.
 
 ### `--no-color`
 
@@ -190,7 +218,32 @@ For the complete, authoritative list of supported timezones, see [timezones.go](
 
 ## Templates
 
-Template paths for formatted output. Each asset type has its own template file. See [the view command docs](commands/VIEW.md#templates) for more details.
+Template paths for formatted output using `--output-format template`. Templates are stored in `~/.config/cencli/templates/` (or `$CENCLI_DATA_DIR/templates/`) and are automatically created with sensible defaults on first use.
+
+Each template corresponds to a specific data type:
+
+| Template | File | Used By |
+|----------|------|---------|
+| Host | `host.hbs` | `view` command (host assets) |
+| Certificate | `certificate.hbs` | `view` command (certificate assets) |
+| Web Property | `webproperty.hbs` | `view` command (web property assets) |
+| Search Result | `searchresult.hbs` | `search` command |
+
+You can customize templates by editing the files in your templates directory. The path to each template can also be overridden in `config.yaml`:
+
+```yaml
+templates:
+  host:
+    path: /path/to/custom/host.hbs
+  certificate:
+    path: /path/to/custom/certificate.hbs
+  webproperty:
+    path: /path/to/custom/webproperty.hbs
+  searchresult:
+    path: /path/to/custom/searchresult.hbs
+```
+
+See [the view command docs](commands/VIEW.md#templates) for more details on creating and customizing templates.
 
 ## Standard Environment Variables
 

@@ -2,6 +2,8 @@
 
 The `history` command allows you to retrieve historical data for hosts, web properties, and certificates from the Censys Platform. This command provides time-series data showing how assets have changed over time.
 
+**Note:** To retrieve certificate history, you must have access to the Threat Hunting module.
+
 ![history](../../examples/history/history.gif)
 
 ## Usage
@@ -18,7 +20,7 @@ The `history` command automatically detects the asset type based on the input fo
 
 ## Flags
 
-This section describes the flags available for the `history` command. To see global flags and how they might affect this command, see the [global configuration docs](mdc:../GLOBAL_CONFIGURATION.md).
+This section describes the flags available for the `history` command. To see global flags and how they might affect this command, see the [global configuration docs](../GLOBAL_CONFIGURATION.md).
 
 ### `--start`, `-s`
 
@@ -82,6 +84,28 @@ Specify the organization ID to use for the request. This overrides the default o
 
 ```bash
 $ censys history 8.8.8.8 --org-id 00000000-0000-0000-0000-000000000001
+```
+
+## Output Formats
+
+The `history` command defaults to **`json`** output format (or the global config value). Unlike other commands, history only supports structured data formats.
+
+**Default:** `json` (or configured global default)  
+**Supported formats:** `json`, `yaml`, `ndjson`, `tree`
+
+**Note:** The `short` and `template` output formats are **not supported** for the history command due to the time-series nature of the data.
+
+### Examples
+
+```bash
+# Default: JSON output
+$ censys history 8.8.8.8 --duration 30d
+
+# YAML output
+$ censys history 8.8.8.8 --duration 30d --output-format yaml
+
+# NDJSON output (one event per line)
+$ censys history 8.8.8.8 --duration 30d --output-format ndjson
 ```
 
 ## Output Format

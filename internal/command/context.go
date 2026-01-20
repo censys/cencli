@@ -2,16 +2,25 @@ package command
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"sync"
+
+	"github.com/google/uuid"
+	"github.com/samber/mo"
 
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
+	"github.com/censys/cencli/internal/app/credits"
 	"github.com/censys/cencli/internal/app/history"
+	"github.com/censys/cencli/internal/app/organizations"
 	"github.com/censys/cencli/internal/app/search"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/app/view"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
+	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
@@ -32,6 +41,8 @@ type Context struct {
 	aggregateSvc aggregate.Service
 	historySvc   history.Service
 	censeyeSvc   censeye.Service
+	creditsSvc   credits.Service
+	orgSvc       organizations.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -46,6 +57,13 @@ func NewCommandContext(
 	for _, opt := range opts {
 		opt(c)
 	}
+	c.updateColorSettings()
+	return c
+}
+
+// updateColorSettings evaluates and updates the color settings based on current config.
+// This should be called after config is loaded or re-unmarshaled.
+func (c *Context) updateColorSettings() {
 	if c.config.NoColor || styles.ColorDisabled() {
 		// globally disable lipgloss styles
 		styles.DisableStyles()
@@ -55,12 +73,15 @@ func NewCommandContext(
 	} else {
 		if c.config.NoColor || styles.ColorDisabled() || !formatter.StdoutIsTTY() {
 			c.colorDisabledStdout = true
+		} else {
+			c.colorDisabledStdout = false
 		}
 		if c.config.NoColor || styles.ColorDisabled() || !formatter.StderrIsTTY() {
 			c.colorDisabledStderr = true
+		} else {
+			c.colorDisabledStderr = false
 		}
 	}
-	return c
 }
 
 func (c *Context) Config() *config.Config { return c.config }
@@ -71,6 +92,29 @@ func (c *Context) SetLogger(l *slog.Logger) { c.logger = l }
 
 // SetClient sets the Context's client so that it can be used to initialize services.
 func (c *Context) SetCensysClient(cli client.Client) { c.censysClient = cli }
+
+// HasOrgID returns true if the context has a configured organization ID.
+func (c *Context) HasOrgID() bool {
+	return c.censysClient != nil && c.censysClient.HasOrgID()
+}
+
+// GetStoredOrgID retrieves the stored organization ID from the store.
+// Returns the org ID if found, or None if not configured.
+func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
+	zero := mo.None[identifiers.OrganizationID]()
+	storedOrgID, err := c.store.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
+	if err != nil {
+		if errors.Is(err, store.ErrGlobalNotFound) {
+			return zero, nil
+		}
+		return zero, cenclierrors.NewCencliError(err)
+	}
+	parsedUUID, parseErr := uuid.Parse(storedOrgID.Value)
+	if parseErr != nil {
+		return zero, cenclierrors.NewCencliError(parseErr)
+	}
+	return mo.Some(identifiers.NewOrganizationID(parsedUUID)), nil
+}
 
 // Logger returns a logger pre-populated with the command name field.
 func (c *Context) Logger(cmdName string) *slog.Logger {
@@ -108,9 +152,28 @@ func (c *Context) WithProgress(
 	return err
 }
 
-// PrintData renders data according to the configured output format.
-func (c *Context) PrintData(data any) cenclierrors.CencliError {
-	return cenclierrors.NewCencliError(formatter.PrintByFormat(data, c.config.OutputFormat, !c.colorDisabledStdout))
+func (c *Context) PrintData(cmd Command, data any) cenclierrors.CencliError {
+	// Streaming formats are handled by WithStreamingOutput - nothing to do here
+	if c.config.Streaming {
+		return nil
+	}
+
+	switch c.config.OutputFormat {
+	case formatter.OutputFormatShort:
+		if c.colorDisabledStdout {
+			enable := styles.TemporarilyDisableStyles()
+			defer enable()
+		}
+		return cmd.RenderShort()
+	case formatter.OutputFormatTemplate:
+		if c.colorDisabledStdout {
+			enable := styles.TemporarilyDisableStyles()
+			defer enable()
+		}
+		return cmd.RenderTemplate()
+	default:
+		return formatter.PrintByFormat(data, c.config.OutputFormat, !c.colorDisabledStdout)
+	}
 }
 
 // PrintYAML renders data as YAML.
@@ -134,6 +197,58 @@ func (c *Context) PrintAppResponseMeta(meta *responsemeta.ResponseMeta) {
 	if !c.config.Quiet && meta != nil {
 		formatter.PrintAppResponseMeta(styles.GlobalStyles, meta, c.config.Debug, !c.colorDisabledStderr)
 	}
+}
+
+// WithStreamingOutput sets up streaming output infrastructure when streaming mode is enabled.
+// For non-streaming mode, this is a no-op.
+//
+// Returns a context with a streaming emitter attached (if streaming) and a stop function
+// that must be called to properly clean up resources. The stop function should be deferred
+// immediately after calling WithStreamingOutput.
+//
+// Example usage:
+//
+//	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
+//	defer stopStreaming(nil)
+func (c *Context) WithStreamingOutput(
+	ctx context.Context,
+	logger *slog.Logger,
+) (context.Context, func(error)) {
+	// No-op for non-streaming formats
+	if !c.config.Streaming {
+		return ctx, func(error) {}
+	}
+
+	emitter, items := streaming.NewChannelEmitter(1)
+	ctx = streaming.WithEmitter(ctx, emitter)
+
+	// Start goroutine to consume and write items immediately
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for item := range items {
+			if item.Done {
+				break
+			}
+			if item.Err != nil {
+				logger.Debug("streaming item error", "error", item.Err)
+				continue
+			}
+			if err := formatter.WriteNDJSONItem(formatter.Stdout, item.Data, !c.colorDisabledStdout); err != nil {
+				logger.Debug("failed to write streaming item", "error", err)
+			}
+		}
+	}()
+
+	var once sync.Once
+	stop := func(finalErr error) {
+		once.Do(func() {
+			emitter.Close(finalErr)
+			<-done
+		})
+	}
+
+	return ctx, stop
 }
 
 // =====================
@@ -241,4 +356,46 @@ func (c *Context) AggregateService() (aggregate.Service, cenclierrors.CencliErro
 // the AggregateService will be instantiated on demand.
 func WithAggregateService(svc aggregate.Service) ContextOpts {
 	return func(c *Context) { c.aggregateSvc = svc }
+}
+
+// CreditsService attempts to provide a CreditsService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) CreditsService() (credits.Service, cenclierrors.CencliError) {
+	if c.creditsSvc != nil {
+		return c.creditsSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.creditsSvc = credits.New(c.censysClient)
+	return c.creditsSvc, nil
+}
+
+// WithCreditsService injects an instantiated CreditsService to the Context.
+// This should only be used in tests, as in the application,
+// the CreditsService will be instantiated on demand.
+func WithCreditsService(svc credits.Service) ContextOpts {
+	return func(c *Context) { c.creditsSvc = svc }
+}
+
+// OrganizationsService attempts to provide an OrganizationsService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) OrganizationsService() (organizations.Service, cenclierrors.CencliError) {
+	if c.orgSvc != nil {
+		return c.orgSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.orgSvc = organizations.New(c.censysClient)
+	return c.orgSvc, nil
+}
+
+// WithOrganizationsService injects an instantiated OrganizationsService to the Context.
+// This should only be used in tests, as in the application,
+// the OrganizationsService will be instantiated on demand.
+func WithOrganizationsService(svc organizations.Service) ContextOpts {
+	return func(c *Context) { c.orgSvc = svc }
 }

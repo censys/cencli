@@ -1,0 +1,23 @@
+Display credit details for your Free user Censys account.                                
+                                                                                         
+Note: This command only shows free user credits. If you want to see organization credits,
+run "censys org credits" instead.                                                        
+
+Usage:
+  censys credits [flags]
+
+Examples:
+  censys credits  # Show free user credits
+
+Flags:
+  -h, --help   help for credits
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

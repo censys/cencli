@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
 )
 
@@ -77,13 +78,20 @@ func usageTemplate(cmd *cobra.Command, examples []string) string {
 			}
 		}
 	}
-	if cmd.HasAvailableLocalFlags() {
+	// HACK: Move --output-format to Global Flags section even when locally overridden.
+	// When a command overrides the default output format, we add a local persistent flag
+	// that shadows the inherited one. Cobra treats this as a local flag, but we want it
+	// to always appear in "Global Flags" for consistency. This is a workaround for Cobra's
+	// limitation where local flags can't be displayed in the inherited flags section.
+	localFlags, globalFlags := separateOutputFormatFlag(cmd)
+
+	if hasAvailableFlags(localFlags) {
 		b.WriteString("\n" + styles.GlobalStyles.Info.Render("Flags:") + "\n")
-		b.WriteString(styledFlagUsages(cmd.LocalFlags()))
+		b.WriteString(styledFlagUsages(localFlags))
 	}
-	if cmd.HasAvailableInheritedFlags() {
+	if hasAvailableFlags(globalFlags) {
 		b.WriteString("\n" + styles.GlobalStyles.Info.Render("Global Flags:") + "\n")
-		b.WriteString(styledFlagUsages(cmd.InheritedFlags()))
+		b.WriteString(styledFlagUsages(globalFlags))
 	}
 	if cmd.HasHelpSubCommands() {
 		b.WriteString("\n" + styles.GlobalStyles.Info.Render("Additional help topics:") + "\n")
@@ -161,6 +169,68 @@ func renderExampleLine(cmdPath, example string) string {
 		return fmt.Sprintf("%s %s", base, beforeComment+" "+comment)
 	}
 	return fmt.Sprintf("%s %s", base, beforeComment)
+}
+
+// separateOutputFormatFlag separates local and inherited flags, moving --output-format
+// to the inherited flags set even if it was defined locally. This is a hack to work around
+// Cobra's limitation where we can't control which section a flag appears in when we need
+// to override its default value.
+//
+// When a command has a custom DefaultOutputType(), we add a local persistent --output-format
+// flag that shadows the inherited one. This allows the command to have a different default
+// value without affecting sibling commands. However, Cobra will then show this flag in the
+// "Flags:" section instead of "Global Flags:", which is confusing for users since it's
+// conceptually a global flag that happens to have a command-specific default.
+//
+// This function creates new flag sets where --output-format is always in the "global" set.
+func separateOutputFormatFlag(cmd *cobra.Command) (local *pflag.FlagSet, global *pflag.FlagSet) {
+	local = pflag.NewFlagSet("local", pflag.ContinueOnError)
+	global = pflag.NewFlagSet("global", pflag.ContinueOnError)
+
+	// Start with inherited flags in global
+	cmd.InheritedFlags().VisitAll(func(f *pflag.Flag) {
+		global.AddFlag(f)
+	})
+
+	// Check if --output-format exists in local flags (meaning it was overridden)
+	var outputFormatFlag *pflag.Flag
+	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Name == formatter.OutputFormatFlagName {
+			outputFormatFlag = f
+		} else {
+			local.AddFlag(f)
+		}
+	})
+
+	// If --output-format was found locally, add it to global (replacing inherited version)
+	if outputFormatFlag != nil {
+		// Remove the inherited version if it exists
+		if inheritedFlag := global.Lookup(formatter.OutputFormatFlagName); inheritedFlag != nil {
+			// We can't actually remove it, so we'll re-create the global set without it
+			newGlobal := pflag.NewFlagSet("global", pflag.ContinueOnError)
+			global.VisitAll(func(f *pflag.Flag) {
+				if f.Name != formatter.OutputFormatFlagName {
+					newGlobal.AddFlag(f)
+				}
+			})
+			global = newGlobal
+		}
+		// Add the local version to global
+		global.AddFlag(outputFormatFlag)
+	}
+
+	return local, global
+}
+
+// hasAvailableFlags returns true if the flag set has any non-hidden flags.
+func hasAvailableFlags(fs *pflag.FlagSet) bool {
+	hasFlags := false
+	fs.VisitAll(func(f *pflag.Flag) {
+		if !f.Hidden {
+			hasFlags = true
+		}
+	})
+	return hasFlags
 }
 
 // =============================================================================

@@ -8,6 +8,7 @@ import (
 	"github.com/samber/mo"
 
 	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
@@ -34,7 +35,6 @@ func (s *historyService) GetCertificateHistory(
 
 	pages := uint64(0)
 	pageToken := mo.None[string]()
-	totalObservations := 0
 
 	// Format date range for display
 	dateRange := fmt.Sprintf("%s to %s", fromTime.Format("2006-01-02"), toTime.Format("2006-01-02"))
@@ -45,7 +45,7 @@ func (s *historyService) GetCertificateHistory(
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if pages > 0 {
+			if pages > 0 || streaming.IsStreaming(ctx) {
 				latency := time.Since(start)
 				if lastMeta != nil {
 					lastMeta.Latency = latency
@@ -65,7 +65,7 @@ func (s *historyService) GetCertificateHistory(
 		if pages == 1 {
 			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching certificate observations for %s (%s)...", certIDStr, dateRange))
 		} else {
-			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching certificate observations for %s (%s, page %d, %d observations so far)...", certIDStr, dateRange, pages, totalObservations))
+			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching certificate observations for %s (%s, page %d, %d observations so far)...", certIDStr, dateRange, pages, len(allRanges)))
 		}
 
 		// fetch observations page
@@ -96,11 +96,23 @@ func (s *historyService) GetCertificateHistory(
 
 		ranges := res.Data.GetRanges()
 
-		// append ranges to result
+		// Either stream or accumulate ranges
 		for i := range ranges {
-			allRanges = append(allRanges, &ranges[i])
+			rangeItem := &ranges[i]
+			var emitErr error
+			allRanges, emitErr = streaming.EmitOrCollect(ctx, rangeItem, allRanges)
+			if emitErr != nil {
+				if lastMeta != nil {
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = pages
+				}
+				return CertificateHistoryResult{
+					Meta:         lastMeta,
+					Ranges:       nil,
+					PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+				}, nil
+			}
 		}
-		totalObservations = len(allRanges)
 
 		// check if there's a next page
 		nextToken := res.Data.GetNextPageToken()

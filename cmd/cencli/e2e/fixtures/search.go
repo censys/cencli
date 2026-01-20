@@ -35,14 +35,51 @@ var searchFixtures = []Fixture{
 		},
 	},
 	{
-		Name:      "short",
-		Args:      []string{"host.services: (protocol=SSH)", "--short", "-n", "2", "-p", "2"},
+		Name:      "output-json-default",
+		Args:      []string{"host.services: (protocol=SSH)", "-n", "2", "-p", "1"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Default is JSON output
+			v := unmarshalJSONAny[[]map[string]any](t, stdout)
+			assert.Len(t, v, 2)
+		},
+	},
+	{
+		Name:      "output-short",
+		Args:      []string{"host.services: (protocol=SSH)", "-n", "2", "--output-format", "short"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Just verify short output exists (don't validate content)
+			assert.Greater(t, len(stdout), 0)
+		},
+	},
+	{
+		Name:      "output-template",
+		Args:      []string{"host.services: (protocol=SSH)", "-n", "2", "-p", "2", "--output-format", "template"},
 		ExitCode:  0,
 		Timeout:   5 * time.Second,
 		NeedsAuth: true,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			assertRenderedTemplate(t, templates.SearchResultTemplate, stdout)
+		},
+	},
+	{
+		Name:      "output-yaml",
+		Args:      []string{"host.services: (protocol=SSH)", "-n", "2", "--output-format", "yaml"},
+		ExitCode:  0,
+		Timeout:   5 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			// Verify YAML output format
+			assert.Contains(t, string(stdout), "host:")
 		},
 	},
 }

@@ -2,11 +2,11 @@ name: Run Tests and Check Coverage
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, release/* ]
     paths:
       - '**/*.go'
   push:
-    branches: [ main ]
+    branches: [ main, release/* ]
     paths-ignore:
       - '**/*.md'
   workflow_dispatch:

@@ -11,10 +11,13 @@ import (
 type CencliLink string
 
 const (
-	CencliRepo              CencliLink = "https://github.com/censys/cencli"
-	CencliDocs              CencliLink = "https://docs.censys.com/docs/platform-cli"
-	CensysPATInstructions   CencliLink = "https://docs.censys.com/reference/get-started#step-2-create-a-personal-access-token"
-	CensysOrgIDInstructions CencliLink = "https://docs.censys.com/reference/get-started#step-3-find-and-use-your-organization-id-optional"
+	CencliRepo                      CencliLink = "https://github.com/censys/cencli"
+	CencliDocs                      CencliLink = "https://docs.censys.com/docs/platform-cli"
+	CensysPATInstructions           CencliLink = "https://docs.censys.com/reference/get-started#step-2-create-a-personal-access-token"
+	CensysOrgIDInstructions         CencliLink = "https://docs.censys.com/reference/get-started#step-3-find-and-use-your-organization-id-optional"
+	CensysHostLookupTemplate        CencliLink = "https://platform.censys.io/hosts/{host_id}"
+	CensysCertificateLookupTemplate CencliLink = "https://platform.censys.io/certificates/{certificate_id}"
+	CensysWebPropertyLookupTemplate CencliLink = "https://platform.censys.io/web/{hostname:port}"
 )
 
 func (l CencliLink) String() string {
@@ -97,4 +100,19 @@ func DocumentationOrgID(w io.Writer) string {
 		sb.WriteString(CensysOrgIDInstructions.String())
 	}
 	return sb.String()
+}
+
+// CensysHostLookupLink creates a link to the Censys platform for a given host ID.
+func CensysHostLookupLink(hostID string) CencliLink {
+	return CencliLink(strings.Replace(string(CensysHostLookupTemplate), "{host_id}", hostID, 1))
+}
+
+// CensysCertificateLookupLink creates a link to the Censys platform for a given certificate ID.
+func CensysCertificateLookupLink(certID string) CencliLink {
+	return CencliLink(strings.Replace(string(CensysCertificateLookupTemplate), "{certificate_id}", certID, 1))
+}
+
+// CensysWebPropertyLookupLink creates a link to the Censys platform for a given web property (hostname:port).
+func CensysWebPropertyLookupLink(hostport string) CencliLink {
+	return CencliLink(strings.Replace(string(CensysWebPropertyLookupTemplate), "{hostname:port}", hostport, 1))
 }

@@ -86,6 +86,18 @@ func (c *Command) Init() error {
 
 func (c *Command) Args() command.PositionalArgs { return command.ExactArgs(1) }
 
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeData
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeData}
+}
+
+func (c *Command) SupportsStreaming() bool {
+	return true
+}
+
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	// gather assets
 	rawAssets := cmdutil.SplitString(args[0])
@@ -141,9 +153,13 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"end", c.end.Format(time.RFC3339),
 	)
 
-	var result interface{}
+	// Set up streaming output (no-op for non-streaming formats)
+	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
+	defer stopStreaming(nil)
+
+	var result any
 	err := c.WithProgress(
-		cmd.Context(),
+		ctx,
 		logger,
 		fmt.Sprintf("Fetching history for %s...", c.assetID),
 		func(pctx context.Context) cenclierrors.CencliError {
@@ -167,27 +183,27 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		return err
 	}
 
-	// Print response metadata and output raw JSON (even if partial)
+	// Print response metadata and output (PrintData handles streaming vs buffered automatically)
 	var partialError cenclierrors.CencliError
 	switch c.assetType {
 	case assets.AssetTypeHost:
 		hostResult := result.(history.HostHistoryResult)
 		c.PrintAppResponseMeta(hostResult.Meta)
-		if printErr := c.PrintData(hostResult.Events); printErr != nil {
+		if printErr := c.PrintData(c, hostResult.Events); printErr != nil {
 			return printErr
 		}
 		partialError = hostResult.PartialError
 	case assets.AssetTypeCertificate:
 		certResult := result.(history.CertificateHistoryResult)
 		c.PrintAppResponseMeta(certResult.Meta)
-		if printErr := c.PrintData(certResult.Ranges); printErr != nil {
+		if printErr := c.PrintData(c, certResult.Ranges); printErr != nil {
 			return printErr
 		}
 		partialError = certResult.PartialError
 	case assets.AssetTypeWebProperty:
 		webPropResult := result.(history.WebPropertyHistoryResult)
 		c.PrintAppResponseMeta(webPropResult.Meta)
-		if printErr := c.PrintData(webPropResult.Snapshots); printErr != nil {
+		if printErr := c.PrintData(c, webPropResult.Snapshots); printErr != nil {
 			return printErr
 		}
 		partialError = webPropResult.PartialError

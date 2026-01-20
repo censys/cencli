@@ -2,7 +2,7 @@ name: PR - Lint
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, release/* ]
     paths:
       - '**/*.go'
   workflow_dispatch:

@@ -11,7 +11,9 @@ Available Commands:
   censeye     Analyze a host and generate pivotable queries with rarity bounds
   completion  Generate shell completion scripts
   config      Manage configuration
+  credits     Display credit details for your Censys account
   history     Retrieve historical data for hosts, web properties, and certificates
+  org         Manage and view organization details
   search      Execute a search query across Censys data
   version     Print version information
   view        Retrieve information about hosts, certificates, and web properties

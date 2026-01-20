@@ -54,7 +54,7 @@ func TestViewCommand(t *testing.T) {
 				ms.EXPECT().GetHosts(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.HostID{hostID}, mo.None[time.Time]()).Return(result, nil)
 				return ms
 			},
-			args: []string{"8.8.8.8", "--short"},
+			args: []string{"8.8.8.8", "--output-format", "short"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "8.8.8.8")
@@ -74,7 +74,7 @@ func TestViewCommand(t *testing.T) {
 				ms.EXPECT().GetWebProperties(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.WebPropertyID{wp}, mo.None[time.Time]()).Return(result, nil)
 				return ms
 			},
-			args: []string{"platform.censys.io:443", "--short"},
+			args: []string{"platform.censys.io:443", "--output-format", "short"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "platform.censys.io")
@@ -94,7 +94,7 @@ func TestViewCommand(t *testing.T) {
 				ms.EXPECT().GetHosts(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.HostID{hostID}, mo.None[time.Time]()).Return(result, nil)
 				return ms
 			},
-			args: []string{"8.8.8.8", "--short"},
+			args: []string{"8.8.8.8", "--output-format", "short"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "8.8.8.8")
@@ -115,7 +115,7 @@ func TestViewCommand(t *testing.T) {
 				ms.EXPECT().GetCertificates(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.CertificateID{certID}).Return(result, nil)
 				return ms
 			},
-			args: []string{"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", "--short"},
+			args: []string{"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", "--output-format", "short"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				// Expect truncated format first16…last4
@@ -136,7 +136,7 @@ func TestViewCommand(t *testing.T) {
 				ms.EXPECT().GetWebProperties(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.WebPropertyID{wp}, mo.None[time.Time]()).Return(result, nil)
 				return ms
 			},
-			args: []string{"platform.censys.io:80", "--short"},
+			args: []string{"platform.censys.io:80", "--output-format", "short"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "platform.censys.io")
@@ -548,6 +548,9 @@ func TestViewCommand(t *testing.T) {
 			rootCmd, err := command.RootCommandToCobra(NewViewCommand(cmdContext))
 			require.NoError(t, err)
 
+			// Bind global flags for tests
+			require.NoError(t, config.BindGlobalFlags(rootCmd.PersistentFlags(), cfg))
+
 			rootCmd.SetArgs(tc.args)
 			if tc.stdin != "" {
 				rootCmd.SetIn(bytes.NewBufferString(tc.stdin))
@@ -612,6 +615,9 @@ func TestViewCommand_PartialError(t *testing.T) {
 		rootCmd, err := command.RootCommandToCobra(viewCmd)
 		require.NoError(t, err)
 
+		// Bind global flags for this test
+		require.NoError(t, config.BindGlobalFlags(rootCmd.PersistentFlags(), cfg))
+
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
 		rootCmd.SetOut(stdout)
@@ -619,7 +625,7 @@ func TestViewCommand_PartialError(t *testing.T) {
 		formatter.Stdout = stdout
 		formatter.Stderr = stderr
 
-		rootCmd.SetArgs([]string{"8.8.8.8", "--short"})
+		rootCmd.SetArgs([]string{"8.8.8.8", "--output-format", "short"})
 		cmdErr := rootCmd.Execute()
 
 		require.NoError(t, cmdErr)

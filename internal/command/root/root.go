@@ -12,7 +12,9 @@ import (
 	censeyecmd "github.com/censys/cencli/internal/command/censeye"
 	completioncmd "github.com/censys/cencli/internal/command/completion"
 	configcmd "github.com/censys/cencli/internal/command/config"
+	creditscmd "github.com/censys/cencli/internal/command/credits"
 	historycmd "github.com/censys/cencli/internal/command/history"
+	orgcmd "github.com/censys/cencli/internal/command/org"
 	searchcmd "github.com/censys/cencli/internal/command/search"
 	versioncmd "github.com/censys/cencli/internal/command/versioncmd"
 	"github.com/censys/cencli/internal/command/view"
@@ -46,8 +48,16 @@ func (c *Command) Args() command.PositionalArgs {
 	return command.ExactArgs(0)
 }
 
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
 func (c *Command) Init() error {
-	if err := config.BindGlobalFlags(c.PersistentFlags()); err != nil {
+	if err := config.BindGlobalFlags(c.PersistentFlags(), c.Config()); err != nil {
 		return fmt.Errorf("failed to bind global flags: %w", err)
 	}
 
@@ -60,6 +70,8 @@ func (c *Command) Init() error {
 		searchcmd.NewSearchCommand(c.Context),
 		aggregatecmd.NewAggregateCommand(c.Context),
 		censeyecmd.NewCenseyeCommand(c.Context),
+		creditscmd.NewCreditsCommand(c.Context),
+		orgcmd.NewOrgCommand(c.Context),
 	)
 }
 
@@ -140,7 +152,7 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 			),
 			// view with template output
 			recorder.Type(
-				"view platform.censys.io:80 --short",
+				"view platform.censys.io:80 --output-format short",
 				tape.WithSleepAfter(3),
 				tape.WithClearAfter(),
 			),

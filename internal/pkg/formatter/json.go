@@ -2,57 +2,49 @@ package formatter
 
 import (
 	"encoding/json"
+	"io"
 
 	"github.com/censys/cencli/internal/pkg/styles"
 	jsoncolor "github.com/neilotoole/jsoncolor"
 )
 
 // PrintJSON prints v as pretty JSON, optionally colored.
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
 func PrintJSON(v any, colored bool) error {
-	enc := newEncoder(colored, true)
-	return enc.Encode(v)
+	return writeJSON(Stdout, v, colored, true)
 }
 
-// PrintNDJSON prints one JSON object per line.
-// If v is a slice, it prints each element on its own line.
-// Otherwise, it prints v.
-func PrintNDJSON(v any, colored bool) error {
-	enc := newEncoder(colored, false)
-
-	switch s := v.(type) {
-	case []any:
-		for _, item := range s {
-			if err := enc.Encode(item); err != nil {
-				return err
-			}
-		}
-		return nil
-	default:
-		return enc.Encode(v)
+// writeJSON writes v as JSON to w, optionally colored and pretty-printed.
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
+func writeJSON(w io.Writer, v any, colored, pretty bool) error {
+	var data []byte
+	var err error
+	if pretty {
+		data, err = json.MarshalIndent(v, "", "  ")
+	} else {
+		data, err = json.Marshal(v)
 	}
-}
+	if err != nil {
+		return err
+	}
 
-// encoder is a type that can encode JSON.
-type jsonEncoder interface {
-	Encode(v any) error
-}
-
-// newEncoder creates either a plain or color encoder.
-// pretty controls whether SetIndent is applied.
-func newEncoder(colored, pretty bool) jsonEncoder {
 	if colored {
-		enc := jsoncolor.NewEncoder(Stdout)
+		var unmarshaled any
+		if err := json.Unmarshal(data, &unmarshaled); err != nil {
+			return err
+		}
+		enc := jsoncolor.NewEncoder(w)
 		enc.SetColors(jsonColors())
 		if pretty {
 			enc.SetIndent("", "  ")
 		}
-		return enc
+		return enc.Encode(unmarshaled)
 	}
-	enc := json.NewEncoder(Stdout)
-	if pretty {
-		enc.SetIndent("", "  ")
-	}
-	return enc
+
+	_, err = w.Write(append(data, '\n'))
+	return err
 }
 
 // jsonColors defines the color scheme for jsoncolor.
@@ -69,4 +61,13 @@ func jsonColors() *jsoncolor.Colors {
 	res.Punc = styles.ANSIPrefix(styles.NewStyle(styles.ColorOffWhite))        // jq = white
 	res.TextMarshaler = styles.ANSIPrefix(styles.NewStyle(styles.ColorOrange)) // jq = white
 	return res
+}
+
+// WriteNDJSONItem encodes a single item as NDJSON (one line of JSON) to the provided writer.
+// This enables true streaming output where each item is written immediately.
+// The item is encoded without pretty-printing (compact JSON on a single line).
+// Uses the standard library for marshaling (to support omitzero),
+// then colorizes the output if requested.
+func WriteNDJSONItem(w io.Writer, item any, colored bool) error {
+	return writeJSON(w, item, colored, false)
 }

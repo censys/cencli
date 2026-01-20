@@ -99,18 +99,29 @@ Display results in an interactive table (TUI) that allows you to navigate, searc
 $ censys aggregate "host.services.port=22" "host.services.protocol" --interactive
 ```
 
-**Note:** Cannot be used with `--raw`.
+## Output Formats
 
-### `--raw`, `-r`
+The `aggregate` command defaults to **`short`** output format, which displays results as a formatted table. You can override this with the `--output-format` flag (or `-O`).
 
-Output raw JSON data instead of a formatted table. This will respect the [output format](../GLOBAL_CONFIGURATION.md#--output-format--o) configuration.
+**Default:** `short` (table view)  
+**Supported formats:** `json`, `yaml`, `tree`, `short`
 
-**Type:** `boolean`  
-**Default:** `false`
+### Examples
 
 ```bash
-$ censys aggregate "host.services.port=22" "host.services.protocol" --raw
+# Default: formatted table view
+$ censys aggregate "host.services.protocol=SSH" "host.services.port"
+
+# JSON output
+$ censys aggregate "host.services.protocol=SSH" "host.services.port" --output-format json
+$ censys aggregate "host.services.protocol=SSH" "host.services.port" -O json
+
+# YAML output
+$ censys aggregate "host.services.protocol=SSH" "host.services.port" --output-format yaml
+
+# Interactive table (works with short format)
+$ censys aggregate "host.services.protocol=SSH" "host.services.port" --interactive
 ```
 
-**Note:** Cannot be used with `--interactive`.
+**Note:** The `--interactive` flag provides an enhanced interactive table view when using the `short` output format.
 
