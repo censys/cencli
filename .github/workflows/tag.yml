@@ -158,7 +158,7 @@ jobs:
       - name: Create and push tag
         if: steps.select.outputs.should_release == 'true'
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.tag.outputs.tag }}
           SHA: ${{ steps.select.outputs.sha }}
           BRANCH: ${{ steps.select.outputs.branch }}
@@ -172,5 +172,12 @@ jobs:
             msg="Automated weekly release ${TAG} from ${BRANCH}"
           fi
           git tag -a "${TAG}" "${SHA}" -m "${msg}"
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push origin "${TAG}"
+          
+          # Clear any cached credentials from actions/checkout
+          # The default GITHUB_TOKEN does not trigger CI workflows, so we must use the GitHub App token
+          git config --unset-all http.https://github.com/.extraheader || true
+          git config --global --unset-all credential.helper || true
+          git config --local --unset-all credential.helper || true
+          
+          # Push with GitHub App token in URL
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${TAG}"
