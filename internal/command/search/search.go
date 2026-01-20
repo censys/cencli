@@ -96,7 +96,7 @@ func (c *Command) SupportsStreaming() bool {
 
 func (c *Command) Examples() []string {
 	return []string{
-		`"host.ip: 1.1.1.1/16"`,
+		`"host.ip: '1.1.1.1/16'"`,
 		`--fields host.ip,host.location "host.services: (protocol=SSH and not port: 22)"`,
 		`--collection-id <your-collection-id> "host.services.protocol=SSH"`,
 		`--page-size 50 --max-pages 5 "cert.names=censys.com"`,
