@@ -316,7 +316,7 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 		tape.NewTape("censeye-interactive",
 			tape.DefaultTapeConfig(),
 			recorder.Type(
-				"censeye 145.131.8.169 -i",
+				"censeye 145.131.8.169 -I",
 				tape.WithSleepAfter(10),
 			),
 			recorder.SpamPress("j", 50),
