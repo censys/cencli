@@ -2,19 +2,22 @@ name: Bump SDK and Create PR
 
 on:
   schedule:
-    - cron: "0 2 * * *"  # daily at 02:00 UTC
+    - cron: "0 2 * * *" # daily at 02:00 UTC
   workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: bump-sdk
+  cancel-in-progress: true
+
 jobs:
   bump-sdk:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
+    steps:
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
@@ -23,49 +26,116 @@ jobs:
           repositories: |
             cencli
 
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
       - uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: go.mod
           cache: true
 
       - name: Configure git
         run: |
-          git config user.name "${GITHUB_ACTOR}"
-          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git config user.name "censys-artifact-releaser[bot]"
+          git config user.email "censys-artifact-releaser[bot]@users.noreply.github.com"
+
+      - name: Check for existing PR on bump-sdk branch
+        id: check-pr
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          EXISTING_PR=$(gh pr list \
+            --state open \
+            --head bump-sdk \
+            --json number,body \
+            --limit 1)
+
+          if [ "$EXISTING_PR" != "[]" ]; then
+            PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.[0].number')
+            PR_BODY=$(echo "$EXISTING_PR" | jq -r '.[0].body')
+
+            echo "has_existing_pr=true" >> $GITHUB_OUTPUT
+            echo "existing_pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "existing_pr_body<<EOF" >> $GITHUB_OUTPUT
+            echo "$PR_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_existing_pr=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create branch and bump SDK
         id: bump
         run: |
-          BRANCH="bump-sdk-$(date +%Y%m%d%H%M%S)"
+          BRANCH="bump-sdk"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-          git checkout -b $BRANCH
-          
+
+          git checkout -B $BRANCH
+
           go get github.com/censys/censys-sdk-go@latest
           go mod tidy
-          
+
           if git diff --quiet; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "No SDK changes found, exiting."
+            exit 0
           fi
 
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+          NEW_VERSION=$(grep 'github.com/censys/censys-sdk-go' go.mod | awk '{print $2}')
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version matches existing PR
+        id: version-check
+        if: steps.check-pr.outputs.has_existing_pr == 'true'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          EXISTING_BODY="${{ steps.check-pr.outputs.existing_pr_body }}"
+
+          EXISTING_VERSION=$(echo "$EXISTING_BODY" | grep -oP 'SDK version: \K[^\s]+' || echo "")
+
+          echo "existing_version=$EXISTING_VERSION" >> $GITHUB_OUTPUT
+
+          if [ "$NEW_VERSION" = "$EXISTING_VERSION" ]; then
+            echo "version_matches=true" >> $GITHUB_OUTPUT
+            echo "Version $NEW_VERSION already has an open PR, skipping."
+            exit 0
+          fi
+
+          echo "version_matches=false" >> $GITHUB_OUTPUT
+          echo "Version changed from $EXISTING_VERSION to $NEW_VERSION"
+
+      - name: Close existing PR (if outdated)
+        if: steps.check-pr.outputs.has_existing_pr == 'true' && steps.version-check.outputs.version_matches == 'false'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr close ${{ steps.check-pr.outputs.existing_pr_number }} \
+            --comment "Closing in favor of updated SDK version ${{ steps.bump.outputs.new_version }}"
+
       - name: Commit and push changes
-        if: steps.bump.outputs.has_changes == 'true'
+        if: steps.bump.outputs.has_changes == 'true' && (steps.check-pr.outputs.has_existing_pr == 'false' || steps.version-check.outputs.version_matches == 'false')
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git add go.mod go.sum
-          git commit -m "chore: bump SDK version"
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push origin HEAD
+          git commit -m "chore: bump SDK version to ${{ steps.bump.outputs.new_version }}"
+
+          git push origin bump-sdk --force
 
       - name: Create pull request
-        if: steps.bump.outputs.has_changes == 'true'
+        if: steps.bump.outputs.has_changes == 'true' && (steps.check-pr.outputs.has_existing_pr == 'false' || steps.version-check.outputs.version_matches == 'false')
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh pr create \
             --base main \
-            --head ${{ steps.bump.outputs.branch }} \
+            --head bump-sdk \
             --title "chore: bump SDK version" \
-            --body "Automated bump of SDK version"
+            --body "Automated bump of SDK version. SDK version: ${{ steps.bump.outputs.new_version }}"
