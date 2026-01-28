@@ -8,8 +8,8 @@ The `search` command allows you to perform search queries across hosts, certific
 
 ```bash
 $ censys search "host.services: (protocol=SSH and not port: 22)" # complex query
-$ censys search "services.port: 443" --fields host.ip,host.location # specify fields to return
-$ censys search "services.service_name: HTTP" --max-pages -1 # fetch all pages
+$ censys search "host.services.port: 443" --fields host.ip,host.location # specify fields to return
+$ censys search "host.services.protocol: 'HTTP'" --max-pages -1 # fetch all pages
 ```
 
 ## Query Syntax
@@ -31,7 +31,7 @@ Search within a specific collection instead of globally.
 **Default:** none (searches globally)
 
 ```bash
-$ censys search "services.port: 443" --collection-id 550e8400-e29b-41d4-a716-446655440000
+$ censys search "host.services.port: 443" --collection-id 550e8400-e29b-41d4-a716-446655440000
 ```
 
 ### `--org-id`
@@ -42,7 +42,7 @@ Specify the organization ID to use for the request. This overrides the default o
 **Default:** Uses the configured organization ID (or the free-user wallet if not configured)
 
 ```bash
-$ censys search "services.port: 443" --org-id 00000000-0000-0000-0000-000000000001
+$ censys search "host.services.port: 443" --org-id 00000000-0000-0000-0000-000000000001
 ```
 
 ### `--fields`, `-f`
@@ -53,8 +53,8 @@ Specify which fields to return in the response. This allows you to filter the ou
 **Default:** none (returns all fields)
 
 ```bash
-$ censys search "host.services: (protocol=SSH)" --fields host.ip,host.location
-$ censys search "services.port: 443" -f host.ip,services.port,services.service_name
+$ censys search "host.services.protocol=SSH" --fields host.ip,host.location.country
+$ censys search "host.services.port: 443" -f host.services.port,host.ip,host.services.protocol
 ```
 
 ### `--page-size`, `-n`
@@ -66,7 +66,7 @@ The number of results to return per page. Larger page sizes reduce the number of
 **Minimum:** `1`
 
 ```bash
-$ censys search "services.port: 443" --page-size 50
+$ censys search "host.services.port: 443" --page-size 50
 ```
 
 ### `--max-pages`, `-p`
@@ -78,8 +78,8 @@ The maximum number of pages to fetch. Use `-1` to fetch all available pages.
 **Special Values:** `-1` fetches all pages
 
 ```bash
-$ censys search "services.port: 443" --max-pages 5
-$ censys search "services.service_name: HTTP" --max-pages -1  # fetch all results
+$ censys search "host.services.port: 443" --max-pages 5
+$ censys search "host.services.protocol: HTTP" --max-pages -1  # fetch all results
 ```
 
 **Note:** Using `--max-pages -1` will fetch all available results, which may result in many API calls and take considerable time depending on the query.
@@ -103,17 +103,17 @@ The `search` command defaults to **`json`** output format (or the global config 
 
 ```bash
 # Default: JSON output
-$ censys search "services.port: 443"
+$ censys search "host.services.port: 443"
 
 # Short format: concise summary
-$ censys search "services.port: 443" --output-format short
-$ censys search "services.port: 443" -O short
+$ censys search "host.services.port: 443" --output-format short
+$ censys search "host.services.port: 443" -O short
 
 # Template format: custom Handlebars rendering
-$ censys search "services.port: 443" --output-format template
+$ censys search "host.services.port: 443" --output-format template
 
 # YAML output
-$ censys search "services.port: 443" --output-format yaml
+$ censys search "host.services.port: 443" --output-format yaml
 ```
 
 For more information on customizing templates, see the [view command templates documentation](VIEW.md#templates).
@@ -131,13 +131,13 @@ When using `--streaming` (or `-S`), results are **streamed immediately** as NDJS
 
 ```bash
 # Stream all SSH hosts to a file
-$ censys search "services.port: 22" --max-pages -1 --streaming > ssh_hosts.jsonl
+$ censys search "host.services.port: 22" --max-pages -1 --streaming > ssh_hosts.jsonl
 
 # Process results as they arrive using jq
-$ censys search "services.port: 443" --max-pages 10 -S | jq -r '.host.ip'
+$ censys search "host.services.port: 443" --max-pages 10 -S | jq -r '.host.ip'
 
 # Count results without storing them all in memory
-$ censys search "services.service_name: HTTP" --max-pages -1 -S | wc -l
+$ censys search "host.services.protocol: HTTP" --max-pages -1 -S | wc -l
 ```
 
 ### When to Use Streaming

@@ -84,8 +84,8 @@ func (c *Command) Args() command.PositionalArgs {
 func (c *Command) Examples() []string {
 	return []string{
 		`"host.services.protocol=SSH" "host.services.port"`,
-		`-c <your-collection-id> "services.service_name:HTTP" "services.port"`,
-		`"services.service_name:HTTP" "services.port" --output-format json`,
+		`-c <your-collection-id> "host.services.protocol=HTTP" "host.location.country"`,
+		`"host.services.protocol=HTTP" "host.location.country" --output-format json`,
 	}
 }
 

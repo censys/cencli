@@ -6,7 +6,7 @@ Usage:
 
 Examples:
   censys search "host.ip: '1.1.1.1/16'"
-  censys search --fields host.ip,host.location "host.services: (protocol=SSH and not port: 22)"
+  censys search --fields host.ip,host.location.country "host.services: (protocol=SSH and not port: 22)"
   censys search --collection-id <your-collection-id> "host.services.protocol=SSH"
   censys search --page-size 50 --max-pages 5 "cert.names=censys.com"
   censys search --max-pages -1 "host.services.port: 443 and host.location.country: Germany"

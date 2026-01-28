@@ -6,8 +6,8 @@ Usage:
 
 Examples:
   censys aggregate "host.services.protocol=SSH" "host.services.port"
-  censys aggregate -c <your-collection-id> "services.service_name:HTTP" "services.port"
-  censys aggregate "services.service_name:HTTP" "services.port" --output-format json
+  censys aggregate -c <your-collection-id> "host.services.protocol=HTTP" "host.location.country"
+  censys aggregate "host.services.protocol=HTTP" "host.location.country" --output-format json
 
 Flags:
   -c, --collection-id string    collection to aggregate within (optional)
