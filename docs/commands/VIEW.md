@@ -144,7 +144,7 @@ To use templates, specify `--output-format template` (or `-O template`) when run
 ```bash
 $ censys view 8.8.8.8 --output-format template
 $ censys view example.com:443 -O template
-$ censys search "services.port: 443" -O template
+$ censys search "host.services.port: 443" -O template
 ```
 
 ### Customizing Templates

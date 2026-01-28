@@ -12,7 +12,7 @@ The aggregate command takes two required arguments:
 
 ```bash
 $ censys aggregate "host.services.protocol=SSH" "host.services.port" # aggregate SSH services by port
-$ censys aggregate "services.service_name:HTTP" "services.port" -n 10 # top 10 HTTP ports
+$ censys aggregate "host.services.protocol=HTTP" "host.location.country" -n 10 # top 10 HTTP countries
 ```
 
 ## Flags
@@ -27,7 +27,7 @@ Aggregate within a specific collection instead of globally.
 **Default:** none (aggregates globally)
 
 ```bash
-$ censys aggregate "services.port: 443" "services.tls.version" --collection-id 550e8400-e29b-41d4-a716-446655440000
+$ censys aggregate "host.services.port: 443" "host.location.country" --collection-id 550e8400-e29b-41d4-a716-446655440000
 ```
 
 ### `--org-id`
@@ -38,7 +38,7 @@ Specify the organization ID to use for the request. This overrides the default o
 **Default:** Uses the configured organization ID (or the free-user wallet if not configured)
 
 ```bash
-$ censys aggregate "services.port: 443" "services.tls.version" --org-id 00000000-0000-0000-0000-000000000001
+$ censys aggregate "host.services.port: 443" "host.location.country" --org-id 00000000-0000-0000-0000-000000000001
 ```
 
 ### `--num-buckets`, `-n`
@@ -52,7 +52,7 @@ The number of buckets (unique values) to return in the aggregation results. This
 
 ```bash
 $ censys aggregate "host.services.protocol=SSH" "host.services.port" --num-buckets 10
-$ censys aggregate "services.service_name:HTTP" "services.port" -n 50
+$ censys aggregate "host.services.protocol=HTTP" "host.location.country" -n 50
 ```
 
 ### `--count-by-level`, `-l`
