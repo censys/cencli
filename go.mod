@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/aymerick/raymond v2.0.2+incompatible
-	github.com/censys/censys-sdk-go v0.25.3
+	github.com/censys/censys-sdk-go v0.25.4
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v0.7.0
