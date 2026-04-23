@@ -138,4 +138,5 @@ jobs:
             --base main \
             --head bump-sdk \
             --title "chore: bump SDK version" \
+            --reviewer censys/core-services-dev \
             --body "Automated bump of SDK version. SDK version: ${{ steps.bump.outputs.new_version }}"
