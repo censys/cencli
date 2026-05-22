@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -65,7 +66,8 @@ func TestRaceConditionEndToEnd(t *testing.T) {
 
 			exitCode := 0
 			if err != nil {
-				if ee, ok := err.(*exec.ExitError); ok {
+				var ee *exec.ExitError
+				if errors.As(err, &ee) {
 					exitCode = ee.ExitCode()
 				} else {
 					exitCode = -1
