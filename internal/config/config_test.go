@@ -346,7 +346,7 @@ func TestConfigWriteErrors(t *testing.T) {
 		_, err = New(tempDir)
 		var invalidConfigErr InvalidConfigError
 		assert.ErrorAs(t, err, &invalidConfigErr)
-		assert.Contains(t, err.Error(), "permission denied")
+		assert.Contains(t, err.Error(), "failed to acquire config lock")
 	})
 }
 
