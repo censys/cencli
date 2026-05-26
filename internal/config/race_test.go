@@ -137,17 +137,15 @@ func TestRaceConditionEndToEnd(t *testing.T) {
 	}
 }
 
-// TestRaceWorker is a subprocess helper that calls config.New() once against a
-// shared data directory. Each invocation is a separate OS process — exactly
-// like a real cencli CLI invocation. Only runs when spawned by the parent test.
+// TestRaceWorker verifies that config.New() produces a valid, non-corrupt
+// config file. When spawned as a subprocess by TestRaceConditionEndToEnd
+// (RACE_WORKER=1, RACE_DATA_DIR set), it operates against the shared data
+// directory to exercise the file-lock under contention. When run standalone
+// it uses its own temp directory as a basic config.New() smoke test.
 func TestRaceWorker(t *testing.T) {
-	if os.Getenv("RACE_WORKER") != "1" {
-		t.Skip("skipping: only runs as subprocess of TestRaceConditionEndToEnd")
-	}
-
 	dataDir := os.Getenv("RACE_DATA_DIR")
 	if dataDir == "" {
-		t.Fatal("RACE_DATA_DIR not set")
+		dataDir = t.TempDir()
 	}
 
 	cfg, cErr := New(dataDir)
