@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/gofrs/flock"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
@@ -67,6 +68,12 @@ func New(dataDir string) (*Config, cenclierrors.CencliError) {
 	viper.AutomaticEnv()
 
 	configPath := filepath.Join(dataDir, "config.yaml")
+
+	fileLock := flock.New(configPath + ".lock")
+	if err := fileLock.Lock(); err != nil {
+		return nil, newInvalidConfigError(fmt.Errorf("failed to acquire config lock: %w", err).Error())
+	}
+	defer func() { _ = fileLock.Unlock() }()
 
 	if err := viper.ReadInConfig(); err != nil {
 		var configFileNotFoundError viper.ConfigFileNotFoundError
