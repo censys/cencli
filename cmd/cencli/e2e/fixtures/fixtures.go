@@ -25,6 +25,7 @@ func Fixtures() map[string][]Fixture {
 	return map[string][]Fixture{
 		"root":      RootFixtures,
 		"view":      viewFixtures,
+		"enrich":    enrichFixtures,
 		"aggregate": aggregateFixtures,
 		"search":    searchFixtures,
 		"censeye":   censeyeFixtures,

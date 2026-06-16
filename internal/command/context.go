@@ -12,6 +12,7 @@ import (
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
 	"github.com/censys/cencli/internal/app/credits"
+	"github.com/censys/cencli/internal/app/enrich"
 	"github.com/censys/cencli/internal/app/history"
 	"github.com/censys/cencli/internal/app/organizations"
 	"github.com/censys/cencli/internal/app/search"
@@ -37,6 +38,7 @@ type Context struct {
 	colorDisabledStderr bool
 	// services
 	viewSvc      view.Service
+	enrichSvc    enrich.Service
 	searchSvc    search.Service
 	aggregateSvc aggregate.Service
 	historySvc   history.Service
@@ -274,6 +276,27 @@ func (c *Context) ViewService() (view.Service, cenclierrors.CencliError) {
 // the ViewService will be instantiated on demand.
 func WithViewService(svc view.Service) ContextOpts {
 	return func(c *Context) { c.viewSvc = svc }
+}
+
+// EnrichService attempts to provide an EnrichService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) EnrichService() (enrich.Service, cenclierrors.CencliError) {
+	if c.enrichSvc != nil {
+		return c.enrichSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.enrichSvc = enrich.New(c.censysClient)
+	return c.enrichSvc, nil
+}
+
+// WithEnrichService injects an instantiated EnrichService to the Context.
+// This should only be used in tests, as in the application,
+// the EnrichService will be instantiated on demand.
+func WithEnrichService(svc enrich.Service) ContextOpts {
+	return func(c *Context) { c.enrichSvc = svc }
 }
 
 // SearchService attempts to provide a SearchService to the caller.

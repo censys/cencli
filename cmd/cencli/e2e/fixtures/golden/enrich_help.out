@@ -1,0 +1,32 @@
+Enrich one or more host IPs using the Censys Host Enrichment API: a lightweight, curated, 
+fixed subset of host IPv4/IPv6 data — location, autonomous system, whois, DNS, labels,    
+greynoise, reputation, network and privacy classifications, services, and third-party     
+verdicts.                                                                                 
+Purpose-built for high-volume, automated lookups in SOC environments such as SIEM and SOAR
+integrations, enrichment lookups do not consume credits. Available on the Censys Core     
+plan. Supports defanged IPs and requires an organization ID.                              
+
+Usage:
+  censys enrich <ip> [flags]
+
+Examples:
+  censys enrich 8.8.8.8
+  censys enrich 8.8.8.8,9.9.9.9
+  censys enrich --input-file ips.txt
+  censys enrich --input-file - # read IPs from STDIN
+  censys enrich 8.8.8.8 --output-format short
+
+Flags:
+  -h, --help                help for enrich
+  -i, --input-file string   file to read the host IPs from. Overrides the positional argument.
+  -o, --org-id string       override the configured organization ID
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "json")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

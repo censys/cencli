@@ -11,6 +11,7 @@ import (
 
 	"github.com/censys/cencli/internal/command/aggregate"
 	"github.com/censys/cencli/internal/command/censeye"
+	"github.com/censys/cencli/internal/command/enrich"
 	"github.com/censys/cencli/internal/command/history"
 	"github.com/censys/cencli/internal/command/root"
 	"github.com/censys/cencli/internal/command/search"
@@ -53,6 +54,7 @@ func main() {
 		"aggregate": aggregate.NewAggregateCommand(nil),
 		"censeye":   censeye.NewCenseyeCommand(nil),
 		"history":   history.NewHistoryCommand(nil),
+		"enrich":    enrich.NewEnrichCommand(nil),
 	}
 
 	var targetCommands map[string]recordableCommand
