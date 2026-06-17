@@ -13,6 +13,7 @@ import (
 	completioncmd "github.com/censys/cencli/internal/command/completion"
 	configcmd "github.com/censys/cencli/internal/command/config"
 	creditscmd "github.com/censys/cencli/internal/command/credits"
+	enrichcmd "github.com/censys/cencli/internal/command/enrich"
 	historycmd "github.com/censys/cencli/internal/command/history"
 	orgcmd "github.com/censys/cencli/internal/command/org"
 	searchcmd "github.com/censys/cencli/internal/command/search"
@@ -63,6 +64,7 @@ func (c *Command) Init() error {
 
 	return c.AddSubCommands(
 		view.NewViewCommand(c.Context),
+		enrichcmd.NewEnrichCommand(c.Context),
 		configcmd.NewConfigCommand(c.Context),
 		versioncmd.NewVersionCommand(c.Context),
 		completioncmd.NewCompletionCommand(c.Context),

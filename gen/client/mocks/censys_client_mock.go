@@ -74,6 +74,21 @@ func (mr *MockClientMockRecorder) AggregateCollection(ctx, collectionID, orgID, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AggregateCollection", reflect.TypeOf((*MockClient)(nil).AggregateCollection), ctx, collectionID, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// EnrichHost mocks base method.
+func (m *MockClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnrichHost", ctx, orgID, hostIP)
+	ret0, _ := ret[0].(censys.Result[components.HostEnrichment])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// EnrichHost indicates an expected call of EnrichHost.
+func (mr *MockClientMockRecorder) EnrichHost(ctx, orgID, hostIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnrichHost", reflect.TypeOf((*MockClient)(nil).EnrichHost), ctx, orgID, hostIP)
+}
+
 // GetCertificates mocks base method.
 func (m *MockClient) GetCertificates(ctx context.Context, orgID mo.Option[string], certificateIDs []string) (censys.Result[[]components.Certificate], censys.ClientError) {
 	m.ctrl.T.Helper()

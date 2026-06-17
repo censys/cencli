@@ -92,6 +92,12 @@ The `view` command allows you to fetch information about a particular host, cert
 
 You can also use `-O short` (or `--output-format short`) to render output using templates, which can be customized. See the [templating documentation](./docs/commands/VIEW.md#templates) for more details.
 
+### Enrich
+
+The `enrich` command looks up host IPs through the Censys Host Enrichment API — a lightweight API purpose-built to operationalize external internet data without traditional credit consumption. It returns a curated, fixed subset of host IPv4/IPv6 data designed for high-volume, automated lookups in SOC environments (such as SIEM and SOAR integrations) and is available to customers on the Censys Core plan. See the [enrich command docs](./docs/commands/ENRICH.md) for more details.
+
+![enrich](examples/enrich/enrich.gif)
+
 ### Search
 
 The `search` command allows you to perform Censys Platform searches, either globally or within a collection. See the [search command docs](./docs/commands/SEARCH.md) for more details.
