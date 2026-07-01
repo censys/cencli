@@ -60,7 +60,7 @@ func (c *Command) Short() string {
 func (c *Command) Long() string {
 	return "Enrich one or more host IPs using the Censys Host Enrichment API: a lightweight, " +
 		"curated, fixed subset of host IPv4/IPv6 data — location, autonomous system, whois, DNS, " +
-		"labels, reputation, network and privacy classifications, services, and " +
+		"labels, greynoise, reputation, network and privacy classifications, services, and " +
 		"third-party verdicts.\n" +
 		"Purpose-built for high-volume, automated lookups in SOC environments such as SIEM and " +
 		"SOAR integrations, enrichment lookups do not consume credits. Available on the Censys " +
