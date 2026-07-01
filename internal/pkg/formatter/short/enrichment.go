@@ -38,6 +38,7 @@ func renderEnrichedHostShort(host *assets.EnrichedHost) string {
 	out.WriteString(hostLabels(host.Labels))
 	out.WriteString(enrichmentDNS(host.DNS))
 	out.WriteString(enrichmentReputation(host.Reputation))
+	out.WriteString(enrichmentGreynoise(host.Greynoise))
 	out.WriteString(enrichmentClassifications(host.Network, host.Privacy))
 	out.WriteString(enrichmentServices(host.Services, host.ServiceCount))
 	out.WriteString(enrichmentMallory(host.ThirdParty))
@@ -157,6 +158,35 @@ func enrichmentReputation(rep *components.Reputation) string {
 	} else {
 		line.Write("Reputation", level)
 	}
+	return line.String()
+}
+
+// enrichmentGreynoise renders GreyNoise signals from the host enrichment response.
+func enrichmentGreynoise(gn *components.HostEnrichmentGreynoise) string {
+	if gn == nil {
+		return ""
+	}
+
+	classification := Val(gn.Classification, "")
+	actor := Val(gn.Actor, "")
+	lastObserved := Val(gn.LastObservedTime, "")
+	if classification == "" && actor == "" && lastObserved == "" {
+		return ""
+	}
+
+	parts := make([]string, 0, 3)
+	if classification != "" {
+		parts = append(parts, classification)
+	}
+	if actor != "" {
+		parts = append(parts, fmt.Sprintf("actor: %s", actor))
+	}
+	if lastObserved != "" {
+		parts = append(parts, fmt.Sprintf("last observed: %s", lastObserved))
+	}
+
+	line := NewLine()
+	line.Write("GreyNoise", strings.Join(parts, ", "))
 	return line.String()
 }
 
