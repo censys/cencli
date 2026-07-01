@@ -27,7 +27,6 @@ Unlike `view`, which returns the full host asset, `enrich` returns a curated, fi
 - WHOIS
 - DNS (forward and reverse)
 - Labels
-- GreyNoise signals
 - Reputation
 - Network and privacy classifications
 - A trimmed service list (port / protocol / labels / threats)

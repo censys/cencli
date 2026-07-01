@@ -37,7 +37,7 @@ func renderEnrichedHostShort(host *assets.EnrichedHost) string {
 	out.WriteString(enrichmentMetadata(host))
 	out.WriteString(hostLabels(host.Labels))
 	out.WriteString(enrichmentDNS(host.DNS))
-	out.WriteString(enrichmentReputation(host.Greynoise, host.Reputation))
+	out.WriteString(enrichmentReputation(host.Reputation))
 	out.WriteString(enrichmentClassifications(host.Network, host.Privacy))
 	out.WriteString(enrichmentServices(host.Services, host.ServiceCount))
 	out.WriteString(enrichmentMallory(host.ThirdParty))
@@ -140,41 +140,24 @@ func enrichmentDNS(dns *components.HostDNS) string {
 	return out.String()
 }
 
-// enrichmentReputation renders greynoise and reputation signals.
-func enrichmentReputation(gn *components.Greynoise, rep *components.Reputation) string {
-	var out strings.Builder
-
-	if rep != nil {
-		level := string(Val(rep.ScoreLevel, components.ScoreLevel("")))
-		if level != "" {
-			line := NewLine()
-			if rep.Score != nil {
-				line.Write("Reputation", fmt.Sprintf("%s (score %.2f)", level, *rep.Score))
-			} else {
-				line.Write("Reputation", level)
-			}
-			out.WriteString(line.String())
-		}
+// enrichmentReputation renders reputation signals.
+func enrichmentReputation(rep *components.Reputation) string {
+	if rep == nil {
+		return ""
 	}
 
-	if gn != nil {
-		classification := Val(gn.Classification, "")
-		actor := Val(gn.Actor, "")
-		if classification != "" || actor != "" {
-			parts := make([]string, 0, 2)
-			if classification != "" {
-				parts = append(parts, classification)
-			}
-			if actor != "" {
-				parts = append(parts, fmt.Sprintf("actor: %s", actor))
-			}
-			line := NewLine()
-			line.Write("GreyNoise", strings.Join(parts, ", "))
-			out.WriteString(line.String())
-		}
+	level := string(Val(rep.ScoreLevel, components.ScoreLevel("")))
+	if level == "" {
+		return ""
 	}
 
-	return out.String()
+	line := NewLine()
+	if rep.Score != nil {
+		line.Write("Reputation", fmt.Sprintf("%s (score %.2f)", level, *rep.Score))
+	} else {
+		line.Write("Reputation", level)
+	}
+	return line.String()
 }
 
 // enrichmentClassifications renders network and privacy classification flags.
