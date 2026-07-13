@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/censys/cencli/gen/client/mocks"
+	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
@@ -24,15 +27,17 @@ import (
 
 func TestSearchService(t *testing.T) {
 	testCases := []struct {
-		name         string
-		client       func(ctrl *gomock.Controller) client.Client
-		orgID        mo.Option[identifiers.OrganizationID]
-		collectionID mo.Option[identifiers.CollectionID]
-		query        string
-		fields       []string
-		pagination   func() (pageSize mo.Option[uint64], maxPages mo.Option[uint64])
-		ctx          func() context.Context
-		assert       func(t *testing.T, res Result, err cenclierrors.CencliError)
+		name           string
+		client         func(ctrl *gomock.Controller) client.Client
+		orgID          mo.Option[identifiers.OrganizationID]
+		collectionID   mo.Option[identifiers.CollectionID]
+		query          string
+		fields         []string
+		pagination     func() (pageSize mo.Option[uint64], maxPages mo.Option[uint64])
+		ctx            func() context.Context
+		stream         bool
+		assert         func(t *testing.T, res Result, err cenclierrors.CencliError)
+		assertProgress func(t *testing.T, msgs []string)
 	}{
 		{
 			name: "success - no collection - no org",
@@ -847,6 +852,42 @@ func TestSearchService(t *testing.T) {
 				require.Equal(t, int64(0), res.TotalHits)
 			},
 		},
+		{
+			// Test to check streaming count reports correctly
+			name: "streaming - progress reports running hit count",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return threePageSearchMock(ctrl)
+			},
+			query:  "query",
+			fields: []string{"field"},
+			pagination: func() (mo.Option[uint64], mo.Option[uint64]) {
+				return mo.Some(uint64(2)), mo.None[uint64]()
+			},
+			stream: true,
+			assert: func(t *testing.T, res Result, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Empty(t, res.Hits) // streamed, not collected
+				require.Equal(t, int64(5), res.TotalHits)
+			},
+			assertProgress: assertRunningHitCount,
+		},
+		{
+			// Running count still reflects accumulated hits.
+			name: "collecting - progress reports running hit count",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return threePageSearchMock(ctrl)
+			},
+			query:  "query",
+			fields: []string{"field"},
+			pagination: func() (mo.Option[uint64], mo.Option[uint64]) {
+				return mo.Some(uint64(2)), mo.None[uint64]()
+			},
+			assert: func(t *testing.T, res Result, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Hits, 5)
+			},
+			assertProgress: assertRunningHitCount,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -868,6 +909,20 @@ func TestSearchService(t *testing.T) {
 				ctx = tc.ctx()
 			}
 
+			var emitter streaming.Emitter
+			var items <-chan streaming.Item
+			if tc.stream {
+				emitter, items = streaming.NewChannelEmitter(64)
+				ctx = streaming.WithEmitter(ctx, emitter)
+			}
+
+			var pub progress.Publisher
+			var events <-chan progress.Event
+			if tc.assertProgress != nil {
+				pub, events = progress.NewChannelPublisher(64)
+				ctx = progress.WithPublisher(ctx, pub)
+			}
+
 			params := Params{
 				OrgID:        tc.orgID,
 				CollectionID: tc.collectionID,
@@ -878,6 +933,16 @@ func TestSearchService(t *testing.T) {
 			}
 			res, err := svc.Search(ctx, params)
 			tc.assert(t, res, err)
+
+			if emitter != nil {
+				emitter.Close(nil)
+				for range items { //nolint:revive // drain emitted items
+				}
+			}
+			if tc.assertProgress != nil {
+				pub.Close(nil)
+				tc.assertProgress(t, drainMessages(events))
+			}
 		})
 	}
 }
@@ -948,6 +1013,66 @@ func TestSearchService_DeadlineExpiresBetweenPages(t *testing.T) {
 	require.Len(t, res.Hits, 1)
 	require.NotNil(t, res.PartialError)
 	require.ErrorIs(t, res.PartialError, context.DeadlineExceeded)
+}
+
+// threePageSearchMock serves three pages (2 + 2 + 1 hits) so progress fires past page 0.
+func threePageSearchMock(ctrl *gomock.Controller) *mocks.MockClient {
+	mockClient := mocks.NewMockClient(ctrl)
+	page := func(next string, ips ...string) client.Result[components.SearchQueryResponse] {
+		hits := make([]components.SearchQueryHit, len(ips))
+		for i, ip := range ips {
+			hits[i] = components.SearchQueryHit{
+				HostV1: &components.HostAssetWithMatchedServices{
+					Resource: components.Host{IP: strPtr(ip)},
+				},
+			}
+		}
+		return client.Result[components.SearchQueryResponse]{
+			Metadata: client.Metadata{
+				Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
+				Response: &http.Response{StatusCode: 200},
+				Latency:  100 * time.Millisecond,
+			},
+			Data: &components.SearchQueryResponse{
+				Hits:          hits,
+				TotalHits:     5,
+				NextPageToken: next,
+			},
+		}
+	}
+	gomock.InOrder(
+		mockClient.EXPECT().Search(gomock.Any(), mo.None[string](), "query", []string{"field"}, mo.Some(int64(2)), mo.None[string]()).
+			Return(page("token1", "127.0.0.1", "127.0.0.2"), nil),
+		mockClient.EXPECT().Search(gomock.Any(), mo.None[string](), "query", []string{"field"}, mo.Some(int64(2)), mo.Some("token1")).
+			Return(page("token2", "127.0.0.3", "127.0.0.4"), nil),
+		mockClient.EXPECT().Search(gomock.Any(), mo.None[string](), "query", []string{"field"}, mo.Some(int64(2)), mo.Some("token2")).
+			Return(page("", "127.0.0.5"), nil),
+	)
+	return mockClient
+}
+
+func drainMessages(events <-chan progress.Event) []string {
+	var msgs []string
+	for ev := range events {
+		if ev.Message != "" {
+			msgs = append(msgs, ev.Message)
+		}
+	}
+	return msgs
+}
+
+// assertRunningHitCount checks progress reports "2 hits collected", never "0 hits collected".
+func assertRunningHitCount(t *testing.T, msgs []string) {
+	t.Helper()
+	require.NotEmpty(t, msgs)
+	foundRunningCount := false
+	for _, m := range msgs {
+		require.NotContains(t, m, "0 hits collected", "progress must report the true running count")
+		if strings.Contains(m, "2 hits collected") {
+			foundRunningCount = true
+		}
+	}
+	require.True(t, foundRunningCount, "expected a progress message with the running hit count, got %v", msgs)
 }
 
 func strPtr[T ~string](v T) *T { return &v }

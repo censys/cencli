@@ -82,6 +82,7 @@ func (s *searchService) searchWithPagination(
 	maxPages mo.Option[uint64],
 ) (Result, cenclierrors.CencliError) {
 	var allHits []assets.Asset
+	hitsCollected := 0
 	var totalHits int64
 	var lastMeta *responsemeta.ResponseMeta
 	var pagesProcessed uint64
@@ -116,7 +117,7 @@ func (s *searchService) searchWithPagination(
 		}
 
 		// Report progress for pagination
-		s.reportSearchProgress(ctx, pagesProcessed, len(allHits), maxPages)
+		s.reportSearchProgress(ctx, pagesProcessed, hitsCollected, maxPages)
 
 		result, err := searchFn(pageToken)
 		if err != nil {
@@ -157,9 +158,11 @@ func (s *searchService) searchWithPagination(
 						PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
 					}, nil
 				}
+				hitsCollected++
 			}
 		} else {
 			allHits = append(allHits, pageHits...)
+			hitsCollected = len(allHits)
 		}
 
 		totalHits = int64(result.Data.TotalHits)
