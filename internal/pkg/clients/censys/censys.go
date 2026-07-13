@@ -25,6 +25,7 @@ type Client interface {
 	CollectionsClient
 	ThreatHuntingClient
 	AccountManagementClient
+	TagsClient
 	HasOrgID() bool
 }
 
@@ -45,6 +46,7 @@ type censysSDKImpl struct {
 	CollectionsClient
 	ThreatHuntingClient
 	AccountManagementClient
+	TagsClient
 }
 
 var _ Client = &censysSDKImpl{}
@@ -97,6 +99,7 @@ func NewCensysSDK(
 		CollectionsClient:       newCollectionsSDK(censysSDK),
 		ThreatHuntingClient:     newThreatHuntingSDK(censysSDK),
 		AccountManagementClient: newAccountManagementSDK(censysSDK),
+		TagsClient:              newTagsSDK(censysSDK),
 	}, nil
 }
 
