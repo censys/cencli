@@ -268,6 +268,21 @@ func (mr *MockClientMockRecorder) ListOrganizationMembers(ctx, orgID, pageSize, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationMembers", reflect.TypeOf((*MockClient)(nil).ListOrganizationMembers), ctx, orgID, pageSize, pageToken)
 }
 
+// ListTags mocks base method.
+func (m *MockClient) ListTags(ctx context.Context, req censys.ListTagsRequest) (censys.Result[components.TagsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTags", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTags indicates an expected call of ListTags.
+func (mr *MockClientMockRecorder) ListTags(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTags", reflect.TypeOf((*MockClient)(nil).ListTags), ctx, req)
+}
+
 // Search mocks base method.
 func (m *MockClient) Search(ctx context.Context, orgID mo.Option[string], query string, fields []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.SearchQueryResponse], censys.ClientError) {
 	m.ctrl.T.Helper()
