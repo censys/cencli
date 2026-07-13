@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/censys/cencli/gen/client/mocks"
+	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
@@ -33,14 +36,16 @@ func TestGetCertificateHistory(t *testing.T) {
 	cert2 := "3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf"
 
 	testCases := []struct {
-		name          string
-		client        func(ctrl *gomock.Controller) client.Client
-		orgID         mo.Option[identifiers.OrganizationID]
-		certificateID assets.CertificateID
-		fromTime      time.Time
-		toTime        time.Time
-		ctx           func() context.Context
-		assert        func(t *testing.T, res CertificateHistoryResult, err cenclierrors.CencliError)
+		name           string
+		client         func(ctrl *gomock.Controller) client.Client
+		orgID          mo.Option[identifiers.OrganizationID]
+		certificateID  assets.CertificateID
+		fromTime       time.Time
+		toTime         time.Time
+		ctx            func() context.Context
+		stream         bool
+		assert         func(t *testing.T, res CertificateHistoryResult, err cenclierrors.CencliError)
+		assertProgress func(t *testing.T, msgs []string)
 	}{
 		{
 			name: "success - single page with results",
@@ -526,6 +531,57 @@ func TestGetCertificateHistory(t *testing.T) {
 				assert.Equal(t, uint64(2), res.Meta.PageCount)
 			},
 		},
+		{
+			// Test to check streaming count reports correctly
+			name: "streaming - progress reports running observation count",
+			client: func(ctrl *gomock.Controller) client.Client {
+				mockClient := mocks.NewMockClient(ctrl)
+				page := func(next *string, ips ...string) client.Result[components.HostObservationResponse] {
+					ranges := make([]components.HostObservationRange, len(ips))
+					for i, ip := range ips {
+						ranges[i] = components.HostObservationRange{IP: ip}
+					}
+					return client.Result[components.HostObservationResponse]{
+						Data: &components.HostObservationResponse{Ranges: ranges, NextPageToken: next},
+						Metadata: client.Metadata{
+							Request:  &http.Request{Method: "GET", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
+							Response: &http.Response{StatusCode: 200},
+							Latency:  100 * time.Millisecond,
+							Attempts: 1,
+						},
+					}
+				}
+				token1, token2 := "page2token", "page3token"
+				gomock.InOrder(
+					mockClient.EXPECT().GetHostObservationsWithCertificate(gomock.Any(), mo.None[string](), cert1, mo.Some(fromTime), mo.Some(toTime), mo.None[int](), mo.None[string](), mo.None[int64](), mo.None[string]()).
+						Return(page(&token1, "8.8.8.8", "1.1.1.1"), nil),
+					mockClient.EXPECT().GetHostObservationsWithCertificate(gomock.Any(), mo.None[string](), cert1, mo.Some(fromTime), mo.Some(toTime), mo.None[int](), mo.None[string](), mo.None[int64](), mo.Some(token1)).
+						Return(page(&token2, "10.0.0.1", "10.0.0.2"), nil),
+					mockClient.EXPECT().GetHostObservationsWithCertificate(gomock.Any(), mo.None[string](), cert1, mo.Some(fromTime), mo.Some(toTime), mo.None[int](), mo.None[string](), mo.None[int64](), mo.Some(token2)).
+						Return(page(nil, "172.16.0.1"), nil),
+				)
+				return mockClient
+			},
+			certificateID: mustCertificateID(cert1),
+			fromTime:      fromTime,
+			toTime:        toTime,
+			stream:        true,
+			assert: func(t *testing.T, res CertificateHistoryResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Empty(t, res.Ranges) // streamed, not collected
+			},
+			assertProgress: func(t *testing.T, msgs []string) {
+				require.NotEmpty(t, msgs)
+				foundRunningCount := false
+				for _, m := range msgs {
+					require.NotContains(t, m, "0 observations so far", "progress must report the true running count")
+					if strings.Contains(m, "2 observations so far") {
+						foundRunningCount = true
+					}
+				}
+				require.True(t, foundRunningCount, "expected a progress message with the running observation count, got %v", msgs)
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -541,8 +597,38 @@ func TestGetCertificateHistory(t *testing.T) {
 				ctx = tc.ctx()
 			}
 
+			var emitter streaming.Emitter
+			var items <-chan streaming.Item
+			if tc.stream {
+				emitter, items = streaming.NewChannelEmitter(64)
+				ctx = streaming.WithEmitter(ctx, emitter)
+			}
+
+			var pub progress.Publisher
+			var events <-chan progress.Event
+			if tc.assertProgress != nil {
+				pub, events = progress.NewChannelPublisher(64)
+				ctx = progress.WithPublisher(ctx, pub)
+			}
+
 			res, err := svc.GetCertificateHistory(ctx, tc.orgID, tc.certificateID, tc.fromTime, tc.toTime)
 			tc.assert(t, res, err)
+
+			if emitter != nil {
+				emitter.Close(nil)
+				for range items { //nolint:revive // drain emitted items
+				}
+			}
+			if tc.assertProgress != nil {
+				pub.Close(nil)
+				var msgs []string
+				for ev := range events {
+					if ev.Message != "" {
+						msgs = append(msgs, ev.Message)
+					}
+				}
+				tc.assertProgress(t, msgs)
+			}
 		})
 	}
 }
