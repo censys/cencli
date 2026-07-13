@@ -17,6 +17,7 @@ import (
 	"github.com/censys/cencli/internal/app/organizations"
 	"github.com/censys/cencli/internal/app/search"
 	"github.com/censys/cencli/internal/app/streaming"
+	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/app/view"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -45,6 +46,7 @@ type Context struct {
 	censeyeSvc   censeye.Service
 	creditsSvc   credits.Service
 	orgSvc       organizations.Service
+	tagsSvc      tags.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -297,6 +299,27 @@ func (c *Context) EnrichService() (enrich.Service, cenclierrors.CencliError) {
 // the EnrichService will be instantiated on demand.
 func WithEnrichService(svc enrich.Service) ContextOpts {
 	return func(c *Context) { c.enrichSvc = svc }
+}
+
+// TagsService attempts to provide a TagsService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) TagsService() (tags.Service, cenclierrors.CencliError) {
+	if c.tagsSvc != nil {
+		return c.tagsSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.tagsSvc = tags.New(c.censysClient)
+	return c.tagsSvc, nil
+}
+
+// WithTagsService injects an instantiated TagsService to the Context.
+// This should only be used in tests, as in the application,
+// the TagsService will be instantiated on demand.
+func WithTagsService(svc tags.Service) ContextOpts {
+	return func(c *Context) { c.tagsSvc = svc }
 }
 
 // SearchService attempts to provide a SearchService to the caller.
