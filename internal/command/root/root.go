@@ -18,6 +18,7 @@ import (
 	historycmd "github.com/censys/cencli/internal/command/history"
 	orgcmd "github.com/censys/cencli/internal/command/org"
 	searchcmd "github.com/censys/cencli/internal/command/search"
+	tagscmd "github.com/censys/cencli/internal/command/tags"
 	versioncmd "github.com/censys/cencli/internal/command/versioncmd"
 	"github.com/censys/cencli/internal/command/view"
 	"github.com/censys/cencli/internal/config"
@@ -76,6 +77,7 @@ func (c *Command) Init() error {
 		censeyecmd.NewCenseyeCommand(c.Context),
 		creditscmd.NewCreditsCommand(c.Context),
 		orgcmd.NewOrgCommand(c.Context),
+		tagscmd.NewTagsCommand(c.Context),
 	)
 }
 

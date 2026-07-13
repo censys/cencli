@@ -1,0 +1,47 @@
+package tags
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/censys/cencli/internal/pkg/cenclierrors"
+)
+
+// invalidPaginationParamsError signals that a pagination parameter (page size or
+// max pages) was given an invalid value.
+type invalidPaginationParamsError struct {
+	reason string
+}
+
+// NewInvalidPaginationParamsError creates an invalid-pagination-params error.
+func NewInvalidPaginationParamsError(reason string) cenclierrors.CencliError {
+	return &invalidPaginationParamsError{reason: reason}
+}
+
+func (e *invalidPaginationParamsError) Error() string { return e.reason }
+
+func (e *invalidPaginationParamsError) Title() string { return "Invalid Pagination Parameters" }
+
+func (e *invalidPaginationParamsError) ShouldPrintUsage() bool { return true }
+
+// invalidEnumFilterError signals that a filter flag with a fixed set of accepted
+// values (e.g. --order-by, --privacy) was given an unsupported value.
+type invalidEnumFilterError struct {
+	filter    string
+	provided  string
+	supported []string
+}
+
+// NewInvalidEnumFilterError creates an invalid-enum-filter error naming the flag,
+// the rejected value, and the accepted set.
+func NewInvalidEnumFilterError(filter, provided string, supported []string) cenclierrors.CencliError {
+	return &invalidEnumFilterError{filter: filter, provided: provided, supported: supported}
+}
+
+func (e *invalidEnumFilterError) Error() string {
+	return fmt.Sprintf("invalid %s '%s'; supported values: %s", e.filter, e.provided, strings.Join(e.supported, ", "))
+}
+
+func (e *invalidEnumFilterError) Title() string { return "Invalid Filter Value" }
+
+func (e *invalidEnumFilterError) ShouldPrintUsage() bool { return true }
