@@ -29,4 +29,8 @@ var (
 	OrgCreditsHelpStdout []byte
 	//go:embed org_help.out
 	OrgHelpStdout []byte
+	//go:embed tags_help.out
+	TagsHelpStdout []byte
+	//go:embed tags_list_help.out
+	TagsListHelpStdout []byte
 )
