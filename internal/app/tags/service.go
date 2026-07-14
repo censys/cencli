@@ -21,6 +21,7 @@ import (
 // Service provides tag management capabilities.
 type Service interface {
 	ListTags(ctx context.Context, params ListParams) (ListResult, cenclierrors.CencliError)
+	GetTag(ctx context.Context, params GetParams) (GetResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -71,6 +72,38 @@ func (s *tagsService) ListTags(
 	}
 
 	return s.listWithPagination(ctx, listFn, params.MaxPages)
+}
+
+// GetTag retrieves a single tag by name or UUID. The endpoint accepts either
+// interchangeably, so the raw identifier is passed straight through (no resolve
+// roundtrip).
+func (s *tagsService) GetTag(
+	ctx context.Context,
+	params GetParams,
+) (GetResult, cenclierrors.CencliError) {
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	result, err := s.client.GetTag(ctx, orgIDStr, params.TagID.String())
+	if err != nil {
+		return GetResult{}, err
+	}
+
+	var meta *responsemeta.ResponseMeta
+	if result.Metadata.Request != nil || result.Metadata.Response != nil {
+		meta = responsemeta.NewResponseMeta(
+			result.Metadata.Request,
+			result.Metadata.Response,
+			result.Metadata.Latency,
+			result.Metadata.Attempts,
+		)
+	}
+
+	var tag Tag
+	if result.Data != nil {
+		tag = mapTag(*result.Data)
+	}
+
+	return GetResult{Meta: meta, Tag: tag}, nil
 }
 
 func (s *tagsService) listWithPagination(
