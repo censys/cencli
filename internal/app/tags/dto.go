@@ -23,6 +23,12 @@ type ListParams struct {
 	MaxPages  mo.Option[uint64]
 }
 
+// GetParams bundles inputs for retrieving a single tag by name or UUID.
+type GetParams struct {
+	OrgID mo.Option[identifiers.OrganizationID]
+	TagID identifiers.TagID
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -32,6 +38,12 @@ type Tag struct {
 	CreatedBy   string    `json:"created_by" yaml:"created_by"`
 	CreatedAt   time.Time `json:"created_at" yaml:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" yaml:"updated_at"`
+}
+
+// GetResult is the outcome of retrieving a single tag.
+type GetResult struct {
+	Meta *responsemeta.ResponseMeta
+	Tag  Tag
 }
 
 // ListResult is the outcome of listing tags.

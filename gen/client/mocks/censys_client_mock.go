@@ -179,6 +179,21 @@ func (mr *MockClientMockRecorder) GetOrganizationDetails(ctx, orgID, includeMemb
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationDetails), ctx, orgID, includeMemberCounts)
 }
 
+// GetTag mocks base method.
+func (m *MockClient) GetTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTag", ctx, orgID, tagID)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTag indicates an expected call of GetTag.
+func (mr *MockClientMockRecorder) GetTag(ctx, orgID, tagID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockClient)(nil).GetTag), ctx, orgID, tagID)
+}
+
 // GetUserCreditDetails mocks base method.
 func (m *MockClient) GetUserCreditDetails(ctx context.Context) (censys.Result[components.UserCredits], censys.ClientError) {
 	m.ctrl.T.Helper()

@@ -50,6 +50,7 @@ func (c *Command) SupportedOutputTypes() []command.OutputType {
 func (c *Command) Init() error {
 	return c.AddSubCommands(
 		NewListCommand(c.Context),
+		NewGetCommand(c.Context),
 	)
 }
 
