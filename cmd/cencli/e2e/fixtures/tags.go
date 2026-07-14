@@ -68,4 +68,37 @@ var tagsFixtures = []Fixture{
 			}
 		},
 	},
+	// ========== get subcommand ==========
+	{
+		Name:      "get help",
+		Args:      []string{"get", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsGetHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "get missing arg",
+		Args:      []string{"get"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 1 arg")
+		},
+	},
+	{
+		// Exercises the live GetTag endpoint + API-error translation without
+		// depending on org-specific tag data. A random UUID reliably 404s.
+		Name:      "get not found",
+		Args:      []string{"get", "00000000-0000-4000-8000-000000000000"},
+		ExitCode:  1,
+		Timeout:   10 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "Not Found")
+		},
+	},
 }
