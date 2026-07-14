@@ -1,0 +1,33 @@
+List all tags in your organization.                                                 
+                                                                                    
+Results can be filtered by privacy, name, and creator, and sorted by various fields.
+
+Usage:
+  censys tags list [flags]
+
+Examples:
+  censys tags list  # List all tags
+  censys tags list --privacy shared # List only shared tags
+  censys tags list --name my-tag # Filter by exact name
+  censys tags list --order-by name_desc # Sort by name descending
+  censys tags list --output-format json # Output as JSON
+
+Flags:
+      --created-by string   filter by the user ID of the tag's creator
+  -h, --help                help for list
+  -p, --max-pages int       maximum number of pages to fetch (-1 for all pages) (default 1)
+      --name string         filter by exact tag name
+      --order-by string     sort order (name_asc, name_desc, created_at_asc, created_at_desc, updated_at_asc, updated_at_desc)
+  -o, --org-id string       override the configured organization ID
+  -n, --page-size int       number of tags to return per page (default 100)
+      --privacy string      filter by privacy (private, shared)
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+
