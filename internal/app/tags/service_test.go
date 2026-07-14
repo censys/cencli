@@ -324,3 +324,88 @@ func TestTagsService_ListTags_Progress(t *testing.T) {
 	require.NotEmpty(t, msgs)
 	require.Contains(t, msgs[len(msgs)-1], "collected")
 }
+
+func TestTagsService_GetTag(t *testing.T) {
+	orgUUID := uuid.New()
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params GetParams
+		assert func(t *testing.T, res GetResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "success by name - maps SDK tag to DTO",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				desc := "a description"
+				sdkTag := &components.Tag{
+					ID:          "tag-id",
+					Name:        "my-tag",
+					Description: &desc,
+					Privacy:     components.TagPrivacyPrivate,
+					CreatedBy:   "creator",
+				}
+				m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").
+					Return(client.Result[components.Tag]{Metadata: okMeta(), Data: sdkTag}, nil)
+				return m
+			},
+			params: GetParams{TagID: identifiers.NewTagID("my-tag")},
+			assert: func(t *testing.T, res GetResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "tag-id", res.Tag.ID)
+				require.Equal(t, "my-tag", res.Tag.Name)
+				require.Equal(t, "private", res.Tag.Privacy)
+				require.NotNil(t, res.Tag.Description)
+				require.Equal(t, "a description", *res.Tag.Description)
+				require.Equal(t, "creator", res.Tag.CreatedBy)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "org id threaded to client",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().GetTag(gomock.Any(), mo.Some(orgUUID.String()), orgUUID.String()).
+					Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: "id", Name: "n", Privacy: components.TagPrivacyShared}}, nil)
+				return m
+			},
+			params: GetParams{
+				OrgID: mo.Some(identifiers.NewOrganizationID(orgUUID)),
+				TagID: identifiers.NewTagID(orgUUID.String()),
+			},
+			assert: func(t *testing.T, res GetResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "n", res.Tag.Name)
+			},
+		},
+		{
+			name: "client error propagates",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				detail := "Tag not found"
+				status := int64(404)
+				structuredErr := client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
+				m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "missing").
+					Return(client.Result[components.Tag]{}, structuredErr)
+				return m
+			},
+			params: GetParams{TagID: identifiers.NewTagID("missing")},
+			assert: func(t *testing.T, res GetResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "Tag not found")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+			res, err := svc.GetTag(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
