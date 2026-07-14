@@ -26,6 +26,9 @@ echo "Updating golden fixtures..."
 "$BINARY" org members --help > org_members_help.out
 "$BINARY" org credits --help > org_credits_help.out
 "$BINARY" org --help > org_help.out
+"$BINARY" tags --help > tags_help.out
+"$BINARY" tags list --help > tags_list_help.out
+"$BINARY" tags get --help > tags_get_help.out
 "$BINARY" > root.out
 
 echo "✅ All golden fixtures updated"

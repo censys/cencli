@@ -1,0 +1,26 @@
+Retrieve a single tag by its name or UUID.                                   
+                                                                             
+Tag names are unique within an organization, so a name and its ID can be used
+interchangeably.                                                             
+
+Usage:
+  censys tags get <tag> [flags]
+
+Examples:
+  censys tags get my-tag # Get a tag by name
+  censys tags get 018f9c2e-1b3a-7c4d-9e5f-6a7b8c9d0e1f # Get a tag by UUID
+  censys tags get my-tag --output-format json # Output as JSON
+
+Flags:
+  -h, --help            help for get
+  -o, --org-id string   override the configured organization ID
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+
