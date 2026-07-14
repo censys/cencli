@@ -32,14 +32,7 @@ func (c *Command) Short() string {
 func (c *Command) Long() string {
 	return `Manage tags and tag assignments for your organization.
 
-Tags allow you to label and organize assets (hosts, certificates, web properties)
-for tracking and filtering.
-
-By default, these commands use your stored organization ID. If no organization ID is
-stored, or you want to query a different organization, use the --org-id flag on each
-subcommand.
-
-To set your default organization ID, run: censys config org-id set <org-id>`
+Use --org-id on any subcommand to target a different organization; otherwise your stored organization ID is used.`
 }
 
 func (c *Command) Args() command.PositionalArgs {
