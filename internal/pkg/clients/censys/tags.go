@@ -24,6 +24,12 @@ type ListTagsRequest struct {
 type TagsClient interface {
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtags
 	ListTags(ctx context.Context, req ListTagsRequest) (Result[components.TagsList], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#gettag
+	GetTag(
+		ctx context.Context,
+		orgID mo.Option[string],
+		tagID string,
+	) (Result[components.Tag], ClientError)
 }
 
 type tagsSDK struct {
@@ -79,5 +85,36 @@ func (t *tagsSDK) ListTags(
 	return Result[components.TagsList]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     tagsList,
+	}, nil
+}
+
+func (t *tagsSDK) GetTag(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID string,
+) (Result[components.Tag], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsGetTagResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		req := operations.V3TagsGetTagRequest{
+			OrganizationID: orgID.ToPointer(),
+			TagID:          tagID,
+		}
+		res, err = t.censysSDK.client.TagsAndComments.GetTag(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.Tag]{}
+		return zero, err
+	}
+	tag := res.GetResponseEnvelopeTag().GetResult()
+	return Result[components.Tag]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     tag,
 	}, nil
 }

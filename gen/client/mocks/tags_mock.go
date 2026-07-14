@@ -15,6 +15,7 @@ import (
 
 	censys "github.com/censys/cencli/internal/pkg/clients/censys"
 	components "github.com/censys/censys-sdk-go/models/components"
+	mo "github.com/samber/mo"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -40,6 +41,21 @@ func NewMockTagsClient(ctrl *gomock.Controller) *MockTagsClient {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTagsClient) EXPECT() *MockTagsClientMockRecorder {
 	return m.recorder
+}
+
+// GetTag mocks base method.
+func (m *MockTagsClient) GetTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTag", ctx, orgID, tagID)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTag indicates an expected call of GetTag.
+func (mr *MockTagsClientMockRecorder) GetTag(ctx, orgID, tagID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockTagsClient)(nil).GetTag), ctx, orgID, tagID)
 }
 
 // ListTags mocks base method.
