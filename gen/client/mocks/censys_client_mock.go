@@ -74,6 +74,21 @@ func (mr *MockClientMockRecorder) AggregateCollection(ctx, collectionID, orgID, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AggregateCollection", reflect.TypeOf((*MockClient)(nil).AggregateCollection), ctx, collectionID, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// CreateTag mocks base method.
+func (m *MockClient) CreateTag(ctx context.Context, req censys.CreateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTag", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTag indicates an expected call of CreateTag.
+func (mr *MockClientMockRecorder) CreateTag(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockClient)(nil).CreateTag), ctx, req)
+}
+
 // EnrichHost mocks base method.
 func (m *MockClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
 	m.ctrl.T.Helper()

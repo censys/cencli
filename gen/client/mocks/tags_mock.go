@@ -43,6 +43,21 @@ func (m *MockTagsClient) EXPECT() *MockTagsClientMockRecorder {
 	return m.recorder
 }
 
+// CreateTag mocks base method.
+func (m *MockTagsClient) CreateTag(ctx context.Context, req censys.CreateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTag", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTag indicates an expected call of CreateTag.
+func (mr *MockTagsClientMockRecorder) CreateTag(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockTagsClient)(nil).CreateTag), ctx, req)
+}
+
 // GetTag mocks base method.
 func (m *MockTagsClient) GetTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Result[components.Tag], censys.ClientError) {
 	m.ctrl.T.Helper()

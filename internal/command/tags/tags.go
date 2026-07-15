@@ -51,6 +51,7 @@ func (c *Command) Init() error {
 	return c.AddSubCommands(
 		NewListCommand(c.Context),
 		NewGetCommand(c.Context),
+		NewCreateCommand(c.Context),
 	)
 }
 

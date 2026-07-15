@@ -3,6 +3,7 @@ package tags
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/samber/mo"
@@ -22,6 +23,7 @@ import (
 type Service interface {
 	ListTags(ctx context.Context, params ListParams) (ListResult, cenclierrors.CencliError)
 	GetTag(ctx context.Context, params GetParams) (GetResult, cenclierrors.CencliError)
+	CreateTag(ctx context.Context, params CreateParams) (CreateResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -104,6 +106,49 @@ func (s *tagsService) GetTag(
 	}
 
 	return GetResult{Meta: meta, Tag: tag}, nil
+}
+
+// CreateTag creates a new tag. The name (non-empty) and privacy are validated
+// against the API contract before the request is made.
+func (s *tagsService) CreateTag(
+	ctx context.Context,
+	params CreateParams,
+) (CreateResult, cenclierrors.CencliError) {
+	if strings.TrimSpace(params.Name) == "" {
+		return CreateResult{}, NewInvalidTagNameError()
+	}
+	if err := validatePrivacy(mo.Some(params.Privacy)); err != nil {
+		return CreateResult{}, err
+	}
+
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	result, err := s.client.CreateTag(ctx, client.CreateTagRequest{
+		OrgID:       orgIDStr,
+		Name:        params.Name,
+		Description: params.Description,
+		Privacy:     params.Privacy,
+	})
+	if err != nil {
+		return CreateResult{}, err
+	}
+
+	var meta *responsemeta.ResponseMeta
+	if result.Metadata.Request != nil || result.Metadata.Response != nil {
+		meta = responsemeta.NewResponseMeta(
+			result.Metadata.Request,
+			result.Metadata.Response,
+			result.Metadata.Latency,
+			result.Metadata.Attempts,
+		)
+	}
+
+	var tag Tag
+	if result.Data != nil {
+		tag = mapTag(*result.Data)
+	}
+
+	return CreateResult{Meta: meta, Tag: tag}, nil
 }
 
 func (s *tagsService) listWithPagination(

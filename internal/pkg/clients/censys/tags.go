@@ -20,6 +20,14 @@ type ListTagsRequest struct {
 	Privacy   mo.Option[string]
 }
 
+// CreateTagRequest bundles the fields for CreateTag.
+type CreateTagRequest struct {
+	OrgID       mo.Option[string]
+	Name        string
+	Description mo.Option[string]
+	Privacy     string
+}
+
 //go:generate mockgen -destination=../../../../gen/client/mocks/tags_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys TagsClient
 type TagsClient interface {
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtags
@@ -30,6 +38,8 @@ type TagsClient interface {
 		orgID mo.Option[string],
 		tagID string,
 	) (Result[components.Tag], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#createtag
+	CreateTag(ctx context.Context, req CreateTagRequest) (Result[components.Tag], ClientError)
 }
 
 type tagsSDK struct {
@@ -102,6 +112,40 @@ func (t *tagsSDK) GetTag(
 			TagID:          tagID,
 		}
 		res, err = t.censysSDK.client.TagsAndComments.GetTag(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.Tag]{}
+		return zero, err
+	}
+	tag := res.GetResponseEnvelopeTag().GetResult()
+	return Result[components.Tag]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     tag,
+	}, nil
+}
+
+func (t *tagsSDK) CreateTag(
+	ctx context.Context,
+	req CreateTagRequest,
+) (Result[components.Tag], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsCreateTagResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		sdkReq := operations.V3TagsCreateTagRequest{
+			OrganizationID: req.OrgID.ToPointer(),
+			CreateTagInputBody: components.CreateTagInputBody{
+				Name:        req.Name,
+				Description: req.Description.ToPointer(),
+				Privacy:     components.CreateTagInputBodyPrivacy(req.Privacy),
+			},
+		}
+		res, err = t.censysSDK.client.TagsAndComments.CreateTag(ctx, sdkReq)
 		if err != nil {
 			return NewClientError(err)
 		}

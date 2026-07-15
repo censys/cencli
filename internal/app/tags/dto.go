@@ -29,6 +29,14 @@ type GetParams struct {
 	TagID identifiers.TagID
 }
 
+// CreateParams bundles inputs for creating a tag.
+type CreateParams struct {
+	OrgID       mo.Option[identifiers.OrganizationID]
+	Name        string
+	Description mo.Option[string]
+	Privacy     string
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -42,6 +50,12 @@ type Tag struct {
 
 // GetResult is the outcome of retrieving a single tag.
 type GetResult struct {
+	Meta *responsemeta.ResponseMeta
+	Tag  Tag
+}
+
+// CreateResult is the outcome of creating a tag.
+type CreateResult struct {
 	Meta *responsemeta.ResponseMeta
 	Tag  Tag
 }
