@@ -8,6 +8,7 @@ Usage:
   censys tags [command]
 
 Available Commands:
+  create      Create a new tag
   get         Retrieve a single tag by name or ID
   list        List all tags
 
