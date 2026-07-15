@@ -45,3 +45,15 @@ func (e *invalidEnumFilterError) Error() string {
 func (e *invalidEnumFilterError) Title() string { return "Invalid Filter Value" }
 
 func (e *invalidEnumFilterError) ShouldPrintUsage() bool { return true }
+
+// invalidTagNameError signals that a tag name was empty or whitespace-only.
+type invalidTagNameError struct{}
+
+// NewInvalidTagNameError creates an invalid-tag-name error.
+func NewInvalidTagNameError() cenclierrors.CencliError { return &invalidTagNameError{} }
+
+func (e *invalidTagNameError) Error() string { return "tag name must not be empty" }
+
+func (e *invalidTagNameError) Title() string { return "Invalid Tag Name" }
+
+func (e *invalidTagNameError) ShouldPrintUsage() bool { return true }
