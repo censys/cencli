@@ -1,0 +1,28 @@
+Create a new tag with the given name.                                                
+                                                                                     
+Tag names must be unique within an organization. New tags are private by default; use
+--privacy shared to make a tag visible to all organization members.                  
+
+Usage:
+  censys tags create <name> [flags]
+
+Examples:
+  censys tags create my-tag # Create a private tag
+  censys tags create my-tag --privacy shared # Create a shared tag
+  censys tags create my-tag --description "Assets flagged for review" # Create a tag with a description
+
+Flags:
+      --description string   a human-readable description of the tag
+  -h, --help                 help for create
+  -o, --org-id string        override the configured organization ID
+      --privacy string       tag visibility (private, shared) (default "private")
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

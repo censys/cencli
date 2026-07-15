@@ -101,4 +101,28 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "Not Found")
 		},
 	},
+	// ========== create subcommand ==========
+	// No live create fixture: create is a non-idempotent write with no
+	// deterministic teardown, and --privacy validation runs after auth. Both are
+	// covered by unit tests (internal/app/tags, internal/command/tags).
+	{
+		Name:      "create help",
+		Args:      []string{"create", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsCreateHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "create missing arg",
+		Args:      []string{"create"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 1 arg")
+		},
+	},
 }
