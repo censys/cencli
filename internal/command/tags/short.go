@@ -2,6 +2,7 @@ package tags
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -78,4 +79,38 @@ func (c *ListCommand) RenderShort() cenclierrors.CencliError {
 	fmt.Fprintf(formatter.Stdout, "\n")
 
 	return nil
+}
+
+// renderTagDetail renders a single tag as a labeled detail view (TTY-aware),
+// under the given section header. Shared by the get and create commands.
+func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {
+	var out strings.Builder
+	out.WriteRune('\n')
+	out.WriteString(styles.GlobalStyles.Signature.Render(header))
+	out.WriteRune('\n')
+	out.WriteRune('\n')
+
+	writeField(&out, "Name", t.Name)
+	writeField(&out, "ID", t.ID)
+	writeField(&out, "Privacy", t.Privacy)
+
+	description := "-"
+	if t.Description != nil && *t.Description != "" {
+		description = *t.Description
+	}
+	writeField(&out, "Description", description)
+
+	writeField(&out, "Created By", t.CreatedBy)
+	writeField(&out, "Created At", t.CreatedAt.Format("2006-01-02 15:04:05 MST"))
+	writeField(&out, "Updated At", t.UpdatedAt.Format("2006-01-02 15:04:05 MST"))
+
+	formatter.Println(formatter.Stdout, out.String())
+	return nil
+}
+
+// writeField appends a padded label / value line to a detail view.
+func writeField(out *strings.Builder, label, value string) {
+	labelStyled := styles.GlobalStyles.Primary.Render(fmt.Sprintf("%-13s", label+":"))
+	valueStyled := styles.GlobalStyles.Comment.Render(value)
+	fmt.Fprintf(out, "  %s %s\n", labelStyled, valueStyled)
 }

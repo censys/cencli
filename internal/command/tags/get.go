@@ -3,7 +3,6 @@ package tags
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
@@ -13,8 +12,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
-	"github.com/censys/cencli/internal/pkg/formatter"
-	"github.com/censys/cencli/internal/pkg/styles"
 )
 
 const getCmdName = "get"
@@ -132,37 +129,7 @@ func (c *GetCommand) resolveTagsService() cenclierrors.CencliError {
 	return nil
 }
 
-// RenderShort renders a single tag as a labeled detail view (TTY-aware).
+// RenderShort renders the fetched tag as a labeled detail view (TTY-aware).
 func (c *GetCommand) RenderShort() cenclierrors.CencliError {
-	t := c.result.Tag
-
-	var out strings.Builder
-	out.WriteRune('\n')
-	out.WriteString(styles.GlobalStyles.Signature.Render("━━━ Tag ━━━"))
-	out.WriteRune('\n')
-	out.WriteRune('\n')
-
-	writeField(&out, "Name", t.Name)
-	writeField(&out, "ID", t.ID)
-	writeField(&out, "Privacy", t.Privacy)
-
-	description := "-"
-	if t.Description != nil && *t.Description != "" {
-		description = *t.Description
-	}
-	writeField(&out, "Description", description)
-
-	writeField(&out, "Created By", t.CreatedBy)
-	writeField(&out, "Created At", t.CreatedAt.Format("2006-01-02 15:04:05 MST"))
-	writeField(&out, "Updated At", t.UpdatedAt.Format("2006-01-02 15:04:05 MST"))
-
-	formatter.Println(formatter.Stdout, out.String())
-	return nil
-}
-
-// writeField appends a padded label / value line to the detail view.
-func writeField(out *strings.Builder, label, value string) {
-	labelStyled := styles.GlobalStyles.Primary.Render(fmt.Sprintf("%-13s", label+":"))
-	valueStyled := styles.GlobalStyles.Comment.Render(value)
-	fmt.Fprintf(out, "  %s %s\n", labelStyled, valueStyled)
+	return renderTagDetail("━━━ Tag ━━━", c.result.Tag)
 }
