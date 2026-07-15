@@ -42,6 +42,21 @@ func (m *MockTagsService) EXPECT() *MockTagsServiceMockRecorder {
 	return m.recorder
 }
 
+// CreateTag mocks base method.
+func (m *MockTagsService) CreateTag(ctx context.Context, params tags.CreateParams) (tags.CreateResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTag", ctx, params)
+	ret0, _ := ret[0].(tags.CreateResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// CreateTag indicates an expected call of CreateTag.
+func (mr *MockTagsServiceMockRecorder) CreateTag(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockTagsService)(nil).CreateTag), ctx, params)
+}
+
 // GetTag mocks base method.
 func (m *MockTagsService) GetTag(ctx context.Context, params tags.GetParams) (tags.GetResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()
