@@ -409,3 +409,140 @@ func TestTagsService_GetTag(t *testing.T) {
 		})
 	}
 }
+
+func TestTagsService_CreateTag(t *testing.T) {
+	orgUUID := uuid.New()
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params CreateParams
+		assert func(t *testing.T, res CreateResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "success - maps SDK tag to DTO",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				desc := "a description"
+				sdkTag := &components.Tag{
+					ID:          "tag-id",
+					Name:        "my-tag",
+					Description: &desc,
+					Privacy:     components.TagPrivacyPrivate,
+					CreatedBy:   "creator",
+				}
+				m.EXPECT().CreateTag(gomock.Any(), client.CreateTagRequest{
+					Name:        "my-tag",
+					Description: mo.Some("a description"),
+					Privacy:     "private",
+				}).Return(client.Result[components.Tag]{Metadata: okMeta(), Data: sdkTag}, nil)
+				return m
+			},
+			params: CreateParams{
+				Name:        "my-tag",
+				Description: mo.Some("a description"),
+				Privacy:     "private",
+			},
+			assert: func(t *testing.T, res CreateResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "tag-id", res.Tag.ID)
+				require.Equal(t, "my-tag", res.Tag.Name)
+				require.Equal(t, "private", res.Tag.Privacy)
+				require.NotNil(t, res.Tag.Description)
+				require.Equal(t, "a description", *res.Tag.Description)
+				require.Equal(t, "creator", res.Tag.CreatedBy)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "org id and shared privacy threaded to client",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().CreateTag(gomock.Any(), client.CreateTagRequest{
+					OrgID:   mo.Some(orgUUID.String()),
+					Name:    "shared-tag",
+					Privacy: "shared",
+				}).Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: "id", Name: "shared-tag", Privacy: components.TagPrivacyShared}}, nil)
+				return m
+			},
+			params: CreateParams{
+				OrgID:   mo.Some(identifiers.NewOrganizationID(orgUUID)),
+				Name:    "shared-tag",
+				Privacy: "shared",
+			},
+			assert: func(t *testing.T, res CreateResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "shared-tag", res.Tag.Name)
+				require.Equal(t, "shared", res.Tag.Privacy)
+			},
+		},
+		{
+			name: "empty name rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl) // no client call expected
+			},
+			params: CreateParams{Name: "", Privacy: "private"},
+			assert: func(t *testing.T, res CreateResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "name")
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "whitespace-only name rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl) // no client call expected
+			},
+			params: CreateParams{Name: "   ", Privacy: "private"},
+			assert: func(t *testing.T, res CreateResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "name")
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "invalid privacy rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl) // no client call expected
+			},
+			params: CreateParams{Name: "my-tag", Privacy: "bogus"},
+			assert: func(t *testing.T, res CreateResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "privacy")
+				require.Contains(t, err.Error(), "private")
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "client error propagates",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				detail := "Tag already exists"
+				status := int64(409)
+				structuredErr := client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
+				m.EXPECT().CreateTag(gomock.Any(), client.CreateTagRequest{Name: "dupe", Privacy: "private"}).
+					Return(client.Result[components.Tag]{}, structuredErr)
+				return m
+			},
+			params: CreateParams{Name: "dupe", Privacy: "private"},
+			assert: func(t *testing.T, res CreateResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "Tag already exists")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+			res, err := svc.CreateTag(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
