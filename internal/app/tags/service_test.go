@@ -676,3 +676,76 @@ func TestTagsService_UpdateTag(t *testing.T) {
 		})
 	}
 }
+
+func TestTagsService_DeleteTag(t *testing.T) {
+	orgUUID := uuid.New()
+	tagUUID := uuid.New()
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params DeleteParams
+		assert func(t *testing.T, res DeleteResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "success - returns metadata and echoes the identifier",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().DeleteTag(gomock.Any(), mo.None[string](), tagUUID.String()).
+					Return(okMeta(), nil)
+				return m
+			},
+			params: DeleteParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, res DeleteResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, tagUUID.String(), res.TagID)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "org id threaded; raw identifier passed straight through",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().DeleteTag(gomock.Any(), mo.Some(orgUUID.String()), tagUUID.String()).
+					Return(okMeta(), nil)
+				return m
+			},
+			params: DeleteParams{
+				OrgID: mo.Some(identifiers.NewOrganizationID(orgUUID)),
+				TagID: identifiers.NewTagID(tagUUID.String()),
+			},
+			assert: func(t *testing.T, res DeleteResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, tagUUID.String(), res.TagID)
+			},
+		},
+		{
+			name: "client error propagates",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				detail := "Tag not found"
+				status := int64(404)
+				structuredErr := client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
+				m.EXPECT().DeleteTag(gomock.Any(), mo.None[string](), tagUUID.String()).
+					Return(client.Metadata{}, structuredErr)
+				return m
+			},
+			params: DeleteParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, res DeleteResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.TagID)
+				require.Contains(t, err.Error(), "Tag not found")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+			res, err := svc.DeleteTag(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
