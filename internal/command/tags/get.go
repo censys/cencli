@@ -59,7 +59,7 @@ Tag names are unique within an organization, so a name and its ID can be used in
 func (c *GetCommand) Examples() []string {
 	return []string{
 		"my-tag # Get a tag by name",
-		"018f9c2e-1b3a-7c4d-9e5f-6a7b8c9d0e1f # Get a tag by UUID",
+		"<tag-id> # Get a tag by UUID",
 		"my-tag --output-format json # Output as JSON",
 	}
 }
