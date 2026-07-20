@@ -24,6 +24,7 @@ type Service interface {
 	ListTags(ctx context.Context, params ListParams) (ListResult, cenclierrors.CencliError)
 	GetTag(ctx context.Context, params GetParams) (GetResult, cenclierrors.CencliError)
 	CreateTag(ctx context.Context, params CreateParams) (CreateResult, cenclierrors.CencliError)
+	UpdateTag(ctx context.Context, params UpdateParams) (UpdateResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -149,6 +150,48 @@ func (s *tagsService) CreateTag(
 	}
 
 	return CreateResult{Meta: meta, Tag: tag}, nil
+}
+
+// UpdateTag mutates an existing tag by name or UUID. Privacy, when provided, is
+// validated; the raw identifier is passed straight through (the endpoint
+// accepts name or UUID, like GetTag).
+func (s *tagsService) UpdateTag(
+	ctx context.Context,
+	params UpdateParams,
+) (UpdateResult, cenclierrors.CencliError) {
+	if err := validatePrivacy(params.Privacy); err != nil {
+		return UpdateResult{}, err
+	}
+
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	result, err := s.client.UpdateTag(ctx, client.UpdateTagRequest{
+		OrgID:       orgIDStr,
+		TagID:       params.TagID.String(),
+		Name:        params.Name,
+		Description: params.Description,
+		Privacy:     params.Privacy,
+	})
+	if err != nil {
+		return UpdateResult{}, err
+	}
+
+	var meta *responsemeta.ResponseMeta
+	if result.Metadata.Request != nil || result.Metadata.Response != nil {
+		meta = responsemeta.NewResponseMeta(
+			result.Metadata.Request,
+			result.Metadata.Response,
+			result.Metadata.Latency,
+			result.Metadata.Attempts,
+		)
+	}
+
+	var tag Tag
+	if result.Data != nil {
+		tag = mapTag(*result.Data)
+	}
+
+	return UpdateResult{Meta: meta, Tag: tag}, nil
 }
 
 func (s *tagsService) listWithPagination(
