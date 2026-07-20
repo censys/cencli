@@ -57,6 +57,21 @@ func (mr *MockTagsServiceMockRecorder) CreateTag(ctx, params any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockTagsService)(nil).CreateTag), ctx, params)
 }
 
+// DeleteTag mocks base method.
+func (m *MockTagsService) DeleteTag(ctx context.Context, params tags.DeleteParams) (tags.DeleteResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTag", ctx, params)
+	ret0, _ := ret[0].(tags.DeleteResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// DeleteTag indicates an expected call of DeleteTag.
+func (mr *MockTagsServiceMockRecorder) DeleteTag(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockTagsService)(nil).DeleteTag), ctx, params)
+}
+
 // GetTag mocks base method.
 func (m *MockTagsService) GetTag(ctx context.Context, params tags.GetParams) (tags.GetResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()

@@ -52,6 +52,10 @@ type TagsClient interface {
 	CreateTag(ctx context.Context, req CreateTagRequest) (Result[components.Tag], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#updatetag
 	UpdateTag(ctx context.Context, req UpdateTagRequest) (Result[components.Tag], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#deletetag
+	//
+	// DeleteTag returns only response metadata; the endpoint has no body.
+	DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (Metadata, ClientError)
 }
 
 type tagsSDK struct {
@@ -139,6 +143,33 @@ func (t *tagsSDK) GetTag(
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     tag,
 	}, nil
+}
+
+func (t *tagsSDK) DeleteTag(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID string,
+) (Metadata, ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsDeleteTagResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		req := operations.V3TagsDeleteTagRequest{
+			OrganizationID: orgID.ToPointer(),
+			TagID:          tagID,
+		}
+		res, err = t.censysSDK.client.TagsAndComments.DeleteTag(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		return Metadata{}, err
+	}
+	// The delete endpoint returns no body, only response metadata.
+	return buildResponseMetadata(res, latency, attempts), nil
 }
 
 func (t *tagsSDK) CreateTag(

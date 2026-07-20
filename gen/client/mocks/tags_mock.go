@@ -58,6 +58,21 @@ func (mr *MockTagsClientMockRecorder) CreateTag(ctx, req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockTagsClient)(nil).CreateTag), ctx, req)
 }
 
+// DeleteTag mocks base method.
+func (m *MockTagsClient) DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTag", ctx, orgID, tagID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteTag indicates an expected call of DeleteTag.
+func (mr *MockTagsClientMockRecorder) DeleteTag(ctx, orgID, tagID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockTagsClient)(nil).DeleteTag), ctx, orgID, tagID)
+}
+
 // GetTag mocks base method.
 func (m *MockTagsClient) GetTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Result[components.Tag], censys.ClientError) {
 	m.ctrl.T.Helper()

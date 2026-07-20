@@ -104,6 +104,21 @@ func (mr *MockClientMockRecorder) CredentialInfo() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CredentialInfo", reflect.TypeOf((*MockClient)(nil).CredentialInfo))
 }
 
+// DeleteTag mocks base method.
+func (m *MockClient) DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTag", ctx, orgID, tagID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteTag indicates an expected call of DeleteTag.
+func (mr *MockClientMockRecorder) DeleteTag(ctx, orgID, tagID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockClient)(nil).DeleteTag), ctx, orgID, tagID)
+}
+
 // EnrichHost mocks base method.
 func (m *MockClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
 	m.ctrl.T.Helper()
