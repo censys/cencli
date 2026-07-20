@@ -91,14 +91,16 @@ var tagsFixtures = []Fixture{
 	},
 	{
 		// Exercises the live GetTag endpoint + API-error translation without
-		// depending on org-specific tag data. A random UUID reliably 404s.
-		Name:      "get not found",
+		// depending on org-specific tag data. A random UUID never maps to a real
+		// tag; the API masks resource existence and returns 403 Permission denied
+		// (not 404), so that is the expected error here.
+		Name:      "get forbidden for unknown id",
 		Args:      []string{"get", "00000000-0000-4000-8000-000000000000"},
 		ExitCode:  1,
 		Timeout:   10 * time.Second,
 		NeedsAuth: true,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assert.Contains(t, string(stderr), "Not Found")
+			assert.Contains(t, string(stderr), "Permission denied")
 		},
 	},
 	// ========== create subcommand ==========
@@ -123,6 +125,50 @@ var tagsFixtures = []Fixture{
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			assert.Contains(t, string(stderr), "accepts 1 arg")
+		},
+	},
+	// ========== update subcommand ==========
+	// No live update fixture: update is a non-idempotent write with no
+	// deterministic fixture, and --privacy validation runs after auth. Covered
+	// by unit tests (internal/app/tags, internal/command/tags).
+	{
+		Name:      "update help",
+		Args:      []string{"update", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsUpdateHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "update missing arg",
+		Args:      []string{"update"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 1 arg")
+		},
+	},
+	{
+		Name:      "update nothing to update",
+		Args:      []string{"update", "my-tag"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "no fields to update")
+		},
+	},
+	{
+		Name:      "update description conflict",
+		Args:      []string{"update", "my-tag", "--description", "foo", "--clear-description"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "cannot be used together")
 		},
 	},
 }
