@@ -546,3 +546,133 @@ func TestTagsService_CreateTag(t *testing.T) {
 		})
 	}
 }
+
+func TestTagsService_UpdateTag(t *testing.T) {
+	orgUUID := uuid.New()
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params UpdateParams
+		assert func(t *testing.T, res UpdateResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "success - maps SDK tag to DTO",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				desc := "new description"
+				sdkTag := &components.Tag{
+					ID:          "tag-id",
+					Name:        "renamed",
+					Description: &desc,
+					Privacy:     components.TagPrivacyShared,
+					CreatedBy:   "creator",
+				}
+				m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{
+					TagID:       "my-tag",
+					Name:        mo.Some("renamed"),
+					Description: mo.Some("new description"),
+					Privacy:     mo.Some("shared"),
+				}).Return(client.Result[components.Tag]{Metadata: okMeta(), Data: sdkTag}, nil)
+				return m
+			},
+			params: UpdateParams{
+				TagID:       identifiers.NewTagID("my-tag"),
+				Name:        mo.Some("renamed"),
+				Description: mo.Some("new description"),
+				Privacy:     mo.Some("shared"),
+			},
+			assert: func(t *testing.T, res UpdateResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "tag-id", res.Tag.ID)
+				require.Equal(t, "renamed", res.Tag.Name)
+				require.Equal(t, "shared", res.Tag.Privacy)
+				require.NotNil(t, res.Tag.Description)
+				require.Equal(t, "new description", *res.Tag.Description)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "partial update - only privacy, org and raw UUID threaded to client",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{
+					OrgID:   mo.Some(orgUUID.String()),
+					TagID:   orgUUID.String(),
+					Privacy: mo.Some("private"),
+				}).Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: "id", Name: "n", Privacy: components.TagPrivacyPrivate}}, nil)
+				return m
+			},
+			params: UpdateParams{
+				OrgID:   mo.Some(identifiers.NewOrganizationID(orgUUID)),
+				TagID:   identifiers.NewTagID(orgUUID.String()),
+				Privacy: mo.Some("private"),
+			},
+			assert: func(t *testing.T, res UpdateResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "private", res.Tag.Privacy)
+			},
+		},
+		{
+			name: "clear description sent as empty string",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{
+					TagID:       "my-tag",
+					Description: mo.Some(""),
+				}).Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: "id", Name: "my-tag", Privacy: components.TagPrivacyPrivate}}, nil)
+				return m
+			},
+			params: UpdateParams{
+				TagID:       identifiers.NewTagID("my-tag"),
+				Description: mo.Some(""),
+			},
+			assert: func(t *testing.T, res UpdateResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "id", res.Tag.ID)
+			},
+		},
+		{
+			name: "invalid privacy rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl) // no client call expected
+			},
+			params: UpdateParams{TagID: identifiers.NewTagID("my-tag"), Privacy: mo.Some("bogus")},
+			assert: func(t *testing.T, res UpdateResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "privacy")
+				require.Contains(t, err.Error(), "private")
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "client error propagates",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				detail := "Tag not found"
+				status := int64(404)
+				structuredErr := client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
+				m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{TagID: "missing", Name: mo.Some("x")}).
+					Return(client.Result[components.Tag]{}, structuredErr)
+				return m
+			},
+			params: UpdateParams{TagID: identifiers.NewTagID("missing"), Name: mo.Some("x")},
+			assert: func(t *testing.T, res UpdateResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Tag.ID)
+				require.Contains(t, err.Error(), "Tag not found")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+			res, err := svc.UpdateTag(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
