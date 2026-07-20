@@ -39,4 +39,6 @@ var (
 	TagsCreateHelpStdout []byte
 	//go:embed tags_update_help.out
 	TagsUpdateHelpStdout []byte
+	//go:embed tags_delete_help.out
+	TagsDeleteHelpStdout []byte
 )

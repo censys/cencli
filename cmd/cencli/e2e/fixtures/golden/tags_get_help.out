@@ -8,7 +8,7 @@ Usage:
 
 Examples:
   censys tags get my-tag # Get a tag by name
-  censys tags get 018f9c2e-1b3a-7c4d-9e5f-6a7b8c9d0e1f # Get a tag by UUID
+  censys tags get <tag-id> # Get a tag by UUID
   censys tags get my-tag --output-format json # Output as JSON
 
 Flags:
