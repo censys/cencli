@@ -47,6 +47,12 @@ type UpdateParams struct {
 	Privacy     mo.Option[string]
 }
 
+// DeleteParams bundles inputs for deleting a tag by name or UUID.
+type DeleteParams struct {
+	OrgID mo.Option[identifiers.OrganizationID]
+	TagID identifiers.TagID
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -74,6 +80,13 @@ type CreateResult struct {
 type UpdateResult struct {
 	Meta *responsemeta.ResponseMeta
 	Tag  Tag
+}
+
+// DeleteResult is the outcome of deleting a tag. The endpoint returns no tag
+// body, so only the identifier the caller supplied is echoed back for rendering.
+type DeleteResult struct {
+	Meta  *responsemeta.ResponseMeta
+	TagID string
 }
 
 // ListResult is the outcome of listing tags.
