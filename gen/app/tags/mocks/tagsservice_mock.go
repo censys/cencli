@@ -86,3 +86,18 @@ func (mr *MockTagsServiceMockRecorder) ListTags(ctx, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTags", reflect.TypeOf((*MockTagsService)(nil).ListTags), ctx, params)
 }
+
+// UpdateTag mocks base method.
+func (m *MockTagsService) UpdateTag(ctx context.Context, params tags.UpdateParams) (tags.UpdateResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTag", ctx, params)
+	ret0, _ := ret[0].(tags.UpdateResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// UpdateTag indicates an expected call of UpdateTag.
+func (mr *MockTagsServiceMockRecorder) UpdateTag(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTag", reflect.TypeOf((*MockTagsService)(nil).UpdateTag), ctx, params)
+}

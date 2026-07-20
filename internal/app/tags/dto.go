@@ -37,6 +37,16 @@ type CreateParams struct {
 	Privacy     string
 }
 
+// UpdateParams bundles inputs for updating a tag by name or UUID. Clearing the
+// description is expressed as Description = mo.Some("").
+type UpdateParams struct {
+	OrgID       mo.Option[identifiers.OrganizationID]
+	TagID       identifiers.TagID
+	Name        mo.Option[string]
+	Description mo.Option[string]
+	Privacy     mo.Option[string]
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -56,6 +66,12 @@ type GetResult struct {
 
 // CreateResult is the outcome of creating a tag.
 type CreateResult struct {
+	Meta *responsemeta.ResponseMeta
+	Tag  Tag
+}
+
+// UpdateResult is the outcome of updating a tag.
+type UpdateResult struct {
 	Meta *responsemeta.ResponseMeta
 	Tag  Tag
 }

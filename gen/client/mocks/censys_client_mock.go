@@ -327,3 +327,18 @@ func (mr *MockClientMockRecorder) SearchCollection(ctx, collectionID, orgID, que
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCollection", reflect.TypeOf((*MockClient)(nil).SearchCollection), ctx, collectionID, orgID, query, fields, pageSize, pageToken)
 }
+
+// UpdateTag mocks base method.
+func (m *MockClient) UpdateTag(ctx context.Context, req censys.UpdateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTag", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// UpdateTag indicates an expected call of UpdateTag.
+func (mr *MockClientMockRecorder) UpdateTag(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTag", reflect.TypeOf((*MockClient)(nil).UpdateTag), ctx, req)
+}
