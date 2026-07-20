@@ -28,6 +28,16 @@ type CreateTagRequest struct {
 	Privacy     string
 }
 
+// UpdateTagRequest bundles the fields for UpdateTag. Fields are optional; only
+// present options are sent.
+type UpdateTagRequest struct {
+	OrgID       mo.Option[string]
+	TagID       string
+	Name        mo.Option[string]
+	Description mo.Option[string]
+	Privacy     mo.Option[string]
+}
+
 //go:generate mockgen -destination=../../../../gen/client/mocks/tags_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys TagsClient
 type TagsClient interface {
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtags
@@ -40,6 +50,8 @@ type TagsClient interface {
 	) (Result[components.Tag], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#createtag
 	CreateTag(ctx context.Context, req CreateTagRequest) (Result[components.Tag], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#updatetag
+	UpdateTag(ctx context.Context, req UpdateTagRequest) (Result[components.Tag], ClientError)
 }
 
 type tagsSDK struct {
@@ -146,6 +158,45 @@ func (t *tagsSDK) CreateTag(
 			},
 		}
 		res, err = t.censysSDK.client.TagsAndComments.CreateTag(ctx, sdkReq)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.Tag]{}
+		return zero, err
+	}
+	tag := res.GetResponseEnvelopeTag().GetResult()
+	return Result[components.Tag]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     tag,
+	}, nil
+}
+
+func (t *tagsSDK) UpdateTag(
+	ctx context.Context,
+	req UpdateTagRequest,
+) (Result[components.Tag], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsUpdateTagResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		body := components.UpdateTagInputBody{
+			Name:        req.Name.ToPointer(),
+			Description: req.Description.ToPointer(),
+		}
+		if req.Privacy.IsPresent() {
+			p := components.UpdateTagInputBodyPrivacy(req.Privacy.MustGet())
+			body.Privacy = &p
+		}
+		sdkReq := operations.V3TagsUpdateTagRequest{
+			OrganizationID:     req.OrgID.ToPointer(),
+			TagID:              req.TagID,
+			UpdateTagInputBody: body,
+		}
+		res, err = t.censysSDK.client.TagsAndComments.UpdateTag(ctx, sdkReq)
 		if err != nil {
 			return NewClientError(err)
 		}
