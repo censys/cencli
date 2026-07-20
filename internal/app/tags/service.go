@@ -25,6 +25,7 @@ type Service interface {
 	GetTag(ctx context.Context, params GetParams) (GetResult, cenclierrors.CencliError)
 	CreateTag(ctx context.Context, params CreateParams) (CreateResult, cenclierrors.CencliError)
 	UpdateTag(ctx context.Context, params UpdateParams) (UpdateResult, cenclierrors.CencliError)
+	DeleteTag(ctx context.Context, params DeleteParams) (DeleteResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -192,6 +193,32 @@ func (s *tagsService) UpdateTag(
 	}
 
 	return UpdateResult{Meta: meta, Tag: tag}, nil
+}
+
+// DeleteTag removes a tag by name or UUID. The raw identifier is passed straight
+// through (the endpoint accepts name or UUID, like GetTag/UpdateTag).
+func (s *tagsService) DeleteTag(
+	ctx context.Context,
+	params DeleteParams,
+) (DeleteResult, cenclierrors.CencliError) {
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	metadata, err := s.client.DeleteTag(ctx, orgIDStr, params.TagID.String())
+	if err != nil {
+		return DeleteResult{}, err
+	}
+
+	var meta *responsemeta.ResponseMeta
+	if metadata.Request != nil || metadata.Response != nil {
+		meta = responsemeta.NewResponseMeta(
+			metadata.Request,
+			metadata.Response,
+			metadata.Latency,
+			metadata.Attempts,
+		)
+	}
+
+	return DeleteResult{Meta: meta, TagID: params.TagID.String()}, nil
 }
 
 func (s *tagsService) listWithPagination(

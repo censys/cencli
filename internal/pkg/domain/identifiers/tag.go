@@ -7,10 +7,11 @@ import (
 	"github.com/samber/mo"
 )
 
-// TagID identifies a tag by either its name or its UUID. The Censys tags API
-// accepts both interchangeably in the tag_id path parameter, so the raw value is
-// preserved verbatim and passed straight through. UID reports the UUID when the
-// raw value parses as one, giving later commands a hook for name resolution.
+// TagID identifies a tag by either its name or its UUID. The raw value is
+// preserved verbatim and passed straight through to the tag_id path parameter.
+// Only the GetTag endpoint accepts a name there; the mutate endpoints
+// (update, delete) require a UUID and reject a name with a 422. UID reports the
+// UUID when the raw value parses as one.
 type TagID struct{ raw string }
 
 // NewTagID builds a TagID from a raw name-or-UUID string, trimming surrounding
