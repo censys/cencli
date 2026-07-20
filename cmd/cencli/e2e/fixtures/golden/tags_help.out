@@ -9,6 +9,7 @@ Usage:
 
 Available Commands:
   create      Create a new tag
+  delete      Delete a tag
   get         Retrieve a single tag by name or ID
   list        List all tags
   update      Update an existing tag
