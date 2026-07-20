@@ -1,0 +1,28 @@
+Delete a tag by its ID (UUID). This cannot be undone.                                    
+                                                                                         
+Find a tag's ID with 'censys tags list' or 'censys tags get <name>'.                     
+                                                                                         
+You are prompted to confirm before the tag is deleted. Use --yes to skip the prompt; in a
+non-interactive terminal --yes is required.                                              
+
+Usage:
+  censys tags delete <tag> [flags]
+
+Examples:
+  censys tags delete <tag-id> # Delete a tag (prompts for confirmation)
+  censys tags delete <tag-id> --yes # Delete without confirming
+
+Flags:
+  -h, --help            help for delete
+  -o, --org-id string   override the configured organization ID
+  -y, --yes             skip the confirmation prompt
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

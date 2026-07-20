@@ -171,4 +171,37 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "cannot be used together")
 		},
 	},
+	// ========== delete subcommand ==========
+	{
+		Name:      "delete help",
+		Args:      []string{"delete", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsDeleteHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "delete missing arg",
+		Args:      []string{"delete"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 1 arg")
+		},
+	},
+	{
+		// A non-interactive terminal (piped stdin) without --yes cannot prompt,
+		// so the command refuses before any auth is required.
+		Name:      "delete confirmation required in non-interactive terminal",
+		Args:      []string{"delete", "some-tag"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "confirmation required")
+		},
+	},
 }
