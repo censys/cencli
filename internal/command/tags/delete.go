@@ -115,7 +115,10 @@ func (c *DeleteCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 		return err
 	}
 	c.yes = yes
-	c.tagID = identifiers.NewTagID(args[0])
+	c.tagID, err = requireTagID(args[0])
+	if err != nil {
+		return err
+	}
 
 	// Gate the confirmation before resolving the service so a non-interactive
 	// invocation without --yes fails with a clear confirmation error rather than

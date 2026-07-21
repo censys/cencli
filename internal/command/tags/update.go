@@ -99,7 +99,10 @@ func (c *UpdateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 	if err != nil {
 		return err
 	}
-	c.tagID = identifiers.NewTagID(args[0])
+	c.tagID, err = requireTagID(args[0])
+	if err != nil {
+		return err
+	}
 
 	name, err := c.flags.name.Value()
 	if err != nil {

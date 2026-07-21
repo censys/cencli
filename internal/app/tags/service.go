@@ -241,6 +241,12 @@ func (s *tagsService) resolveTagID(
 	orgID mo.Option[string],
 	tagID identifiers.TagID,
 ) (string, cenclierrors.CencliError) {
+	// Never look up an empty identifier: an empty name filter matches nothing
+	// meaningful and would resolve to an arbitrary tag.
+	if tagID.String() == "" {
+		return "", NewEmptyTagIDError()
+	}
+
 	// A UUID needs no resolution — pass it straight through, no lookup.
 	if tagID.UID().IsPresent() {
 		return tagID.String(), nil
