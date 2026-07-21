@@ -14,6 +14,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
+	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 )
 
@@ -154,8 +155,8 @@ func (s *tagsService) CreateTag(
 }
 
 // UpdateTag mutates an existing tag by name or UUID. Privacy, when provided, is
-// validated; the raw identifier is passed straight through (the endpoint
-// accepts name or UUID, like GetTag).
+// validated; a name is resolved to a UUID (the update endpoint accepts a UUID
+// only) before the write.
 func (s *tagsService) UpdateTag(
 	ctx context.Context,
 	params UpdateParams,
@@ -166,9 +167,14 @@ func (s *tagsService) UpdateTag(
 
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
+	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
+	if resolveErr != nil {
+		return UpdateResult{}, resolveErr
+	}
+
 	result, err := s.client.UpdateTag(ctx, client.UpdateTagRequest{
 		OrgID:       orgIDStr,
-		TagID:       params.TagID.String(),
+		TagID:       tagID,
 		Name:        params.Name,
 		Description: params.Description,
 		Privacy:     params.Privacy,
@@ -195,15 +201,20 @@ func (s *tagsService) UpdateTag(
 	return UpdateResult{Meta: meta, Tag: tag}, nil
 }
 
-// DeleteTag removes a tag by name or UUID. The raw identifier is passed straight
-// through (the endpoint accepts name or UUID, like GetTag/UpdateTag).
+// DeleteTag removes a tag by name or UUID. A name is resolved to a UUID (the
+// delete endpoint accepts a UUID only) before the deletion.
 func (s *tagsService) DeleteTag(
 	ctx context.Context,
 	params DeleteParams,
 ) (DeleteResult, cenclierrors.CencliError) {
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	metadata, err := s.client.DeleteTag(ctx, orgIDStr, params.TagID.String())
+	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
+	if resolveErr != nil {
+		return DeleteResult{}, resolveErr
+	}
+
+	metadata, err := s.client.DeleteTag(ctx, orgIDStr, tagID)
 	if err != nil {
 		return DeleteResult{}, err
 	}
@@ -219,6 +230,34 @@ func (s *tagsService) DeleteTag(
 	}
 
 	return DeleteResult{Meta: meta, TagID: params.TagID.String()}, nil
+}
+
+// resolveTagID returns a concrete tag UUID for the given identifier. A value
+// that already parses as a UUID is returned unchanged with no API call; a name
+// is resolved to its UUID via an exact-match ListTags lookup. Reused by the
+// UUID-only endpoints (update, delete, and later assignments/operations).
+func (s *tagsService) resolveTagID(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID identifiers.TagID,
+) (string, cenclierrors.CencliError) {
+	// A UUID needs no resolution — pass it straight through, no lookup.
+	if tagID.UID().IsPresent() {
+		return tagID.String(), nil
+	}
+
+	result, err := s.client.ListTags(ctx, client.ListTagsRequest{
+		OrgID:    orgID,
+		Name:     mo.Some(tagID.String()),
+		PageSize: mo.Some(int64(1)),
+	})
+	if err != nil {
+		return "", err
+	}
+	if result.Data == nil || len(result.Data.Tags) == 0 {
+		return "", NewTagNotFoundError(tagID.String())
+	}
+	return result.Data.Tags[0].ID, nil
 }
 
 func (s *tagsService) listWithPagination(
