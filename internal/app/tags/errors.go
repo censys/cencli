@@ -46,6 +46,25 @@ func (e *invalidEnumFilterError) Title() string { return "Invalid Filter Value" 
 
 func (e *invalidEnumFilterError) ShouldPrintUsage() bool { return true }
 
+// tagNotFoundError signals that a tag name could not be resolved to an existing
+// tag during a name→UUID lookup.
+type tagNotFoundError struct {
+	name string
+}
+
+// NewTagNotFoundError creates a tag-not-found error naming the unresolved tag.
+func NewTagNotFoundError(name string) cenclierrors.CencliError {
+	return &tagNotFoundError{name: name}
+}
+
+func (e *tagNotFoundError) Error() string {
+	return fmt.Sprintf("tag %q not found", e.name)
+}
+
+func (e *tagNotFoundError) Title() string { return "Tag Not Found" }
+
+func (e *tagNotFoundError) ShouldPrintUsage() bool { return false }
+
 // invalidTagNameError signals that a tag name was empty or whitespace-only.
 type invalidTagNameError struct{}
 

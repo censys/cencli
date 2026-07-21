@@ -58,19 +58,17 @@ func (c *UpdateCommand) Short() string {
 }
 
 func (c *UpdateCommand) Long() string {
-	return `Update an existing tag by its ID (UUID).
-
-Find a tag's ID with 'censys tags list' or 'censys tags get <name>'.
+	return `Update an existing tag by its name or UUID.
 
 At least one mutation flag is required. Use --clear-description to remove a tag's description; it cannot be combined with --description.`
 }
 
 func (c *UpdateCommand) Examples() []string {
 	return []string{
-		`<tag-id> --description "Assets flagged for review" # Set a description`,
-		"<tag-id> --privacy shared # Make a tag visible to the organization",
-		"<tag-id> --name renamed-tag # Rename a tag",
-		"<tag-id> --clear-description # Remove the description",
+		`my-tag --description "Assets flagged for review" # Set a description`,
+		"my-tag --privacy shared # Make a tag visible to the organization",
+		"my-tag --name renamed-tag # Rename a tag",
+		"my-tag --clear-description # Remove the description",
 	}
 }
 

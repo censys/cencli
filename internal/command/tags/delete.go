@@ -74,17 +74,15 @@ func (c *DeleteCommand) Short() string {
 }
 
 func (c *DeleteCommand) Long() string {
-	return `Delete a tag by its ID (UUID). This cannot be undone.
-
-Find a tag's ID with 'censys tags list' or 'censys tags get <name>'.
+	return `Delete a tag by its name or UUID. This cannot be undone.
 
 You are prompted to confirm before the tag is deleted. Use --yes to skip the prompt; in a non-interactive terminal --yes is required.`
 }
 
 func (c *DeleteCommand) Examples() []string {
 	return []string{
-		"<tag-id> # Delete a tag (prompts for confirmation)",
-		"<tag-id> --yes # Delete without confirming",
+		"my-tag # Delete a tag by name (prompts for confirmation)",
+		"my-tag --yes # Delete without confirming",
 	}
 }
 
