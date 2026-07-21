@@ -1,6 +1,4 @@
-Update an existing tag by its ID (UUID).                                         
-                                                                                 
-Find a tag's ID with 'censys tags list' or 'censys tags get <name>'.             
+Update an existing tag by its name or UUID.                                      
                                                                                  
 At least one mutation flag is required. Use --clear-description to remove a tag's
 description; it cannot be combined with --description.                           
@@ -9,10 +7,10 @@ Usage:
   censys tags update <tag> [flags]
 
 Examples:
-  censys tags update <tag-id> --description "Assets flagged for review" # Set a description
-  censys tags update <tag-id> --privacy shared # Make a tag visible to the organization
-  censys tags update <tag-id> --name renamed-tag # Rename a tag
-  censys tags update <tag-id> --clear-description # Remove the description
+  censys tags update my-tag --description "Assets flagged for review" # Set a description
+  censys tags update my-tag --privacy shared # Make a tag visible to the organization
+  censys tags update my-tag --name renamed-tag # Rename a tag
+  censys tags update my-tag --clear-description # Remove the description
 
 Flags:
       --clear-description    remove the tag's description
