@@ -167,6 +167,17 @@ func TestTagsDeleteCommand(t *testing.T) {
 				require.Error(t, err)
 			},
 		},
+		{
+			name:          "empty tag id errors before any prompt or service call",
+			args:          []string{"   "},
+			isTTY:         true,
+			expectConfirm: false,
+			service:       deleteNoCallService,
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "required")
+			},
+		},
 	}
 
 	for _, tc := range testCases {

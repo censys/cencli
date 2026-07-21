@@ -125,6 +125,17 @@ func TestTagsGetCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "error - empty tag id",
+			service: func(ctrl *gomock.Controller) apptags.Service {
+				return tagsmocks.NewMockTagsService(ctrl) // not called
+			},
+			args: []string{"   "},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "required")
+			},
+		},
+		{
 			name: "error - service failure surfaced",
 			service: func(ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
