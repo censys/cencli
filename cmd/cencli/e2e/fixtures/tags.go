@@ -94,6 +94,16 @@ var tagsFixtures = []Fixture{
 		// depending on org-specific tag data. A random UUID never maps to a real
 		// tag; the API masks resource existence and returns 403 Permission denied
 		// (not 404), so that is the expected error here.
+		Name:      "get empty tag id",
+		Args:      []string{"get", ""},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "a tag name or ID is required")
+		},
+	},
+	{
 		Name:      "get forbidden for unknown id",
 		Args:      []string{"get", "00000000-0000-4000-8000-000000000000"},
 		ExitCode:  1,
@@ -202,6 +212,18 @@ var tagsFixtures = []Fixture{
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			assert.Contains(t, string(stderr), "confirmation required")
+		},
+	},
+	{
+		// An empty tag id must be rejected up front, never resolved to an
+		// arbitrary tag and deleted.
+		Name:      "delete empty tag id",
+		Args:      []string{"delete", ""},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "a tag name or ID is required")
 		},
 	},
 }
