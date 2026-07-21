@@ -46,6 +46,21 @@ func (e *invalidEnumFilterError) Title() string { return "Invalid Filter Value" 
 
 func (e *invalidEnumFilterError) ShouldPrintUsage() bool { return true }
 
+// emptyTagIDError signals that a tag command was given an empty tag identifier
+// (name or UUID). Rejected before any lookup so an empty name can never be sent
+// to ListTags — which would otherwise match no filter and resolve to an
+// arbitrary tag.
+type emptyTagIDError struct{}
+
+// NewEmptyTagIDError creates an empty-tag-identifier error.
+func NewEmptyTagIDError() cenclierrors.CencliError { return &emptyTagIDError{} }
+
+func (e *emptyTagIDError) Error() string { return "a tag name or ID is required" }
+
+func (e *emptyTagIDError) Title() string { return "Invalid Tag" }
+
+func (e *emptyTagIDError) ShouldPrintUsage() bool { return true }
+
 // tagNotFoundError signals that a tag name could not be resolved to an existing
 // tag during a name→UUID lookup.
 type tagNotFoundError struct {

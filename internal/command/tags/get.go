@@ -87,7 +87,10 @@ func (c *GetCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.Cenc
 	if err != nil {
 		return err
 	}
-	c.tagID = identifiers.NewTagID(args[0])
+	c.tagID, err = requireTagID(args[0])
+	if err != nil {
+		return err
+	}
 	return c.resolveTagsService()
 }
 

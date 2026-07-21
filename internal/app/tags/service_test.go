@@ -782,6 +782,23 @@ func TestTagsService_DeleteTag(t *testing.T) {
 			},
 		},
 		{
+			name: "empty identifier rejected before any lookup or deletion",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				// Neither a resolve lookup nor a delete may fire for an empty id.
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().DeleteTag(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: DeleteParams{TagID: identifiers.NewTagID("  ")},
+			assert: func(t *testing.T, res DeleteResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.TagID)
+				require.Contains(t, err.Error(), "required")
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
 			name: "org id threaded; raw identifier passed straight through",
 			client: func(ctrl *gomock.Controller) client.Client {
 				m := mocks.NewMockClient(ctrl)
