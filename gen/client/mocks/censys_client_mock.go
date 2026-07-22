@@ -90,6 +90,21 @@ func (mr *MockClientMockRecorder) CreateTag(ctx, req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockClient)(nil).CreateTag), ctx, req)
 }
 
+// CreateTagAssignment mocks base method.
+func (m *MockClient) CreateTagAssignment(ctx context.Context, req censys.CreateTagAssignmentRequest) (censys.Result[components.TagAssignment], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTagAssignment", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagAssignment])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTagAssignment indicates an expected call of CreateTagAssignment.
+func (mr *MockClientMockRecorder) CreateTagAssignment(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTagAssignment", reflect.TypeOf((*MockClient)(nil).CreateTagAssignment), ctx, req)
+}
+
 // CredentialInfo mocks base method.
 func (m *MockClient) CredentialInfo() credential.Info {
 	m.ctrl.T.Helper()
