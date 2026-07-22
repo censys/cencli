@@ -91,3 +91,34 @@ func (e *invalidTagNameError) Error() string { return "tag name must not be empt
 func (e *invalidTagNameError) Title() string { return "Invalid Tag Name" }
 
 func (e *invalidTagNameError) ShouldPrintUsage() bool { return true }
+
+// noAssetsError signals that an assignment command was given no assets to act
+// on (a service-level guard; the command layer normally rejects it earlier).
+type noAssetsError struct{}
+
+// NewNoAssetsError creates a no-assets error.
+func NewNoAssetsError() cenclierrors.CencliError { return &noAssetsError{} }
+
+func (e *noAssetsError) Error() string { return "at least one asset is required" }
+
+func (e *noAssetsError) Title() string { return "No Assets Provided" }
+
+func (e *noAssetsError) ShouldPrintUsage() bool { return true }
+
+// assignPartialError summarizes an assign run where some assets failed.
+type assignPartialError struct {
+	failed int
+	total  int
+}
+
+func newAssignPartialError(failed, total int) cenclierrors.CencliError {
+	return &assignPartialError{failed: failed, total: total}
+}
+
+func (e *assignPartialError) Error() string {
+	return fmt.Sprintf("%d of %d asset(s) failed to assign", e.failed, e.total)
+}
+
+func (e *assignPartialError) Title() string { return "Some Assets Failed to Assign" }
+
+func (e *assignPartialError) ShouldPrintUsage() bool { return false }

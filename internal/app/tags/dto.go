@@ -53,6 +53,14 @@ type DeleteParams struct {
 	TagID identifiers.TagID
 }
 
+// AssignParams bundles inputs for assigning a tag (by name or UUID) to explicit
+// assets. AssetIDs are validated and deduplicated by the command layer.
+type AssignParams struct {
+	OrgID    mo.Option[identifiers.OrganizationID]
+	TagID    identifiers.TagID
+	AssetIDs []string
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -87,6 +95,34 @@ type UpdateResult struct {
 type DeleteResult struct {
 	Meta  *responsemeta.ResponseMeta
 	TagID string
+}
+
+// Assignment is the domain representation of a tag↔asset assignment.
+type Assignment struct {
+	ID          string    `json:"id" yaml:"id"`
+	TagID       string    `json:"tag_id" yaml:"tag_id"`
+	AssetID     string    `json:"asset_id" yaml:"asset_id"`
+	AssetType   string    `json:"asset_type" yaml:"asset_type"`
+	PlatformRef string    `json:"platform_ref" yaml:"platform_ref"`
+	CreatedBy   string    `json:"created_by" yaml:"created_by"`
+	CreatedAt   time.Time `json:"created_at" yaml:"created_at"`
+}
+
+// AssignmentFailure records an asset that could not be assigned.
+type AssignmentFailure struct {
+	AssetID string
+	Err     cenclierrors.CencliError
+}
+
+// AssignResult is the outcome of assigning a tag to explicit assets. TagID
+// echoes the caller's identifier; PartialError is set when some assets
+// succeeded and others failed. Assignments and Failures are in input order.
+type AssignResult struct {
+	Meta         *responsemeta.ResponseMeta
+	TagID        string
+	Assignments  []Assignment
+	Failures     []AssignmentFailure
+	PartialError cenclierrors.CencliError
 }
 
 // ListResult is the outcome of listing tags.

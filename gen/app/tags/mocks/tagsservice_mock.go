@@ -42,6 +42,21 @@ func (m *MockTagsService) EXPECT() *MockTagsServiceMockRecorder {
 	return m.recorder
 }
 
+// Assign mocks base method.
+func (m *MockTagsService) Assign(ctx context.Context, params tags.AssignParams) (tags.AssignResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Assign", ctx, params)
+	ret0, _ := ret[0].(tags.AssignResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// Assign indicates an expected call of Assign.
+func (mr *MockTagsServiceMockRecorder) Assign(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Assign", reflect.TypeOf((*MockTagsService)(nil).Assign), ctx, params)
+}
+
 // CreateTag mocks base method.
 func (m *MockTagsService) CreateTag(ctx context.Context, params tags.CreateParams) (tags.CreateResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()
