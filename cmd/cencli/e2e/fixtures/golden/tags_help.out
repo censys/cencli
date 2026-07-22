@@ -8,6 +8,7 @@ Usage:
   censys tags [command]
 
 Available Commands:
+  assign      Assign a tag to one or more assets
   create      Create a new tag
   delete      Delete a tag
   get         Retrieve a single tag by name or ID
