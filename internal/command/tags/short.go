@@ -81,6 +81,71 @@ func (c *ListCommand) RenderShort() cenclierrors.CencliError {
 	return nil
 }
 
+// RenderShort renders the per-asset assignment outcomes as a styled table
+// (TTY-aware).
+func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
+	views := c.assignmentViews()
+	if len(views) == 0 {
+		fmt.Fprintf(formatter.Stdout, "\nNo assets assigned.\n")
+		return nil
+	}
+
+	columns := []rawtable.Column[assignedAsset]{
+		{
+			Title:  "Asset",
+			String: func(a assignedAsset) string { return a.Asset },
+			Style: func(s string, _ assignedAsset) string {
+				return styles.NewStyle(styles.ColorTeal).Render(s)
+			},
+		},
+		{
+			Title: "Type",
+			String: func(a assignedAsset) string {
+				if a.AssetType == "" {
+					return "-"
+				}
+				return a.AssetType
+			},
+			Style: func(s string, _ assignedAsset) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
+			},
+		},
+		{
+			Title: "Status",
+			String: func(a assignedAsset) string {
+				if a.Assigned {
+					return "assigned"
+				}
+				if a.Error != "" {
+					return "failed: " + a.Error
+				}
+				return "failed"
+			},
+			Style: func(s string, a assignedAsset) string {
+				if a.Assigned {
+					return styles.NewStyle(styles.ColorSage).Render(s)
+				}
+				return styles.NewStyle(styles.ColorRed).Render(s)
+			},
+		},
+	}
+
+	tbl := rawtable.New(
+		columns,
+		rawtable.WithHeaderStyle[assignedAsset](styles.NewStyle(styles.ColorOffWhite).Bold(true)),
+		rawtable.WithStylesDisabled[assignedAsset](!formatter.StdoutIsTTY()),
+	)
+
+	header := fmt.Sprintf("Assigned tag %q to %d of %d asset(s)",
+		c.result.TagID, len(c.result.Assignments), len(views))
+	title := styles.GlobalStyles.Signature.Bold(true).Render(header)
+	fmt.Fprintf(formatter.Stdout, "\n%s\n\n", title)
+	fmt.Fprint(formatter.Stdout, tbl.Render(views))
+	fmt.Fprintf(formatter.Stdout, "\n")
+
+	return nil
+}
+
 // renderTagDetail renders a single tag as a labeled detail view (TTY-aware),
 // under the given section header. Shared by the get and create commands.
 func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {

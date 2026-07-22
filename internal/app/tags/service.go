@@ -27,6 +27,7 @@ type Service interface {
 	CreateTag(ctx context.Context, params CreateParams) (CreateResult, cenclierrors.CencliError)
 	UpdateTag(ctx context.Context, params UpdateParams) (UpdateResult, cenclierrors.CencliError)
 	DeleteTag(ctx context.Context, params DeleteParams) (DeleteResult, cenclierrors.CencliError)
+	Assign(ctx context.Context, params AssignParams) (AssignResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -232,6 +233,91 @@ func (s *tagsService) DeleteTag(
 	return DeleteResult{Meta: meta, TagID: params.TagID.String()}, nil
 }
 
+// Assign links a tag (by name or UUID) to explicit assets, one request per
+// asset. A failure on one asset does not abort the rest: if every asset fails
+// the first error is returned, otherwise the successes come back with a
+// PartialError summarizing the failures.
+func (s *tagsService) Assign(
+	ctx context.Context,
+	params AssignParams,
+) (AssignResult, cenclierrors.CencliError) {
+	if len(params.AssetIDs) == 0 {
+		return AssignResult{}, NewNoAssetsError()
+	}
+
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
+	if resolveErr != nil {
+		return AssignResult{}, resolveErr
+	}
+
+	total := len(params.AssetIDs)
+	assignments := make([]Assignment, 0, total)
+	var failures []AssignmentFailure
+	var firstErr cenclierrors.CencliError
+	var meta *responsemeta.ResponseMeta
+
+	for i, assetID := range params.AssetIDs {
+		// Stop early on cancellation, keeping whatever succeeded so far.
+		if err := ctx.Err(); err != nil {
+			firstErr = cenclierrors.ParseContextError(err)
+			break
+		}
+
+		progress.ReportMessage(ctx, progress.StageProcess,
+			fmt.Sprintf("Assigning tag (%d/%d)...", i+1, total))
+
+		result, err := s.client.CreateTagAssignment(ctx, client.CreateTagAssignmentRequest{
+			OrgID:   orgIDStr,
+			TagID:   tagID,
+			AssetID: assetID,
+		})
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: err})
+			continue
+		}
+
+		if meta == nil && (result.Metadata.Request != nil || result.Metadata.Response != nil) {
+			meta = responsemeta.NewResponseMeta(
+				result.Metadata.Request,
+				result.Metadata.Response,
+				result.Metadata.Latency,
+				result.Metadata.Attempts,
+			)
+		}
+		if result.Data != nil {
+			assignments = append(assignments, mapTagAssignment(*result.Data))
+		}
+	}
+
+	if len(assignments) == 0 {
+		return AssignResult{}, firstErr
+	}
+
+	// Some assets succeeded. Report per-asset failures via a summary error, or
+	// surface a cancellation (which sets firstErr but records no failure entry)
+	// so an interrupted run is never reported as a clean success.
+	var partial cenclierrors.CencliError
+	switch {
+	case len(failures) > 0:
+		partial = newAssignPartialError(len(failures), total)
+	case firstErr != nil:
+		partial = firstErr
+	}
+
+	return AssignResult{
+		Meta:         meta,
+		TagID:        params.TagID.String(),
+		Assignments:  assignments,
+		Failures:     failures,
+		PartialError: cenclierrors.ToPartialError(partial),
+	}, nil
+}
+
 // resolveTagID returns a concrete tag UUID for the given identifier. A value
 // that already parses as a UUID is returned unchanged with no API call; a name
 // is resolved to its UUID via an exact-match ListTags lookup. Reused by the
@@ -385,5 +471,18 @@ func mapTag(t components.Tag) Tag {
 		CreatedBy:   t.CreatedBy,
 		CreatedAt:   t.CreatedAt,
 		UpdatedAt:   t.UpdatedAt,
+	}
+}
+
+// mapTagAssignment converts an SDK tag assignment into the domain DTO.
+func mapTagAssignment(a components.TagAssignment) Assignment {
+	return Assignment{
+		ID:          a.ID,
+		TagID:       a.TagID,
+		AssetID:     a.AssetID,
+		AssetType:   string(a.AssetType),
+		PlatformRef: a.PlatformRef,
+		CreatedBy:   a.CreatedBy,
+		CreatedAt:   a.CreatedAt,
 	}
 }

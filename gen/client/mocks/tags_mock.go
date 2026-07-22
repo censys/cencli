@@ -58,6 +58,21 @@ func (mr *MockTagsClientMockRecorder) CreateTag(ctx, req any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockTagsClient)(nil).CreateTag), ctx, req)
 }
 
+// CreateTagAssignment mocks base method.
+func (m *MockTagsClient) CreateTagAssignment(ctx context.Context, req censys.CreateTagAssignmentRequest) (censys.Result[components.TagAssignment], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTagAssignment", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagAssignment])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTagAssignment indicates an expected call of CreateTagAssignment.
+func (mr *MockTagsClientMockRecorder) CreateTagAssignment(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTagAssignment", reflect.TypeOf((*MockTagsClient)(nil).CreateTagAssignment), ctx, req)
+}
+
 // DeleteTag mocks base method.
 func (m *MockTagsClient) DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Metadata, censys.ClientError) {
 	m.ctrl.T.Helper()
