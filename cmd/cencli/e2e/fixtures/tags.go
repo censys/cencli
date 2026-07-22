@@ -226,4 +226,60 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "a tag name or ID is required")
 		},
 	},
+	// ========== assign subcommand ==========
+	// No live assign fixture: assign is a non-idempotent write with no
+	// deterministic teardown. Covered by unit tests (internal/app/tags,
+	// internal/command/tags).
+	{
+		Name:      "assign help",
+		Args:      []string{"assign", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsAssignHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "assign missing arg",
+		Args:      []string{"assign"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "requires at least 1 arg")
+		},
+	},
+	{
+		// A tag with no assets and no --input-file has nothing to act on.
+		Name:      "assign no assets",
+		Args:      []string{"assign", "my-tag"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "at least one asset")
+		},
+	},
+	{
+		// An unparseable asset is rejected before anything is sent.
+		Name:      "assign unknown asset",
+		Args:      []string{"assign", "my-tag", "not-an-asset"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-an-asset")
+		},
+	},
+	{
+		Name:      "assign empty tag id",
+		Args:      []string{"assign", "", "8.8.8.8"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "a tag name or ID is required")
+		},
+	},
 }
