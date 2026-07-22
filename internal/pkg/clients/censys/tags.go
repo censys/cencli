@@ -38,6 +38,14 @@ type UpdateTagRequest struct {
 	Privacy     mo.Option[string]
 }
 
+// CreateTagAssignmentRequest bundles the fields for CreateTagAssignment. TagID
+// is the resolved tag UUID.
+type CreateTagAssignmentRequest struct {
+	OrgID   mo.Option[string]
+	TagID   string
+	AssetID string
+}
+
 //go:generate mockgen -destination=../../../../gen/client/mocks/tags_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys TagsClient
 type TagsClient interface {
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtags
@@ -56,6 +64,8 @@ type TagsClient interface {
 	//
 	// DeleteTag returns only response metadata; the endpoint has no body.
 	DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (Metadata, ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#createtagassignment
+	CreateTagAssignment(ctx context.Context, req CreateTagAssignmentRequest) (Result[components.TagAssignment], ClientError)
 }
 
 type tagsSDK struct {
@@ -203,6 +213,39 @@ func (t *tagsSDK) CreateTag(
 	return Result[components.Tag]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     tag,
+	}, nil
+}
+
+func (t *tagsSDK) CreateTagAssignment(
+	ctx context.Context,
+	req CreateTagAssignmentRequest,
+) (Result[components.TagAssignment], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsCreateAssignmentResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		sdkReq := operations.V3TagsCreateAssignmentRequest{
+			OrganizationID: req.OrgID.ToPointer(),
+			TagID:          req.TagID,
+			CreateTagAssignmentInputBody: components.CreateTagAssignmentInputBody{
+				AssetID: req.AssetID,
+			},
+		}
+		res, err = t.censysSDK.client.TagsAndComments.CreateTagAssignment(ctx, sdkReq)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TagAssignment]{}
+		return zero, err
+	}
+	assignment := res.GetResponseEnvelopeTagAssignment().GetResult()
+	return Result[components.TagAssignment]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     assignment,
 	}, nil
 }
 
