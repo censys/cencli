@@ -135,9 +135,9 @@ func (c *loginCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencl
 		if name := c.resolveOrgName(cmd.Context(), sess.OrgID); name != "" {
 			sess.OrgName = name
 			if named, mErr := sess.Marshal(); mErr == nil {
-				if renamed, rErr := c.Store().AddValueForAuth(cmd.Context(), config.OAuthSessionName, description, named); rErr == nil {
+				if _, rErr := c.Store().AddValueForAuth(cmd.Context(), config.OAuthSessionName, description, named); rErr == nil {
+					// The named row supersedes the one we just added; drop it.
 					stale = append(stale, added)
-					added = renamed
 				}
 			}
 		}
