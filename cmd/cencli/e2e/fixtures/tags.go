@@ -282,4 +282,72 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "a tag name or ID is required")
 		},
 	},
+	// ========== unassign subcommand ==========
+	// No live unassign fixture: unassign is a non-idempotent write with no
+	// deterministic teardown. Covered by unit tests (internal/app/tags,
+	// internal/command/tags).
+	{
+		Name:      "unassign help",
+		Args:      []string{"unassign", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsUnassignHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "unassign missing arg",
+		Args:      []string{"unassign"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "requires at least 1 arg")
+		},
+	},
+	{
+		// A tag with no assets and no --input-file has nothing to act on.
+		Name:      "unassign no assets",
+		Args:      []string{"unassign", "my-tag"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "at least one asset")
+		},
+	},
+	{
+		// An unparseable asset is rejected before anything is sent.
+		Name:      "unassign unknown asset",
+		Args:      []string{"unassign", "my-tag", "not-an-asset"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-an-asset")
+		},
+	},
+	{
+		Name:      "unassign empty tag id",
+		Args:      []string{"unassign", "", "8.8.8.8"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "a tag name or ID is required")
+		},
+	},
+	{
+		// Removing more than one asset prompts for confirmation; a non-interactive
+		// run (e2e is non-TTY) without --yes must refuse rather than proceed.
+		Name:      "unassign multi-asset requires confirmation",
+		Args:      []string{"unassign", "my-tag", "8.8.8.8", "1.1.1.1"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "confirmation required")
+		},
+	},
 }
