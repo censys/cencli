@@ -735,6 +735,33 @@ func clientStructuredError(detail string, status int64) client.ClientError {
 	return client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
 }
 
+// assignmentsListResult builds a single-assignment list response (what an
+// asset_id-filtered ListTagAssignments returns for an assigned asset).
+func assignmentsListResult(id, assetID string) client.Result[components.TagAssignmentsList] {
+	return client.Result[components.TagAssignmentsList]{
+		Metadata: okMeta(),
+		Data: &components.TagAssignmentsList{
+			Assignments: []components.TagAssignment{{
+				ID:          id,
+				TagID:       "tag-id",
+				AssetID:     assetID,
+				AssetType:   components.TagAssignmentAssetTypeHost,
+				PlatformRef: "https://platform.censys.io/hosts/" + assetID,
+			}},
+			TotalSize: 1,
+		},
+	}
+}
+
+// emptyAssignmentsListResult is the response for an asset with no assignment to
+// the tag (nothing to unassign).
+func emptyAssignmentsListResult() client.Result[components.TagAssignmentsList] {
+	return client.Result[components.TagAssignmentsList]{
+		Metadata: okMeta(),
+		Data:     &components.TagAssignmentsList{TotalSize: 0},
+	}
+}
+
 func TestTagsService_Assign(t *testing.T) {
 	orgUUID := uuid.New()
 	tagUUID := uuid.New()
@@ -933,6 +960,255 @@ func TestTagsService_Assign_CancellationSurfacesPartial(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, res.Assignments, 1)
+	require.Empty(t, res.Failures)
+	require.NotNil(t, res.PartialError)
+}
+
+func TestTagsService_Unassign(t *testing.T) {
+	orgUUID := uuid.New()
+	tagUUID := uuid.New()
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params UnassignParams
+		assert func(t *testing.T, res UnassignResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "all assets unassigned; UUID input skips resolution",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), AssetID: mo.Some("8.8.8.8"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a1", "8.8.8.8"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), tagUUID.String(), "a1").
+					Return(okMeta(), nil)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), AssetID: mo.Some("1.1.1.1"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a2", "1.1.1.1"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), tagUUID.String(), "a2").
+					Return(okMeta(), nil)
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Unassigned, 2)
+				require.Empty(t, res.Failures)
+				require.Nil(t, res.PartialError)
+				require.Equal(t, tagUUID.String(), res.TagID)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "name resolved to UUID once, then assets unassigned",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), client.ListTagsRequest{
+					Name:     mo.Some("my-tag"),
+					PageSize: mo.Some(int64(1)),
+				}).Return(client.Result[components.TagsList]{Data: &components.TagsList{
+					Tags: []components.Tag{{ID: "resolved-id", Name: "my-tag"}},
+				}}, nil)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: "resolved-id", AssetID: mo.Some("8.8.8.8"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a1", "8.8.8.8"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), "resolved-id", "a1").
+					Return(okMeta(), nil)
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID("my-tag"),
+				AssetIDs: []string{"8.8.8.8"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Unassigned, 1)
+				require.Equal(t, "my-tag", res.TagID)
+			},
+		},
+		{
+			name: "not assigned: asset with no assignment is a per-asset failure",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), AssetID: mo.Some("8.8.8.8"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a1", "8.8.8.8"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), tagUUID.String(), "a1").
+					Return(okMeta(), nil)
+				// The second asset has no assignment; its removal is never attempted.
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), AssetID: mo.Some("1.1.1.1"), PageSize: mo.Some(int64(1)),
+				}).Return(emptyAssignmentsListResult(), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), gomock.Any(), "a2").Times(0)
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Unassigned, 1)
+				require.Len(t, res.Failures, 1)
+				require.Equal(t, "1.1.1.1", res.Failures[0].AssetID)
+				require.Contains(t, res.Failures[0].Err.Error(), "not assigned")
+				require.NotNil(t, res.PartialError)
+				require.Contains(t, res.PartialError.Error(), "1 of 2")
+			},
+		},
+		{
+			name: "partial failure: one asset's removal fails, the rest still unassigned",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), AssetID: mo.Some("8.8.8.8"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a1", "8.8.8.8"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), tagUUID.String(), "a1").
+					Return(okMeta(), nil)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), AssetID: mo.Some("1.1.1.1"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a2", "1.1.1.1"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), tagUUID.String(), "a2").
+					Return(client.Metadata{}, clientStructuredError("Forbidden", 403))
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Unassigned, 1)
+				require.Len(t, res.Failures, 1)
+				require.Equal(t, "1.1.1.1", res.Failures[0].AssetID)
+				require.NotNil(t, res.PartialError)
+				require.Contains(t, res.PartialError.Error(), "1 of 2")
+			},
+		},
+		{
+			name: "all assets fail: first error returned, no partial result",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+					Return(emptyAssignmentsListResult(), nil).Times(2)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Unassigned)
+				require.Contains(t, err.Error(), "not assigned")
+			},
+		},
+		{
+			name: "empty identifier rejected before any lookup or removal",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID("  "),
+				AssetIDs: []string{"8.8.8.8"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "required")
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "no assets rejected before any call",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: UnassignParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				AssetIDs: nil,
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.True(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "org id threaded through to the client",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					OrgID: mo.Some(orgUUID.String()), TagID: tagUUID.String(),
+					AssetID: mo.Some("8.8.8.8"), PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsListResult("a1", "8.8.8.8"), nil)
+				m.EXPECT().DeleteTagAssignment(gomock.Any(), mo.Some(orgUUID.String()), tagUUID.String(), "a1").
+					Return(okMeta(), nil)
+				return m
+			},
+			params: UnassignParams{
+				OrgID:    mo.Some(identifiers.NewOrganizationID(orgUUID)),
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				AssetIDs: []string{"8.8.8.8"},
+			},
+			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Unassigned, 1)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+			res, err := svc.Unassign(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
+
+// A cancellation mid-run, after some assets have already been unassigned, must be
+// surfaced as a PartialError rather than reported as a clean success.
+func TestTagsService_Unassign_CancellationSurfacesPartial(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tagUUID := uuid.New()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	m := mocks.NewMockClient(ctrl)
+	// First asset is looked up and removed; the delete cancels the context, so the
+	// loop stops before the second asset with one success and no recorded failure.
+	m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+		Return(assignmentsListResult("a1", "8.8.8.8"), nil)
+	m.EXPECT().DeleteTagAssignment(gomock.Any(), gomock.Any(), gomock.Any(), "a1").
+		DoAndReturn(func(_ context.Context, _ mo.Option[string], _, _ string) (client.Metadata, client.ClientError) {
+			cancel()
+			return okMeta(), nil
+		})
+
+	svc := New(m)
+	res, err := svc.Unassign(ctx, UnassignParams{
+		TagID:    identifiers.NewTagID(tagUUID.String()),
+		AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, res.Unassigned, 1)
 	require.Empty(t, res.Failures)
 	require.NotNil(t, res.PartialError)
 }
