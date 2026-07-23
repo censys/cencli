@@ -44,3 +44,15 @@ func (w WebProperty) AssetType() AssetType { return AssetTypeWebProperty }
 var _ Asset = WebProperty{}
 
 func NewWebProperty(webProperty components.Webproperty) WebProperty { return WebProperty{webProperty} }
+
+// EnrichedHost represents the SOC-oriented enrichment view of a host.
+// This has 1:1 correspondence with the SDK's HostEnrichment type.
+type EnrichedHost struct{ components.HostEnrichment }
+
+func (h EnrichedHost) AssetType() AssetType { return AssetTypeHost }
+
+var _ Asset = EnrichedHost{}
+
+func NewEnrichedHost(enrichment components.HostEnrichment) EnrichedHost {
+	return EnrichedHost{enrichment}
+}

@@ -30,6 +30,7 @@ func (s *historyService) GetCertificateHistory(
 	certIDStr := certificateID.String()
 
 	var allRanges []*components.HostObservationRange
+	rangesCollected := 0
 	var lastMeta *responsemeta.ResponseMeta
 	var firstError cenclierrors.CencliError
 
@@ -65,7 +66,7 @@ func (s *historyService) GetCertificateHistory(
 		if pages == 1 {
 			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching certificate observations for %s (%s)...", certIDStr, dateRange))
 		} else {
-			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching certificate observations for %s (%s, page %d, %d observations so far)...", certIDStr, dateRange, pages, len(allRanges)))
+			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching certificate observations for %s (%s, page %d, %d observations so far)...", certIDStr, dateRange, pages, rangesCollected))
 		}
 
 		// fetch observations page
@@ -112,6 +113,7 @@ func (s *historyService) GetCertificateHistory(
 					PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
 				}, nil
 			}
+			rangesCollected++
 		}
 
 		// check if there's a next page

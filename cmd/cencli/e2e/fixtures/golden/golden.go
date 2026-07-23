@@ -7,6 +7,8 @@ import (
 var (
 	//go:embed view_help.out
 	ViewHelpStdout []byte
+	//go:embed enrich_help.out
+	EnrichHelpStdout []byte
 	//go:embed aggregate_help.out
 	AggregateHelpStdout []byte
 	//go:embed search_help.out

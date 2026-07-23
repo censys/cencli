@@ -59,6 +59,12 @@ type GlobalDataClient interface {
 		fromTime time.Time,
 		toTime time.Time,
 	) (Result[components.HostTimeline], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#gethostenrichment
+	EnrichHost(
+		ctx context.Context,
+		orgID mo.Option[string],
+		hostIP string,
+	) (Result[components.HostEnrichment], ClientError)
 }
 
 type globalDataSDK struct {
@@ -286,5 +292,37 @@ func (g *globalDataSDK) HostTimeline(
 	return Result[components.HostTimeline]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     timeline,
+	}, nil
+}
+
+func (g *globalDataSDK) EnrichHost(
+	ctx context.Context,
+	orgID mo.Option[string],
+	hostIP string,
+) (Result[components.HostEnrichment], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataAssetHostEnrichmentResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		var err error
+		res, err = g.censysSDK.client.GlobalData.GetHostEnrichment(ctx, operations.V3GlobaldataAssetHostEnrichmentRequest{
+			OrganizationID: orgID.ToPointer(),
+			HostIP:         hostIP,
+		})
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.HostEnrichment]{}
+		return zero, err
+	}
+	// GetResult/GetResource are nil-safe on the generated types, returning a zero
+	// HostEnrichment if the envelope or asset is absent.
+	enrichment := res.GetResponseEnvelopeHostEnrichmentAsset().GetResult().GetResource()
+	return Result[components.HostEnrichment]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     &enrichment,
 	}, nil
 }

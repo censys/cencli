@@ -1,15 +1,16 @@
 module github.com/censys/cencli
 
-go 1.25.1
+go 1.25.10
 
 require (
 	github.com/aymerick/raymond v2.0.2+incompatible
-	github.com/censys/censys-sdk-go v0.25.16
+	github.com/censys/censys-sdk-go v0.25.24
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
+	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-colorable v0.1.14
 	github.com/mattn/go-runewidth v0.0.19
@@ -22,7 +23,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/sys v0.36.0
+	golang.org/x/sync v0.17.0
+	golang.org/x/sys v0.37.0
 	golang.org/x/term v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.39.0

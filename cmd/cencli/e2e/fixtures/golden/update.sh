@@ -16,6 +16,7 @@ cd "$SCRIPT_DIR"
 echo "Updating golden fixtures..."
 
 "$BINARY" view --help > view_help.out
+"$BINARY" enrich --help > enrich_help.out
 "$BINARY" aggregate --help > aggregate_help.out
 "$BINARY" search --help > search_help.out
 "$BINARY" censeye --help > censeye_help.out

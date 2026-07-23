@@ -59,6 +59,21 @@ func (mr *MockGlobalDataClientMockRecorder) Aggregate(ctx, orgID, query, field, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockGlobalDataClient)(nil).Aggregate), ctx, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// EnrichHost mocks base method.
+func (m *MockGlobalDataClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnrichHost", ctx, orgID, hostIP)
+	ret0, _ := ret[0].(censys.Result[components.HostEnrichment])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// EnrichHost indicates an expected call of EnrichHost.
+func (mr *MockGlobalDataClientMockRecorder) EnrichHost(ctx, orgID, hostIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnrichHost", reflect.TypeOf((*MockGlobalDataClient)(nil).EnrichHost), ctx, orgID, hostIP)
+}
+
 // GetCertificates mocks base method.
 func (m *MockGlobalDataClient) GetCertificates(ctx context.Context, orgID mo.Option[string], certificateIDs []string) (censys.Result[[]components.Certificate], censys.ClientError) {
 	m.ctrl.T.Helper()
