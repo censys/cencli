@@ -146,6 +146,71 @@ func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
 	return nil
 }
 
+// RenderShort renders the per-asset unassignment outcomes as a styled table
+// (TTY-aware).
+func (c *UnassignCommand) RenderShort() cenclierrors.CencliError {
+	views := c.unassignmentViews()
+	if len(views) == 0 {
+		fmt.Fprintf(formatter.Stdout, "\nNo assets unassigned.\n")
+		return nil
+	}
+
+	columns := []rawtable.Column[unassignedAsset]{
+		{
+			Title:  "Asset",
+			String: func(a unassignedAsset) string { return a.Asset },
+			Style: func(s string, _ unassignedAsset) string {
+				return styles.NewStyle(styles.ColorTeal).Render(s)
+			},
+		},
+		{
+			Title: "Type",
+			String: func(a unassignedAsset) string {
+				if a.AssetType == "" {
+					return "-"
+				}
+				return a.AssetType
+			},
+			Style: func(s string, _ unassignedAsset) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
+			},
+		},
+		{
+			Title: "Status",
+			String: func(a unassignedAsset) string {
+				if a.Unassigned {
+					return "unassigned"
+				}
+				if a.Error != "" {
+					return "failed: " + a.Error
+				}
+				return "failed"
+			},
+			Style: func(s string, a unassignedAsset) string {
+				if a.Unassigned {
+					return styles.NewStyle(styles.ColorSage).Render(s)
+				}
+				return styles.NewStyle(styles.ColorRed).Render(s)
+			},
+		},
+	}
+
+	tbl := rawtable.New(
+		columns,
+		rawtable.WithHeaderStyle[unassignedAsset](styles.NewStyle(styles.ColorOffWhite).Bold(true)),
+		rawtable.WithStylesDisabled[unassignedAsset](!formatter.StdoutIsTTY()),
+	)
+
+	header := fmt.Sprintf("Unassigned tag %q from %d of %d asset(s)",
+		c.result.TagID, len(c.result.Unassigned), len(views))
+	title := styles.GlobalStyles.Signature.Bold(true).Render(header)
+	fmt.Fprintf(formatter.Stdout, "\n%s\n\n", title)
+	fmt.Fprint(formatter.Stdout, tbl.Render(views))
+	fmt.Fprintf(formatter.Stdout, "\n")
+
+	return nil
+}
+
 // renderTagDetail renders a single tag as a labeled detail view (TTY-aware),
 // under the given section header. Shared by the get and create commands.
 func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {

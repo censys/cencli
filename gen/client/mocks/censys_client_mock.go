@@ -119,6 +119,21 @@ func (mr *MockClientMockRecorder) DeleteTag(ctx, orgID, tagID any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockClient)(nil).DeleteTag), ctx, orgID, tagID)
 }
 
+// DeleteTagAssignment mocks base method.
+func (m *MockClient) DeleteTagAssignment(ctx context.Context, orgID mo.Option[string], tagID, assignmentID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTagAssignment", ctx, orgID, tagID, assignmentID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteTagAssignment indicates an expected call of DeleteTagAssignment.
+func (mr *MockClientMockRecorder) DeleteTagAssignment(ctx, orgID, tagID, assignmentID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTagAssignment", reflect.TypeOf((*MockClient)(nil).DeleteTagAssignment), ctx, orgID, tagID, assignmentID)
+}
+
 // EnrichHost mocks base method.
 func (m *MockClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -311,6 +326,21 @@ func (m *MockClient) ListOrganizationMembers(ctx context.Context, orgID string, 
 func (mr *MockClientMockRecorder) ListOrganizationMembers(ctx, orgID, pageSize, pageToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationMembers", reflect.TypeOf((*MockClient)(nil).ListOrganizationMembers), ctx, orgID, pageSize, pageToken)
+}
+
+// ListTagAssignments mocks base method.
+func (m *MockClient) ListTagAssignments(ctx context.Context, req censys.ListTagAssignmentsRequest) (censys.Result[components.TagAssignmentsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagAssignmentsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTagAssignments indicates an expected call of ListTagAssignments.
+func (mr *MockClientMockRecorder) ListTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagAssignments", reflect.TypeOf((*MockClient)(nil).ListTagAssignments), ctx, req)
 }
 
 // ListTags mocks base method.

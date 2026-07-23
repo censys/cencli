@@ -88,6 +88,21 @@ func (mr *MockTagsClientMockRecorder) DeleteTag(ctx, orgID, tagID any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockTagsClient)(nil).DeleteTag), ctx, orgID, tagID)
 }
 
+// DeleteTagAssignment mocks base method.
+func (m *MockTagsClient) DeleteTagAssignment(ctx context.Context, orgID mo.Option[string], tagID, assignmentID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTagAssignment", ctx, orgID, tagID, assignmentID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteTagAssignment indicates an expected call of DeleteTagAssignment.
+func (mr *MockTagsClientMockRecorder) DeleteTagAssignment(ctx, orgID, tagID, assignmentID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTagAssignment", reflect.TypeOf((*MockTagsClient)(nil).DeleteTagAssignment), ctx, orgID, tagID, assignmentID)
+}
+
 // GetTag mocks base method.
 func (m *MockTagsClient) GetTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Result[components.Tag], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -101,6 +116,21 @@ func (m *MockTagsClient) GetTag(ctx context.Context, orgID mo.Option[string], ta
 func (mr *MockTagsClientMockRecorder) GetTag(ctx, orgID, tagID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockTagsClient)(nil).GetTag), ctx, orgID, tagID)
+}
+
+// ListTagAssignments mocks base method.
+func (m *MockTagsClient) ListTagAssignments(ctx context.Context, req censys.ListTagAssignmentsRequest) (censys.Result[components.TagAssignmentsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagAssignmentsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTagAssignments indicates an expected call of ListTagAssignments.
+func (mr *MockTagsClientMockRecorder) ListTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagAssignments", reflect.TypeOf((*MockTagsClient)(nil).ListTagAssignments), ctx, req)
 }
 
 // ListTags mocks base method.
