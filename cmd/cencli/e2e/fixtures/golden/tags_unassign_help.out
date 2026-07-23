@@ -1,0 +1,39 @@
+Unassign a tag, by its name or UUID, from one or more assets (host IPs, certificate      
+SHA-256 fingerprints, or web property hostname:port).                                    
+                                                                                         
+Assets can be passed as positional arguments or read from a file (or STDIN) with         
+--input-file. Assets of different types can be mixed in a single call. Each asset is     
+unassigned independently: if one fails the rest still proceed, and the per-asset outcomes
+are reported.                                                                            
+                                                                                         
+Unassigning more than one asset (or reading assets from --input-file) prompts for        
+confirmation. Use --yes to skip the prompt; in a non-interactive terminal --yes is       
+required for those cases.                                                                
+
+Usage:
+  censys tags unassign <tag> [asset...] [flags]
+
+Examples:
+  censys tags unassign <tag> <ip-address>
+  censys tags unassign <tag> <ip-address> <ip-address>
+  censys tags unassign <tag> <hostname:port>
+  censys tags unassign <tag> <sha256-fingerprint>
+  censys tags unassign <tag> <ip-address> <hostname:port> # asset types can be mixed
+  censys tags unassign <tag> --input-file <file>
+  censys tags unassign <tag> --input-file - # read assets from STDIN
+
+Flags:
+  -h, --help                help for unassign
+  -i, --input-file string   file to read the assets from (or - for STDIN). Overrides positional asset arguments.
+  -o, --org-id string       override the configured organization ID
+  -y, --yes                 skip the confirmation prompt
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+
