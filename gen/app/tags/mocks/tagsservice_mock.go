@@ -117,6 +117,21 @@ func (mr *MockTagsServiceMockRecorder) ListTags(ctx, params any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTags", reflect.TypeOf((*MockTagsService)(nil).ListTags), ctx, params)
 }
 
+// Unassign mocks base method.
+func (m *MockTagsService) Unassign(ctx context.Context, params tags.UnassignParams) (tags.UnassignResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Unassign", ctx, params)
+	ret0, _ := ret[0].(tags.UnassignResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// Unassign indicates an expected call of Unassign.
+func (mr *MockTagsServiceMockRecorder) Unassign(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unassign", reflect.TypeOf((*MockTagsService)(nil).Unassign), ctx, params)
+}
+
 // UpdateTag mocks base method.
 func (m *MockTagsService) UpdateTag(ctx context.Context, params tags.UpdateParams) (tags.UpdateResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()

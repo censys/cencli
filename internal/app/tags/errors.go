@@ -122,3 +122,40 @@ func (e *assignPartialError) Error() string {
 func (e *assignPartialError) Title() string { return "Some Assets Failed to Assign" }
 
 func (e *assignPartialError) ShouldPrintUsage() bool { return false }
+
+// unassignPartialError summarizes an unassign run where some assets failed.
+type unassignPartialError struct {
+	failed int
+	total  int
+}
+
+func newUnassignPartialError(failed, total int) cenclierrors.CencliError {
+	return &unassignPartialError{failed: failed, total: total}
+}
+
+func (e *unassignPartialError) Error() string {
+	return fmt.Sprintf("%d of %d asset(s) failed to unassign", e.failed, e.total)
+}
+
+func (e *unassignPartialError) Title() string { return "Some Assets Failed to Unassign" }
+
+func (e *unassignPartialError) ShouldPrintUsage() bool { return false }
+
+// assetNotAssignedError signals that an asset has no assignment to the tag, so
+// there is nothing to remove. Recorded as a per-asset failure during unassign.
+type assetNotAssignedError struct {
+	assetID string
+}
+
+// NewAssetNotAssignedError creates an asset-not-assigned error naming the asset.
+func NewAssetNotAssignedError(assetID string) cenclierrors.CencliError {
+	return &assetNotAssignedError{assetID: assetID}
+}
+
+func (e *assetNotAssignedError) Error() string {
+	return fmt.Sprintf("asset %q is not assigned to this tag", e.assetID)
+}
+
+func (e *assetNotAssignedError) Title() string { return "Asset Not Assigned" }
+
+func (e *assetNotAssignedError) ShouldPrintUsage() bool { return false }
