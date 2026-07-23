@@ -71,6 +71,10 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
+
+	if c.IsOrgBoundOAuth() {
+		return cenclierrors.NewOrgBoundFreeCreditsError()
+	}
 	return nil
 }
 

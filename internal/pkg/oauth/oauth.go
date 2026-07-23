@@ -192,6 +192,7 @@ func (c *Client) token(ctx context.Context, form url.Values) (*Session, error) {
 		sess.ExpiresAt = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
 	}
 	sess.populateClaims()
+	sess.populateOrgID()
 	return sess, nil
 }
 

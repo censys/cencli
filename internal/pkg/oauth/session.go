@@ -26,6 +26,15 @@ type Session struct {
 	Issuer       string    `json:"issuer,omitempty"`
 	Subject      string    `json:"subject,omitempty"`
 	Email        string    `json:"email,omitempty"`
+	OrgID        string    `json:"org_id,omitempty"`
+	OrgName      string    `json:"org_name,omitempty"`
+}
+
+func (s *Session) OrgLabel() string {
+	if s.OrgName != "" {
+		return s.OrgName
+	}
+	return s.OrgID
 }
 
 // ParseSession decodes a Session previously serialized with Marshal.
@@ -91,4 +100,41 @@ func (s *Session) populateClaims() {
 	}
 	s.Subject = claims.Subject
 	s.Email = claims.Email
+}
+
+// populateOrgID reads the org_id claim from the access or ID token. Claims are
+// decoded without signature verification — display/scoping only; the API
+// enforces the real binding.
+func (s *Session) populateOrgID() {
+	for _, raw := range []string{s.AccessToken, s.IDToken} {
+		if s.OrgID == "" {
+			s.OrgID = parseOrgIDClaim(raw)
+		}
+	}
+}
+
+// parseOrgIDClaim returns the token's org_id claim, or "" if it is not a JWT or
+// lacks the claim.
+func parseOrgIDClaim(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		OrgID string `json:"org_id"`
+		Ext   struct {
+			OrgID string `json:"org_id"`
+		} `json:"ext"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return ""
+	}
+	if claims.OrgID != "" {
+		return claims.OrgID
+	}
+	return claims.Ext.OrgID
 }

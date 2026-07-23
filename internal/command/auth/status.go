@@ -73,5 +73,10 @@ func (c *statusCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 	} else {
 		formatter.Printf(formatter.Stdout, "Logged in via `censys auth login`\n")
 	}
+	if sess.OrgID != "" {
+		formatter.Printf(formatter.Stdout, "Scoped to organization [%s].\n", sess.OrgLabel())
+	} else {
+		formatter.Printf(formatter.Stdout, "Scoped to your free account.\n")
+	}
 	return nil
 }

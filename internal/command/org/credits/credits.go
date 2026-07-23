@@ -91,6 +91,10 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return err
 	}
 
+	if c.IsFreeAccountOAuth() {
+		return cenclierrors.NewFreeAccountOrgError()
+	}
+
 	orgIDFromFlag, err := c.flags.orgID.Value()
 	if err != nil {
 		return err

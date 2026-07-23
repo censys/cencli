@@ -1,16 +1,21 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"github.com/censys/cencli/internal/app/organizations"
 	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/browser"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
+	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	authdom "github.com/censys/cencli/internal/pkg/domain/auth"
+	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
@@ -101,11 +106,6 @@ func (c *loginCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencl
 		return cenclierrors.NewCencliError(fmt.Errorf("login failed: %w", loginErr))
 	}
 
-	value, marshalErr := sess.Marshal()
-	if marshalErr != nil {
-		return cenclierrors.NewCencliError(marshalErr)
-	}
-
 	// Replace any previous session: insert the new one first (so a failure
 	// never leaves the user logged out), then drop the old rows.
 	previous, prevErr := c.Store().GetValuesForAuth(cmd.Context(), config.OAuthSessionName)
@@ -117,10 +117,32 @@ func (c *loginCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencl
 	if description == "" {
 		description = "oauth login"
 	}
-	if _, addErr := c.Store().AddValueForAuth(cmd.Context(), config.OAuthSessionName, description, value); addErr != nil {
+
+	value, marshalErr := sess.Marshal()
+	if marshalErr != nil {
+		return cenclierrors.NewCencliError(marshalErr)
+	}
+	added, addErr := c.Store().AddValueForAuth(cmd.Context(), config.OAuthSessionName, description, value)
+	if addErr != nil {
 		return cenclierrors.NewCencliError(fmt.Errorf("failed to store oauth session: %w", addErr))
 	}
-	for _, old := range previous {
+
+	// Best-effort: the token has only the org ID, so resolve the name via the
+	// API (authenticating with the just-stored session) and persist it so
+	// `auth status` can show it offline. On failure we keep the ID.
+	stale := previous
+	if sess.OrgID != "" {
+		if name := c.resolveOrgName(cmd.Context(), sess.OrgID); name != "" {
+			sess.OrgName = name
+			if named, mErr := sess.Marshal(); mErr == nil {
+				if renamed, rErr := c.Store().AddValueForAuth(cmd.Context(), config.OAuthSessionName, description, named); rErr == nil {
+					stale = append(stale, added)
+					added = renamed
+				}
+			}
+		}
+	}
+	for _, old := range stale {
 		if _, delErr := c.Store().DeleteValueForAuth(cmd.Context(), old.ID); delErr != nil {
 			return cenclierrors.NewCencliError(fmt.Errorf("failed to remove previous oauth session: %w", delErr))
 		}
@@ -131,8 +153,31 @@ func (c *loginCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencl
 	} else {
 		formatter.Printf(formatter.Stdout, "\n✅ You are now logged in\n")
 	}
+	if sess.OrgID != "" {
+		formatter.Printf(formatter.Stdout, "This session is scoped to organization [%s].\n", sess.OrgLabel())
+	} else {
+		formatter.Printf(formatter.Stdout, "This session is scoped to your free account.\n")
+	}
 	if sess.RefreshToken == "" {
 		formatter.Printf(formatter.Stderr, "⚠️  No refresh token was granted; you will need to log in again when the session expires.\n")
 	}
 	return nil
+}
+
+// resolveOrgName returns the organization's name via the API, or "" on any
+// failure (the caller falls back to the org ID).
+func (c *loginCommand) resolveOrgName(ctx context.Context, orgID string) string {
+	uid, err := uuid.Parse(orgID)
+	if err != nil {
+		return ""
+	}
+	cli, err := client.NewCensysSDK(ctx, c.Store(), c.Config())
+	if err != nil {
+		return ""
+	}
+	res, orgErr := organizations.New(cli).GetOrganizationDetails(ctx, identifiers.NewOrganizationID(uid))
+	if orgErr != nil {
+		return ""
+	}
+	return res.Data.Name
 }

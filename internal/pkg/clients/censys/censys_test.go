@@ -68,12 +68,13 @@ func TestNewCensysSDK(t *testing.T) {
 		assert.False(t, client.HasOrgID())
 	})
 
-	t.Run("success with OAuth session", func(t *testing.T) {
+	t.Run("free-account OAuth session ignores stored org-id and has no org", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		// Free-account session: the org-id global is not read while OAuth is active.
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
 			Name:       config.OAuthSessionName,
 			Value:      `{"access_token":"ory_at_test"}`,
@@ -81,11 +82,30 @@ func TestNewCensysSDK(t *testing.T) {
 		}, nil)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 
-		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+		assert.False(t, client.HasOrgID())
+	})
+
+	t.Run("org-bound OAuth session takes its org from the session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		// Org-bound session carries org_id; the org-id global is not consulted.
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test","org_id":"11111111-1111-1111-1111-111111111111"}`,
+			LastUsedAt: time.Now(),
+		}, nil)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 
 		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
+		assert.True(t, client.HasOrgID())
 	})
 
 	t.Run("OAuth session newer than PAT wins", func(t *testing.T) {

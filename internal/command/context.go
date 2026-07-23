@@ -100,10 +100,48 @@ func (c *Context) HasOrgID() bool {
 	return c.censysClient != nil && c.censysClient.HasOrgID()
 }
 
-// GetStoredOrgID retrieves the stored organization ID from the store.
-// Returns the org ID if found, or None if not configured.
+// oauthBinding reports whether an OAuth login is active and the org it is locked
+// to (empty for a free account). Returns (false, "") when the client is absent
+// or doesn't expose the binding (e.g. a test mock).
+func (c *Context) oauthBinding() (isOAuth bool, orgID string) {
+	if c.censysClient == nil {
+		return false, ""
+	}
+	if p, ok := c.censysClient.(interface {
+		OAuthSession() (bool, string)
+	}); ok {
+		return p.OAuthSession()
+	}
+	return false, ""
+}
+
+// IsOrgBoundOAuth reports whether an OAuth login locked to an organization is active.
+func (c *Context) IsOrgBoundOAuth() bool {
+	isOAuth, orgID := c.oauthBinding()
+	return isOAuth && orgID != ""
+}
+
+// IsFreeAccountOAuth reports whether an OAuth login scoped to the free account is active.
+func (c *Context) IsFreeAccountOAuth() bool {
+	isOAuth, orgID := c.oauthBinding()
+	return isOAuth && orgID == ""
+}
+
+// GetStoredOrgID returns the organization ID requests should target, or None.
+// While an OAuth login is active the session dictates the org (org-bound → its
+// org; free account → none) and the stored org-id global is ignored.
 func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
 	zero := mo.None[identifiers.OrganizationID]()
+	if isOAuth, orgID := c.oauthBinding(); isOAuth {
+		if orgID == "" {
+			return zero, nil
+		}
+		parsedUUID, parseErr := uuid.Parse(orgID)
+		if parseErr != nil {
+			return zero, cenclierrors.NewCencliError(parseErr)
+		}
+		return mo.Some(identifiers.NewOrganizationID(parsedUUID)), nil
+	}
 	storedOrgID, err := c.store.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
 	if err != nil {
 		if errors.Is(err, store.ErrGlobalNotFound) {

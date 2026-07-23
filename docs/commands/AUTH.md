@@ -41,13 +41,31 @@ Revoke the OAuth2 session obtained via `censys auth login` (best effort) and rem
 
 ### `auth status`
 
-Show which credential is currently used to authenticate API requests: the OAuth login or a stored personal access token, whichever was most recently activated. For OAuth logins it shows the logged-in account (email).
+Show which credential is currently used to authenticate API requests: the OAuth login or a stored personal access token, whichever was most recently activated. For OAuth logins it shows the logged-in account (email) and whether the session is scoped to an organization (by name) or to your free account. The organization name is resolved once at login and stored with the session, so `auth status` needs no network access.
 
 ## Organization context
 
-You do **not** need to set an organization ID to use an OAuth login. When you log in with `censys auth login`, your organization is **embedded in the OAuth access token** itself — the Platform API resolves your organization from the token, so there is nothing to provide on the command line or store beforehand.
+An OAuth login is **locked to a single context**, chosen when you log in: either **one organization** or your **free account**. The choice is embedded in the OAuth access token itself (the consent screen is where you pick the organization, or skip it for your free account), and it is **strict in both directions**:
 
-This differs from personal access tokens, which are not organization-scoped: with a PAT you may still want to configure an organization ID (`censys config org-id`) or pass `--org-id` per command. If no organization is configured for a PAT, requests use your free-user wallet by default.
+- A session logged in to an **organization** acts only on that organization. It **cannot** access free-user endpoints such as `censys credits` (free user credits).
+- A session logged in to your **free account** acts only on your free account. It **cannot** access any organization — even one you belong to, and even one you join later — so `censys org ...` and `censys enrich` are unavailable.
+
+Because the session carries its own context, you do **not** set or pass an organization ID with an OAuth login: any stored `censys config org-id` value and the `--org-id` flag are ignored while you are logged in via OAuth. The Platform API resolves (and enforces) the organization from the token.
+
+### Switching organizations or your free account
+
+There is no way to switch context within a session, and only one OAuth session exists at a time. To move between organizations, or between an organization and your free account, **log out and log in again**:
+
+```bash
+$ censys auth logout
+$ censys auth login   # pick the organization (or skip it for your free account) on the consent screen
+```
+
+`cencli` fails fast with a clear message when you run a command that the current session isn't scoped for (for example `censys credits` while logged in to an organization), so you don't have to interpret a raw API error.
+
+### Personal access tokens differ
+
+Personal access tokens are **not** organization-scoped: a PAT can act across any organization you belong to as well as your free account. With a PAT you may configure an organization ID (`censys config org-id`) or pass `--org-id` per command; if none is configured, requests use your free-user wallet by default.
 
 ## Credential precedence
 

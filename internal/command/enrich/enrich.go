@@ -114,6 +114,10 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	}
 	c.hostIDs = hostIDs
 
+	if c.IsFreeAccountOAuth() {
+		return cenclierrors.NewFreeAccountOrgError()
+	}
+
 	// Enrichment requires an organization ID. Fail early with a helpful message
 	// rather than letting the API reject the request.
 	if !c.orgID.IsPresent() && !c.HasOrgID() {

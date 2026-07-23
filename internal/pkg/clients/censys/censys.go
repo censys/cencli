@@ -35,11 +35,19 @@ type censysSDK struct {
 	client        *censys.SDK
 	retryStrategy config.RetryStrategy
 	hasOrgID      bool
+	isOAuth       bool
+	oauthOrgID    string
 	logger        *slog.Logger
 }
 
 func (c *censysSDK) HasOrgID() bool {
 	return c.hasOrgID
+}
+
+// OAuthSession reports whether an OAuth login is active and the org it is locked
+// to (empty for a free-account session).
+func (c *censysSDK) OAuthSession() (isOAuth bool, orgID string) {
+	return c.isOAuth, c.oauthOrgID
 }
 
 type censysSDKImpl struct {
@@ -72,26 +80,44 @@ func NewCensysSDK(
 	if err != nil {
 		return nil, err
 	}
+
+	var oauthOrgID string
 	if isOAuth {
 		oauthClient := oauth.NewClient(oauth.Config{}, httpClient)
 		sdkOpts = append(sdkOpts, censys.WithSecuritySource(oauthSecuritySource(ds, oauthClient)))
+		// Read the org the session is locked to (empty for a free account).
+		if sess, perr := oauth.ParseSession(cred.Value); perr == nil {
+			oauthOrgID = sess.OrgID
+		}
 	} else {
 		sdkOpts = append(sdkOpts, censys.WithSecurity(cred.Value))
 	}
 
+	// An OAuth login is self-scoped: the session dictates the org, so the stored
+	// org-id global is ignored. PATs are not org-scoped and fall back to it.
 	hasOrgID := false
-	storedOrgID, err := ds.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
-	if err == nil {
-		hasOrgID = true
-		sdkOpts = append(sdkOpts, censys.WithOrganizationID(storedOrgID.Value))
-	} else if !errors.Is(err, store.ErrGlobalNotFound) {
-		return nil, fmt.Errorf("failed to get last used orgID: %w", err)
+	switch {
+	case isOAuth:
+		if oauthOrgID != "" {
+			hasOrgID = true
+			sdkOpts = append(sdkOpts, censys.WithOrganizationID(oauthOrgID))
+		}
+	default:
+		storedOrgID, orgErr := ds.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
+		if orgErr == nil {
+			hasOrgID = true
+			sdkOpts = append(sdkOpts, censys.WithOrganizationID(storedOrgID.Value))
+		} else if !errors.Is(orgErr, store.ErrGlobalNotFound) {
+			return nil, fmt.Errorf("failed to get last used orgID: %w", orgErr)
+		}
 	}
 
 	censysSDK := &censysSDK{
 		client:        censys.New(sdkOpts...),
 		retryStrategy: cfg.RetryStrategy,
 		hasOrgID:      hasOrgID,
+		isOAuth:       isOAuth,
+		oauthOrgID:    oauthOrgID,
 		logger:        logger,
 	}
 
@@ -169,6 +195,10 @@ func oauthSecuritySource(ds store.Store, oauthClient *oauth.Client) func(context
 		}
 		if newSess.Subject == "" {
 			newSess.Subject = sess.Subject
+		}
+		// Org binding is fixed per grant; carry it over if the refresh omits it.
+		if newSess.OrgID == "" {
+			newSess.OrgID = sess.OrgID
 		}
 
 		value, err := newSess.Marshal()
