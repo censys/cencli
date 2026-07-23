@@ -20,6 +20,7 @@ import (
 
 func TestNewCensysSDK(t *testing.T) {
 	ctx := context.Background()
+	cfg := &config.Config{}
 
 	t.Run("success with PAT and OrgID", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -27,6 +28,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
 			Name:       "auth",
 			Value:      "test-pat-token",
@@ -39,7 +41,7 @@ func TestNewCensysSDK(t *testing.T) {
 			LastUsedAt: time.Now(),
 		}, nil)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.True(t, client.HasOrgID())
@@ -51,6 +53,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
 			Name:       "auth",
 			Value:      "test-pat-token",
@@ -59,21 +62,88 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.False(t, client.HasOrgID())
 	})
 
-	t.Run("error when PAT not found", func(t *testing.T) {
+	t.Run("success with OAuth session", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test"}`,
+			LastUsedAt: time.Now(),
+		}, nil)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound)
+
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+
+	t.Run("OAuth session newer than PAT wins", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test"}`,
+			LastUsedAt: time.Now(),
+		}, nil)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
+			Name:       "auth",
+			Value:      "test-pat-token",
+			LastUsedAt: time.Now().Add(-time.Hour),
+		}, nil)
+
+		cred, isOAuth, err := ActiveCredential(ctx, mockStore)
+		require.NoError(t, err)
+		assert.True(t, isOAuth)
+		assert.Equal(t, config.OAuthSessionName, cred.Name)
+	})
+
+	t.Run("PAT newer than OAuth session wins", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test"}`,
+			LastUsedAt: time.Now().Add(-time.Hour),
+		}, nil)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
+			Name:       "auth",
+			Value:      "test-pat-token",
+			LastUsedAt: time.Now(),
+		}, nil)
+
+		cred, isOAuth, err := ActiveCredential(ctx, mockStore)
+		require.NoError(t, err)
+		assert.False(t, isOAuth)
+		assert.Equal(t, "auth", cred.Name)
+	})
+
+	t.Run("error when no credentials found", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
+
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.True(t, errors.Is(err, authdom.ErrAuthNotFound))
@@ -85,9 +155,10 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), errors.New("db error"))
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to get last used auth")
@@ -99,6 +170,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
 			Name:       "auth",
 			Value:      "test-pat-token",
@@ -107,7 +179,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), errors.New("db error"))
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to get last used orgID")

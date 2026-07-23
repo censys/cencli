@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
+	"sync"
 	"time"
 
 	censys "github.com/censys/censys-sdk-go"
+	"github.com/censys/censys-sdk-go/models/components"
 
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	clienthttp "github.com/censys/cencli/internal/pkg/clients/http"
 	authdom "github.com/censys/cencli/internal/pkg/domain/auth"
 	applog "github.com/censys/cencli/internal/pkg/log"
+	"github.com/censys/cencli/internal/pkg/oauth"
 	"github.com/censys/cencli/internal/store"
 	"github.com/censys/cencli/internal/version"
 )
@@ -52,28 +55,29 @@ var _ Client = &censysSDKImpl{}
 func NewCensysSDK(
 	ctx context.Context,
 	ds store.Store,
-	httpRequestTimeout time.Duration,
-	retryStrategy config.RetryStrategy,
-	debug bool,
+	cfg *config.Config,
 ) (Client, error) {
 	// Create logger for HTTP and retry debugging (only logs when debug=true)
 	var logger *slog.Logger
-	if debug {
-		logger = applog.New(debug, nil)
+	if cfg.Debug {
+		logger = applog.New(cfg.Debug, nil)
 	}
 
+	httpClient := clienthttp.New(cfg.Timeouts.HTTP, buildUserAgent(), logger)
 	sdkOpts := []censys.SDKOption{
-		censys.WithClient(clienthttp.New(httpRequestTimeout, buildUserAgent(), logger)),
+		censys.WithClient(httpClient),
 	}
 
-	storedPAT, err := ds.GetLastUsedAuthByName(ctx, config.AuthName)
+	cred, isOAuth, err := ActiveCredential(ctx, ds)
 	if err != nil {
-		if errors.Is(err, authdom.ErrAuthNotFound) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to get last used auth: %w", err)
+		return nil, err
 	}
-	sdkOpts = append(sdkOpts, censys.WithSecurity(storedPAT.Value))
+	if isOAuth {
+		oauthClient := oauth.NewClient(oauth.Config{}, httpClient)
+		sdkOpts = append(sdkOpts, censys.WithSecuritySource(oauthSecuritySource(ds, oauthClient)))
+	} else {
+		sdkOpts = append(sdkOpts, censys.WithSecurity(cred.Value))
+	}
 
 	hasOrgID := false
 	storedOrgID, err := ds.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
@@ -86,7 +90,7 @@ func NewCensysSDK(
 
 	censysSDK := &censysSDK{
 		client:        censys.New(sdkOpts...),
-		retryStrategy: retryStrategy,
+		retryStrategy: cfg.RetryStrategy,
 		hasOrgID:      hasOrgID,
 		logger:        logger,
 	}
@@ -98,6 +102,88 @@ func NewCensysSDK(
 		ThreatHuntingClient:     newThreatHuntingSDK(censysSDK),
 		AccountManagementClient: newAccountManagementSDK(censysSDK),
 	}, nil
+}
+
+// ActiveCredential resolves the credential API requests should authenticate
+// with: the OAuth session from `censys auth login` or a stored personal
+// access token, whichever was most recently used/activated. Returns
+// auth.ErrAuthNotFound when neither is configured.
+func ActiveCredential(ctx context.Context, ds store.Store) (*store.ValueForAuth, bool, error) {
+	oauthRec, oauthErr := ds.GetLastUsedAuthByName(ctx, config.OAuthSessionName)
+	if oauthErr != nil && !errors.Is(oauthErr, authdom.ErrAuthNotFound) {
+		return nil, false, fmt.Errorf("failed to get oauth session: %w", oauthErr)
+	}
+	patRec, patErr := ds.GetLastUsedAuthByName(ctx, config.AuthName)
+	if patErr != nil && !errors.Is(patErr, authdom.ErrAuthNotFound) {
+		return nil, false, fmt.Errorf("failed to get last used auth: %w", patErr)
+	}
+
+	switch {
+	case oauthErr == nil && patErr == nil:
+		if oauthRec.LastUsedAt.Before(patRec.LastUsedAt) {
+			return patRec, false, nil
+		}
+		return oauthRec, true, nil
+	case oauthErr == nil:
+		return oauthRec, true, nil
+	case patErr == nil:
+		return patRec, false, nil
+	default:
+		return nil, false, authdom.ErrAuthNotFound
+	}
+}
+
+// oauthSecuritySource returns a per-request token source for the SDK. It
+// loads the stored OAuth session, refreshing (and persisting) it when the
+// access token is expired. The access token is sent as a bearer token, same
+// as a personal access token.
+func oauthSecuritySource(ds store.Store, oauthClient *oauth.Client) func(context.Context) (components.Security, error) {
+	var mu sync.Mutex
+	return func(ctx context.Context) (components.Security, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		rec, err := ds.GetLastUsedAuthByName(ctx, config.OAuthSessionName)
+		if err != nil {
+			return components.Security{}, fmt.Errorf("failed to load oauth session (run `censys auth login`): %w", err)
+		}
+		sess, err := oauth.ParseSession(rec.Value)
+		if err != nil {
+			return components.Security{}, fmt.Errorf("%w (run `censys auth login`)", err)
+		}
+
+		if !sess.Expired(time.Now()) {
+			return components.Security{PersonalAccessToken: sess.AccessToken}, nil
+		}
+
+		if sess.RefreshToken == "" {
+			return components.Security{}, errors.New("your session has expired; run `censys auth login` to log in again")
+		}
+		newSess, err := oauthClient.Refresh(ctx, sess.RefreshToken)
+		if err != nil {
+			return components.Security{}, fmt.Errorf("failed to refresh your session (run `censys auth login` to log in again): %w", err)
+		}
+		// Refresh responses may omit identity claims; carry them over for display.
+		if newSess.Email == "" {
+			newSess.Email = sess.Email
+		}
+		if newSess.Subject == "" {
+			newSess.Subject = sess.Subject
+		}
+
+		value, err := newSess.Marshal()
+		if err != nil {
+			return components.Security{}, err
+		}
+		if _, err := ds.AddValueForAuth(ctx, config.OAuthSessionName, rec.Description, value); err != nil {
+			return components.Security{}, fmt.Errorf("failed to persist refreshed oauth session: %w", err)
+		}
+		// Best effort: the new row is newer, so a leftover old row is ignored
+		// by GetLastUsedAuthByName anyway.
+		_, _ = ds.DeleteValueForAuth(ctx, rec.ID)
+
+		return components.Security{PersonalAccessToken: newSess.AccessToken}, nil
+	}
 }
 
 func buildUserAgent() string {

@@ -64,7 +64,7 @@ func run() int {
 	// Build client and app services (optional to allow config/init before auth)
 	sdkCtx, sdkCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer sdkCancel()
-	sdkClient, err := client.NewCensysSDK(sdkCtx, ds, cfg.Timeouts.HTTP, cfg.RetryStrategy, cfg.Debug)
+	sdkClient, err := client.NewCensysSDK(sdkCtx, ds, cfg)
 	if err != nil {
 		if errors.Is(err, authdom.ErrAuthNotFound) {
 			// user hasn't configured enough to initialize the client
