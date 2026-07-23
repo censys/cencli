@@ -61,6 +61,14 @@ type AssignParams struct {
 	AssetIDs []string
 }
 
+// UnassignParams bundles inputs for unassigning a tag (by name or UUID) from
+// explicit assets. AssetIDs are validated and deduplicated by the command layer.
+type UnassignParams struct {
+	OrgID    mo.Option[identifiers.OrganizationID]
+	TagID    identifiers.TagID
+	AssetIDs []string
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -121,6 +129,18 @@ type AssignResult struct {
 	Meta         *responsemeta.ResponseMeta
 	TagID        string
 	Assignments  []Assignment
+	Failures     []AssignmentFailure
+	PartialError cenclierrors.CencliError
+}
+
+// UnassignResult is the outcome of unassigning a tag from explicit assets. TagID
+// echoes the caller's identifier; Unassigned holds the removed assignments (from
+// the per-asset lookup, so asset type is available for rendering) and Failures the
+// assets that were not assigned or whose removal failed, both in input order.
+type UnassignResult struct {
+	Meta         *responsemeta.ResponseMeta
+	TagID        string
+	Unassigned   []Assignment
 	Failures     []AssignmentFailure
 	PartialError cenclierrors.CencliError
 }

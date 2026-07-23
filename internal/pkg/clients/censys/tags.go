@@ -46,6 +46,16 @@ type CreateTagAssignmentRequest struct {
 	AssetID string
 }
 
+// ListTagAssignmentsRequest bundles the query parameters for ListTagAssignments.
+// TagID is the resolved tag UUID; only present options are sent. The field set is
+// minimal and grows as later tickets need more filters.
+type ListTagAssignmentsRequest struct {
+	OrgID    mo.Option[string]
+	TagID    string
+	AssetID  mo.Option[string]
+	PageSize mo.Option[int64]
+}
+
 //go:generate mockgen -destination=../../../../gen/client/mocks/tags_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys TagsClient
 type TagsClient interface {
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtags
@@ -66,6 +76,12 @@ type TagsClient interface {
 	DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (Metadata, ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#createtagassignment
 	CreateTagAssignment(ctx context.Context, req CreateTagAssignmentRequest) (Result[components.TagAssignment], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtagassignments
+	ListTagAssignments(ctx context.Context, req ListTagAssignmentsRequest) (Result[components.TagAssignmentsList], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#deletetagassignment
+	//
+	// DeleteTagAssignment returns only response metadata; the endpoint has no body.
+	DeleteTagAssignment(ctx context.Context, orgID mo.Option[string], tagID, assignmentID string) (Metadata, ClientError)
 }
 
 type tagsSDK struct {
@@ -247,6 +263,69 @@ func (t *tagsSDK) CreateTagAssignment(
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     assignment,
 	}, nil
+}
+
+func (t *tagsSDK) ListTagAssignments(
+	ctx context.Context,
+	req ListTagAssignmentsRequest,
+) (Result[components.TagAssignmentsList], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsListAssignmentsResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		sdkReq := operations.V3TagsListAssignmentsRequest{
+			OrganizationID: req.OrgID.ToPointer(),
+			TagID:          req.TagID,
+			AssetID:        req.AssetID.ToPointer(),
+		}
+		if req.PageSize.IsPresent() {
+			ps := int(req.PageSize.MustGet())
+			sdkReq.PageSize = &ps
+		}
+		res, err = t.censysSDK.client.TagsAndComments.ListTagAssignments(ctx, sdkReq)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TagAssignmentsList]{}
+		return zero, err
+	}
+	assignments := res.GetResponseEnvelopeTagAssignmentsList().GetResult()
+	return Result[components.TagAssignmentsList]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     assignments,
+	}, nil
+}
+
+func (t *tagsSDK) DeleteTagAssignment(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID, assignmentID string,
+) (Metadata, ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsDeleteAssignmentResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		req := operations.V3TagsDeleteAssignmentRequest{
+			OrganizationID: orgID.ToPointer(),
+			TagID:          tagID,
+			AssignmentID:   assignmentID,
+		}
+		res, err = t.censysSDK.client.TagsAndComments.DeleteTagAssignment(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		return Metadata{}, err
+	}
+	// The delete endpoint returns no body, only response metadata.
+	return buildResponseMetadata(res, latency, attempts), nil
 }
 
 func (t *tagsSDK) UpdateTag(

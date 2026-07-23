@@ -55,6 +55,7 @@ func (c *Command) Init() error {
 		NewUpdateCommand(c.Context),
 		NewDeleteCommand(c.Context),
 		NewAssignCommand(c.Context),
+		NewUnassignCommand(c.Context),
 	)
 }
 
