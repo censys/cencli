@@ -13,6 +13,7 @@ Available Commands:
   delete      Delete a tag
   get         Retrieve a single tag by name or ID
   list        List all tags
+  unassign    Unassign a tag from one or more assets
   update      Update an existing tag
 
 Flags:
