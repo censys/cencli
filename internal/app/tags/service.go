@@ -28,6 +28,7 @@ type Service interface {
 	UpdateTag(ctx context.Context, params UpdateParams) (UpdateResult, cenclierrors.CencliError)
 	DeleteTag(ctx context.Context, params DeleteParams) (DeleteResult, cenclierrors.CencliError)
 	Assign(ctx context.Context, params AssignParams) (AssignResult, cenclierrors.CencliError)
+	Unassign(ctx context.Context, params UnassignParams) (UnassignResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -313,6 +314,107 @@ func (s *tagsService) Assign(
 		Meta:         meta,
 		TagID:        params.TagID.String(),
 		Assignments:  assignments,
+		Failures:     failures,
+		PartialError: cenclierrors.ToPartialError(partial),
+	}, nil
+}
+
+// Unassign removes a tag (by name or UUID) from explicit assets, looking up each
+// asset's assignment before deleting it. Like Assign it is continue-on-error; an
+// asset with no assignment is a per-asset failure.
+func (s *tagsService) Unassign(
+	ctx context.Context,
+	params UnassignParams,
+) (UnassignResult, cenclierrors.CencliError) {
+	if len(params.AssetIDs) == 0 {
+		return UnassignResult{}, NewNoAssetsError()
+	}
+
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
+	if resolveErr != nil {
+		return UnassignResult{}, resolveErr
+	}
+
+	total := len(params.AssetIDs)
+	unassigned := make([]Assignment, 0, total)
+	var failures []AssignmentFailure
+	var firstErr cenclierrors.CencliError
+	var meta *responsemeta.ResponseMeta
+
+	for i, assetID := range params.AssetIDs {
+		// Stop early on cancellation, keeping whatever succeeded so far.
+		if err := ctx.Err(); err != nil {
+			firstErr = cenclierrors.ParseContextError(err)
+			break
+		}
+
+		progress.ReportMessage(ctx, progress.StageProcess,
+			fmt.Sprintf("Unassigning tag (%d/%d)...", i+1, total))
+
+		// The delete endpoint is keyed by assignment ID, not asset ID, so look it up.
+		listResult, err := s.client.ListTagAssignments(ctx, client.ListTagAssignmentsRequest{
+			OrgID:    orgIDStr,
+			TagID:    tagID,
+			AssetID:  mo.Some(assetID),
+			PageSize: mo.Some(int64(1)),
+		})
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: err})
+			continue
+		}
+		if listResult.Data == nil || len(listResult.Data.Assignments) == 0 {
+			notAssigned := NewAssetNotAssignedError(assetID)
+			if firstErr == nil {
+				firstErr = notAssigned
+			}
+			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: notAssigned})
+			continue
+		}
+
+		assignment := listResult.Data.Assignments[0]
+		metadata, err := s.client.DeleteTagAssignment(ctx, orgIDStr, tagID, assignment.ID)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: err})
+			continue
+		}
+
+		if meta == nil && (metadata.Request != nil || metadata.Response != nil) {
+			meta = responsemeta.NewResponseMeta(
+				metadata.Request,
+				metadata.Response,
+				metadata.Latency,
+				metadata.Attempts,
+			)
+		}
+		unassigned = append(unassigned, mapTagAssignment(assignment))
+	}
+
+	if len(unassigned) == 0 {
+		return UnassignResult{}, firstErr
+	}
+
+	// Summarize per-asset failures, or surface a cancellation (firstErr with no
+	// failure entry) so an interrupted run is never reported as a clean success.
+	var partial cenclierrors.CencliError
+	switch {
+	case len(failures) > 0:
+		partial = newUnassignPartialError(len(failures), total)
+	case firstErr != nil:
+		partial = firstErr
+	}
+
+	return UnassignResult{
+		Meta:         meta,
+		TagID:        params.TagID.String(),
+		Unassigned:   unassigned,
 		Failures:     failures,
 		PartialError: cenclierrors.ToPartialError(partial),
 	}, nil
