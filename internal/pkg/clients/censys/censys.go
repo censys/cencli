@@ -162,60 +162,92 @@ func ActiveCredential(ctx context.Context, ds store.Store) (*store.ValueForAuth,
 	}
 }
 
+// sessionRefresher exchanges a refresh token for a new session. It is a seam
+// over oauth.Client.Refresh so the security source can be tested without the
+// hardcoded authorization server.
+type sessionRefresher func(ctx context.Context, refreshToken string) (*oauth.Session, error)
+
 // oauthSecuritySource returns a per-request token source for the SDK. It
 // loads the stored OAuth session, refreshing (and persisting) it when the
 // access token is expired. The access token is sent as a bearer token, same
 // as a personal access token.
 func oauthSecuritySource(ds store.Store, oauthClient *oauth.Client) func(context.Context) (components.Security, error) {
+	return newOAuthSecuritySource(ds, oauthClient.Refresh)
+}
+
+func newOAuthSecuritySource(ds store.Store, refresh sessionRefresher) func(context.Context) (components.Security, error) {
 	var mu sync.Mutex
 	return func(ctx context.Context) (components.Security, error) {
+		// The mutex serializes refreshes within this process; the re-read and
+		// fallback below handle a concurrent cencli process racing on the same
+		// grant (the authorization server rotates refresh tokens, so only one
+		// refresh of a given token can win).
 		mu.Lock()
 		defer mu.Unlock()
 
-		rec, err := ds.GetLastUsedAuthByName(ctx, config.OAuthSessionName)
+		rec, sess, err := loadOAuthSession(ctx, ds)
 		if err != nil {
-			return components.Security{}, fmt.Errorf("failed to load oauth session (run `censys auth login`): %w", err)
+			return components.Security{}, err
 		}
-		sess, err := oauth.ParseSession(rec.Value)
-		if err != nil {
-			return components.Security{}, fmt.Errorf("%w (run `censys auth login`)", err)
-		}
-
 		if !sess.Expired(time.Now()) {
 			return components.Security{PersonalAccessToken: sess.AccessToken}, nil
 		}
-
 		if sess.RefreshToken == "" {
 			return components.Security{}, errors.New("your session has expired; run `censys auth login` to log in again")
 		}
-		newSess, err := oauthClient.Refresh(ctx, sess.RefreshToken)
+
+		newSess, err := refresh(ctx, sess.RefreshToken)
 		if err != nil {
+			// A concurrent invocation may have refreshed and rotated the token
+			// out from under us. Re-read the stored session; if it is now valid,
+			// use it rather than forcing the user to log in again.
+			if _, fresh, rerr := loadOAuthSession(ctx, ds); rerr == nil && !fresh.Expired(time.Now()) {
+				return components.Security{PersonalAccessToken: fresh.AccessToken}, nil
+			}
 			return components.Security{}, fmt.Errorf("failed to refresh your session (run `censys auth login` to log in again): %w", err)
 		}
-		// Refresh responses may omit identity claims; carry them over for display.
-		if newSess.Email == "" {
-			newSess.Email = sess.Email
-		}
-		if newSess.Subject == "" {
-			newSess.Subject = sess.Subject
-		}
-		// Org binding is fixed per grant; carry it over if the refresh omits it.
-		if newSess.OrgID == "" {
-			newSess.OrgID = sess.OrgID
-		}
+		carryOverSessionClaims(newSess, sess)
 
 		value, err := newSess.Marshal()
 		if err != nil {
 			return components.Security{}, err
 		}
-		if _, err := ds.AddValueForAuth(ctx, config.OAuthSessionName, rec.Description, value); err != nil {
+		// Update the row in place (atomic) rather than add-then-delete.
+		if _, err := ds.UpdateValueForAuth(ctx, rec.ID, rec.Description, value); err != nil {
 			return components.Security{}, fmt.Errorf("failed to persist refreshed oauth session: %w", err)
 		}
-		// Best effort: the new row is newer, so a leftover old row is ignored
-		// by GetLastUsedAuthByName anyway.
-		_, _ = ds.DeleteValueForAuth(ctx, rec.ID)
 
 		return components.Security{PersonalAccessToken: newSess.AccessToken}, nil
+	}
+}
+
+// loadOAuthSession reads and parses the active OAuth session from the store.
+func loadOAuthSession(ctx context.Context, ds store.Store) (*store.ValueForAuth, *oauth.Session, error) {
+	rec, err := ds.GetLastUsedAuthByName(ctx, config.OAuthSessionName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load oauth session (run `censys auth login`): %w", err)
+	}
+	sess, err := oauth.ParseSession(rec.Value)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w (run `censys auth login`)", err)
+	}
+	return rec, sess, nil
+}
+
+// carryOverSessionClaims copies identity/binding fields a refresh response may
+// omit from the previous session, since they are stable for the grant's life.
+func carryOverSessionClaims(newSess, prev *oauth.Session) {
+	if newSess.Email == "" {
+		newSess.Email = prev.Email
+	}
+	if newSess.Subject == "" {
+		newSess.Subject = prev.Subject
+	}
+	if newSess.OrgID == "" {
+		newSess.OrgID = prev.OrgID
+	}
+	if newSess.OrgName == "" {
+		newSess.OrgName = prev.OrgName
 	}
 }
 

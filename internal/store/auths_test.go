@@ -126,3 +126,28 @@ func (s *authsSuite) TestAuths_UpdateLastUsedAtToNow() {
 
 	assert.WithinDuration(s.T(), auth1.CreatedAt, updatedLastUsed.CreatedAt, time.Second)
 }
+
+func (s *authsSuite) TestAuths_UpdateValueForAuth() {
+	authName := "test-auth"
+
+	auth, err := s.authsStore.AddValueForAuth(s.tctx, authName, "orig-desc", "orig-value")
+	require.NoError(s.T(), err)
+
+	updated, err := s.authsStore.UpdateValueForAuth(s.tctx, auth.ID, "new-desc", "new-value")
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), updated)
+
+	// Same row, updated in place; no extra row is created.
+	assert.Equal(s.T(), auth.ID, updated.ID)
+	assert.Equal(s.T(), "new-desc", updated.Description)
+	assert.Equal(s.T(), "new-value", updated.Value)
+	assert.WithinDuration(s.T(), auth.CreatedAt, updated.CreatedAt, time.Second)
+
+	all, err := s.authsStore.GetValuesForAuth(s.tctx, authName)
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), all, 1)
+
+	// Updating a nonexistent row reports not found.
+	_, err = s.authsStore.UpdateValueForAuth(s.tctx, 99999, "x", "y")
+	require.ErrorIs(s.T(), err, ErrAuthNotFound)
+}
