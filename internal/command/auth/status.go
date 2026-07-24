@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -16,6 +17,19 @@ import (
 
 type statusCommand struct {
 	*command.BaseCommand
+	result statusResult
+}
+
+// statusResult is the machine-readable view of the active credential, rendered
+// directly for data output (json/yaml/tree) and summarized by RenderShort.
+type statusResult struct {
+	Authenticated    bool   `json:"authenticated"`
+	Method           string `json:"method,omitempty"` // "oauth" | "personal_access_token"
+	Account          string `json:"account,omitempty"`
+	Token            string `json:"token,omitempty"`           // personal access token description
+	Scope            string `json:"scope,omitempty"`           // "organization" | "free_account" (oauth only)
+	OrganizationID   string `json:"organization_id,omitempty"` // oauth org-bound session
+	OrganizationName string `json:"organization_name,omitempty"`
 }
 
 var _ command.Command = (*statusCommand)(nil)
@@ -40,7 +54,7 @@ func (c *statusCommand) DefaultOutputType() command.OutputType {
 }
 
 func (c *statusCommand) SupportedOutputTypes() []command.OutputType {
-	return []command.OutputType{command.OutputTypeShort}
+	return []command.OutputType{command.OutputTypeData, command.OutputTypeShort}
 }
 
 func (c *statusCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
@@ -48,33 +62,77 @@ func (c *statusCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 }
 
 func (c *statusCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	cred, isOAuth, err := client.ActiveCredential(cmd.Context(), c.Store())
+	result, err := c.gatherStatus(cmd.Context())
+	if err != nil {
+		return err
+	}
+	c.result = result
+	return c.PrintData(c, c.result)
+}
+
+// gatherStatus resolves the active credential into a statusResult.
+func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclierrors.CencliError) {
+	cred, isOAuth, err := client.ActiveCredential(ctx, c.Store())
 	if err != nil {
 		if errors.Is(err, authdom.ErrAuthNotFound) {
-			formatter.Printf(formatter.Stdout, "No credentials configured.\nRun `censys auth login` to log in with your browser, or `censys config auth add` to add a personal access token.\n")
-			return nil
+			return statusResult{Authenticated: false}, nil
 		}
-		return cenclierrors.NewCencliError(err)
+		return statusResult{}, cenclierrors.NewCencliError(err)
 	}
 
 	if !isOAuth {
-		formatter.Printf(formatter.Stdout, "Authenticated with a personal access token [%s]\n", cred.Description)
-		formatter.Printf(formatter.Stdout, "Manage tokens with `censys config auth`.\n")
-		return nil
+		return statusResult{
+			Authenticated: true,
+			Method:        "personal_access_token",
+			Token:         cred.Description,
+		}, nil
 	}
 
 	sess, parseErr := oauth.ParseSession(cred.Value)
 	if parseErr != nil {
-		return cenclierrors.NewCencliError(fmt.Errorf("%w (run `censys auth login` to log in again)", parseErr))
+		return statusResult{}, cenclierrors.NewCencliError(fmt.Errorf("%w (run `censys auth login` to log in again)", parseErr))
 	}
 
-	if account := sess.Account(); account != "" {
-		formatter.Printf(formatter.Stdout, "Logged in as [%s]\n", account)
+	result := statusResult{
+		Authenticated: true,
+		Method:        "oauth",
+		Account:       sess.Account(),
+	}
+	if sess.OrgID != "" {
+		result.Scope = "organization"
+		result.OrganizationID = sess.OrgID
+		result.OrganizationName = sess.OrgName
+	} else {
+		result.Scope = "free_account"
+	}
+	return result, nil
+}
+
+func (c *statusCommand) RenderShort() cenclierrors.CencliError {
+	r := c.result
+
+	if !r.Authenticated {
+		formatter.Printf(formatter.Stdout, "No credentials configured.\nRun `censys auth login` to log in with your browser, or `censys config auth add` to add a personal access token.\n")
+		return nil
+	}
+
+	if r.Method != "oauth" {
+		formatter.Printf(formatter.Stdout, "Authenticated with a personal access token [%s]\n", r.Token)
+		formatter.Printf(formatter.Stdout, "Manage tokens with `censys config auth`.\n")
+		return nil
+	}
+
+	if r.Account != "" {
+		formatter.Printf(formatter.Stdout, "Logged in as [%s]\n", r.Account)
 	} else {
 		formatter.Printf(formatter.Stdout, "Logged in via `censys auth login`\n")
 	}
-	if sess.OrgID != "" {
-		formatter.Printf(formatter.Stdout, "Scoped to organization [%s].\n", sess.OrgLabel())
+	if r.Scope == "organization" {
+		label := r.OrganizationName
+		if label == "" {
+			label = r.OrganizationID
+		}
+		formatter.Printf(formatter.Stdout, "Scoped to organization [%s].\n", label)
 	} else {
 		formatter.Printf(formatter.Stdout, "Scoped to your free account.\n")
 	}

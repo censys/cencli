@@ -43,6 +43,20 @@ Revoke the OAuth2 session obtained via `censys auth login` (best effort) and rem
 
 Show which credential is currently used to authenticate API requests: the OAuth login or a stored personal access token, whichever was most recently activated. For OAuth logins it shows the logged-in account (email) and whether the session is scoped to an organization (by name) or to your free account. The organization name is resolved once at login and stored with the session, so `auth status` needs no network access.
 
+For scripting, pass `--output-format json` (or `yaml`/`tree`) to get the status as structured data:
+
+```bash
+$ censys auth status --output-format json
+{
+  "authenticated": true,
+  "method": "oauth",
+  "account": "you@example.com",
+  "scope": "organization",
+  "organization_id": "8c96558b-e12b-450b-91df-098960153f13",
+  "organization_name": "Example Org"
+}
+```
+
 ## Organization context
 
 An OAuth login is **locked to a single context**, chosen when you log in: either **one organization** or your **free account**. The choice is embedded in the OAuth access token itself (the consent screen is where you pick the organization, or skip it for your free account), and it is **strict in both directions**:

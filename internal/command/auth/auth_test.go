@@ -134,6 +134,27 @@ func TestAuthStatus_OAuthSession(t *testing.T) {
 	assert.NotContains(t, out, "valid until")
 }
 
+func TestAuthStatus_JSONOutput(t *testing.T) {
+	mockStore, stdout, _, execute := newTestCommand(t)
+
+	mockStore.EXPECT().GetLastUsedAuthByName(gomock.Any(), config.OAuthSessionName).
+		Return(&store.ValueForAuth{
+			Name:        config.OAuthSessionName,
+			Description: "user@censys.com",
+			Value:       `{"access_token":"ory_at_abc","email":"user@censys.com","org_id":"8c96558b-e12b-450b-91df-098960153f13","org_name":"Censys","expires_at":"2100-01-01T00:00:00Z"}`,
+			LastUsedAt:  time.Now(),
+		}, nil)
+	mockStore.EXPECT().GetLastUsedAuthByName(gomock.Any(), config.AuthName).
+		Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
+
+	require.NoError(t, execute("status", "--output-format", "json"))
+	out := stdout.String()
+	assert.Contains(t, out, `"method": "oauth"`)
+	assert.Contains(t, out, `"scope": "organization"`)
+	assert.Contains(t, out, `"organization_name": "Censys"`)
+	assert.Contains(t, out, `"account": "user@censys.com"`)
+}
+
 func TestAuthStatus_OAuthSessionNoEmail(t *testing.T) {
 	mockStore, stdout, _, execute := newTestCommand(t)
 
