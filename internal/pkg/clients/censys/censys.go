@@ -37,6 +37,7 @@ type censysSDK struct {
 	hasOrgID      bool
 	isOAuth       bool
 	oauthOrgID    string
+	oauthOrgName  string
 	logger        *slog.Logger
 }
 
@@ -81,13 +82,14 @@ func NewCensysSDK(
 		return nil, err
 	}
 
-	var oauthOrgID string
+	var oauthOrgID, oauthOrgName string
 	if isOAuth {
 		oauthClient := oauth.NewClient(oauth.Config{}, &httpClient.Client)
 		sdkOpts = append(sdkOpts, censys.WithSecuritySource(oauthSecuritySource(ds, oauthClient)))
 		// Read the org the session is locked to (empty for a free account).
 		if sess, perr := oauth.ParseSession(cred.Value); perr == nil {
 			oauthOrgID = sess.OrgID
+			oauthOrgName = sess.OrgName
 		}
 	} else {
 		sdkOpts = append(sdkOpts, censys.WithSecurity(cred.Value))
@@ -118,6 +120,7 @@ func NewCensysSDK(
 		hasOrgID:      hasOrgID,
 		isOAuth:       isOAuth,
 		oauthOrgID:    oauthOrgID,
+		oauthOrgName:  oauthOrgName,
 		logger:        logger,
 	}
 
@@ -248,7 +251,7 @@ func (c *censysSDK) executeWithRetry(ctx context.Context, operationFn func() Cli
 
 		lastErr = err
 		if attempt == maxAttempts || !shouldRetryCensysError(err) {
-			return err, attempt
+			return c.annotateAuthError(err), attempt
 		}
 
 		delay := calculateRetryDelay(baseDelay, c.retryStrategy.MaxDelay, c.retryStrategy.Backoff, attempt)
@@ -270,7 +273,43 @@ func (c *censysSDK) executeWithRetry(ctx context.Context, operationFn func() Cli
 		}
 	}
 
-	return lastErr, maxAttempts
+	return c.annotateAuthError(lastErr), maxAttempts
+}
+
+// oauthScopeError augments an underlying client error with guidance about the
+// active OAuth session's scope. It embeds the original error so status code,
+// title, and exit-code behavior are unchanged.
+type oauthScopeError struct {
+	ClientError
+	hint string
+}
+
+func (e *oauthScopeError) Error() string { return e.ClientError.Error() + "\n\n" + e.hint }
+
+func (e *oauthScopeError) Unwrap() error { return e.ClientError }
+
+// annotateAuthError appends OAuth-scope guidance to a 403 so a request that
+// targets an organization (or the free account) outside the session's scope
+// yields an actionable message instead of a bare "forbidden". The API is the
+// source of truth; this only adds a hint for the OAuth case.
+func (c *censysSDK) annotateAuthError(err ClientError) ClientError {
+	if err == nil || !c.isOAuth {
+		return err
+	}
+	if status := err.StatusCode(); !status.IsPresent() || status.MustGet() != 403 {
+		return err
+	}
+	var hint string
+	if c.oauthOrgID != "" {
+		org := c.oauthOrgName
+		if org == "" {
+			org = c.oauthOrgID
+		}
+		hint = fmt.Sprintf("This login is scoped to organization %s; it cannot act on a different organization or your free account. Run `censys auth logout` then `censys auth login` to switch.", org)
+	} else {
+		hint = "This login is scoped to your free account; it cannot access organizations. Run `censys auth logout` then `censys auth login` and select the organization to access it."
+	}
+	return &oauthScopeError{ClientError: err, hint: hint}
 }
 
 func shouldRetryCensysError(err ClientError) bool {

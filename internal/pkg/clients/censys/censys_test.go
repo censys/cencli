@@ -427,6 +427,42 @@ func newGenericCensysError(code int) ClientError {
 	return NewCensysClientGenericError(&sdkerrors.SDKError{Message: "retryable", StatusCode: code})
 }
 
+func TestAnnotateAuthError(t *testing.T) {
+	forbidden := newGenericCensysError(403)
+
+	t.Run("org-bound oauth 403 gets a scope hint with the org name", func(t *testing.T) {
+		sdk := &censysSDK{isOAuth: true, oauthOrgID: "org-uuid", oauthOrgName: "Censys"}
+		out := sdk.annotateAuthError(forbidden)
+		assert.Contains(t, out.Error(), "scoped to organization Censys")
+		assert.Contains(t, out.Error(), "censys auth login")
+		// Underlying error (status code) is preserved.
+		assert.Equal(t, int64(403), out.StatusCode().MustGet())
+		var generic ClientGenericError
+		assert.ErrorAs(t, out, &generic)
+	})
+
+	t.Run("org-bound oauth falls back to the org id when the name is unknown", func(t *testing.T) {
+		sdk := &censysSDK{isOAuth: true, oauthOrgID: "org-uuid"}
+		assert.Contains(t, sdk.annotateAuthError(forbidden).Error(), "organization org-uuid")
+	})
+
+	t.Run("free-account oauth 403 gets a free-account hint", func(t *testing.T) {
+		sdk := &censysSDK{isOAuth: true}
+		assert.Contains(t, sdk.annotateAuthError(forbidden).Error(), "scoped to your free account")
+	})
+
+	t.Run("non-403 errors are untouched", func(t *testing.T) {
+		sdk := &censysSDK{isOAuth: true, oauthOrgID: "org-uuid"}
+		notFound := newGenericCensysError(404)
+		assert.Same(t, notFound, sdk.annotateAuthError(notFound))
+	})
+
+	t.Run("pat 403 is untouched", func(t *testing.T) {
+		sdk := &censysSDK{isOAuth: false}
+		assert.Same(t, forbidden, sdk.annotateAuthError(forbidden))
+	})
+}
+
 func TestCalculateRetryDelay(t *testing.T) {
 	base := 100 * time.Millisecond
 	max := 500 * time.Millisecond
