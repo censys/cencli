@@ -1,17 +1,22 @@
-// Package oauth implements the OAuth2 authorization-code + PKCE flow used by
-// `censys auth login`, plus token refresh and revocation, against the Censys
-// authorization server (Ory Hydra).
+// Package oauth runs the OAuth2 authorization-code + PKCE flow used by
+// `censys auth login`. The standard protocol mechanics (authorization URL,
+// PKCE, token exchange, and refresh) are handled by golang.org/x/oauth2; this
+// package adds the loopback-browser login flow, session persistence, and token
+// revocation (RFC 7009), none of which x/oauth2 covers.
 package oauth
 
 import (
 	"context"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -40,11 +45,6 @@ const (
 	revokePath    = "/oauth2/revoke"
 )
 
-// HTTPDoer is the minimal HTTP client interface required by Client.
-type HTTPDoer interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
 // Config describes the client parameters for a flow. The authorization server
 // endpoints (issuer, audience) are not configurable; they are the hardcoded
 // DefaultIssuer / DefaultAudience constants.
@@ -63,7 +63,7 @@ type Config struct {
 // Client performs OAuth2 flows against the Censys authorization server.
 type Client struct {
 	cfg  Config
-	http HTTPDoer
+	http *http.Client
 	// issuer and audience are the hardcoded authorization-server endpoints.
 	// They default to DefaultIssuer / DefaultAudience and are only overridden
 	// by tests (same-package) to target a local server.
@@ -71,8 +71,10 @@ type Client struct {
 	audience string
 }
 
-// NewClient builds a Client, applying defaults for unset config fields.
-func NewClient(cfg Config, doer HTTPDoer) *Client {
+// NewClient builds a Client, applying defaults for unset config fields. The
+// HTTP client is passed to x/oauth2 (via the request context) and used for
+// revocation, so our transport (user agent, timeouts) applies throughout.
+func NewClient(cfg Config, httpClient *http.Client) *Client {
 	if cfg.ClientID == "" {
 		cfg.ClientID = ClientID
 	}
@@ -86,129 +88,119 @@ func NewClient(cfg Config, doer HTTPDoer) *Client {
 	if cfg.LoginTimeout <= 0 {
 		cfg.LoginTimeout = 5 * time.Minute
 	}
-	if doer == nil {
-		doer = &http.Client{Timeout: 30 * time.Second}
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &Client{
 		cfg:      cfg,
-		http:     doer,
+		http:     httpClient,
 		issuer:   strings.TrimRight(DefaultIssuer, "/"),
 		audience: DefaultAudience,
 	}
 }
 
-// AuthCodeURL builds the authorization request URL the user's browser visits.
-func (c *Client) AuthCodeURL(state, challenge, redirectURI string) string {
-	q := url.Values{}
-	q.Set("client_id", c.cfg.ClientID)
-	q.Set("response_type", "code")
-	q.Set("redirect_uri", redirectURI)
-	q.Set("scope", c.cfg.Scopes)
-	q.Set("state", state)
-	q.Set("code_challenge", challenge)
-	q.Set("code_challenge_method", "S256")
-	if c.audience != "" {
-		q.Set("audience", c.audience)
+// oauthConfig builds the x/oauth2 config for a login using the given loopback
+// redirect URI (empty when only the token endpoint is needed, e.g. refresh).
+func (c *Client) oauthConfig(redirectURI string) *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:    c.cfg.ClientID,
+		RedirectURL: redirectURI,
+		Scopes:      strings.Fields(c.cfg.Scopes),
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  c.issuer + authorizePath,
+			TokenURL: c.issuer + tokenPath,
+			// Public PKCE client: send client_id in the request body, no secret.
+			AuthStyle: oauth2.AuthStyleInParams,
+		},
 	}
-	return c.issuer + authorizePath + "?" + q.Encode()
+}
+
+// httpContext injects our HTTP client so x/oauth2 uses it for token requests.
+func (c *Client) httpContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, oauth2.HTTPClient, c.http)
+}
+
+// authCodeOptions carries the audience (RFC 8707) into the authorization URL.
+func (c *Client) authCodeOptions() []oauth2.AuthCodeOption {
+	if c.audience == "" {
+		return nil
+	}
+	return []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("audience", c.audience)}
 }
 
 // Exchange trades an authorization code (plus the PKCE verifier) for tokens.
 func (c *Client) Exchange(ctx context.Context, code, verifier, redirectURI string) (*Session, error) {
-	form := url.Values{}
-	form.Set("grant_type", "authorization_code")
-	form.Set("code", code)
-	form.Set("redirect_uri", redirectURI)
-	form.Set("client_id", c.cfg.ClientID)
-	form.Set("code_verifier", verifier)
-	return c.token(ctx, form)
+	tok, err := c.oauthConfig(redirectURI).Exchange(c.httpContext(ctx), code, oauth2.VerifierOption(verifier))
+	if err != nil {
+		return nil, wrapTokenError(err)
+	}
+	return sessionFromToken(tok, c.issuer), nil
 }
 
-// Refresh trades a refresh token for a new token set. Note the authorization
-// server rotates refresh tokens: the returned session's refresh token
-// replaces the one passed in.
+// Refresh trades a refresh token for a new token set. The authorization server
+// rotates refresh tokens: the returned session's refresh token replaces the
+// one passed in.
 func (c *Client) Refresh(ctx context.Context, refreshToken string) (*Session, error) {
-	form := url.Values{}
-	form.Set("grant_type", "refresh_token")
-	form.Set("refresh_token", refreshToken)
-	form.Set("client_id", c.cfg.ClientID)
-	return c.token(ctx, form)
+	tok, err := c.oauthConfig("").TokenSource(c.httpContext(ctx), &oauth2.Token{RefreshToken: refreshToken}).Token()
+	if err != nil {
+		return nil, wrapTokenError(err)
+	}
+	return sessionFromToken(tok, c.issuer), nil
 }
 
 // Revoke invalidates a token (and, for refresh tokens, the whole grant).
+// x/oauth2 has no revocation support, so this posts the RFC 7009 request directly.
 func (c *Client) Revoke(ctx context.Context, token string) error {
 	form := url.Values{}
 	form.Set("token", token)
 	form.Set("client_id", c.cfg.ClientID)
 
-	resp, err := c.postForm(ctx, c.issuer+revokePath, form)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.issuer+revokePath, strings.NewReader(form.Encode()))
 	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return newServerError(resp)
-	}
-	return nil
-}
-
-type tokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	RefreshToken string `json:"refresh_token"`
-	IDToken      string `json:"id_token"`
-	Scope        string `json:"scope"`
-	ExpiresIn    int64  `json:"expires_in"`
-}
-
-func (c *Client) token(ctx context.Context, form url.Values) (*Session, error) {
-	resp, err := c.postForm(ctx, c.issuer+tokenPath, form)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, newServerError(resp)
-	}
-
-	var tr tokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
-		return nil, fmt.Errorf("failed to decode token response: %w", err)
-	}
-	if tr.AccessToken == "" {
-		return nil, fmt.Errorf("token response contained no access token")
-	}
-
-	sess := &Session{
-		AccessToken:  tr.AccessToken,
-		TokenType:    tr.TokenType,
-		RefreshToken: tr.RefreshToken,
-		IDToken:      tr.IDToken,
-		Scope:        tr.Scope,
-		Issuer:       c.issuer,
-	}
-	if tr.ExpiresIn > 0 {
-		sess.ExpiresAt = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)
-	}
-	sess.populateClaims()
-	sess.populateOrgID()
-	return sess, nil
-}
-
-func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to build request: %w", err)
+		return fmt.Errorf("failed to build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request to authorization server failed: %w", err)
+		return fmt.Errorf("request to authorization server failed: %w", err)
 	}
-	return resp, nil
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return &ServerError{StatusCode: resp.StatusCode}
+	}
+	return nil
+}
+
+// sessionFromToken converts an x/oauth2 token into a persisted Session,
+// pulling the id_token/scope from the response extras and deriving claims.
+func sessionFromToken(tok *oauth2.Token, issuer string) *Session {
+	sess := &Session{
+		AccessToken:  tok.AccessToken,
+		TokenType:    tok.TokenType,
+		RefreshToken: tok.RefreshToken,
+		ExpiresAt:    tok.Expiry,
+		Issuer:       issuer,
+	}
+	if idToken, ok := tok.Extra("id_token").(string); ok {
+		sess.IDToken = idToken
+	}
+	if scope, ok := tok.Extra("scope").(string); ok {
+		sess.Scope = scope
+	}
+	sess.populateClaims()
+	sess.populateOrgID()
+	return sess
+}
+
+// generateState returns an opaque state parameter for the authorization request.
+func generateState() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate state: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // ServerError is an OAuth2 error response (RFC 6749 section 5.2) from the
@@ -230,16 +222,16 @@ func (e *ServerError) Error() string {
 	return msg
 }
 
-func newServerError(resp *http.Response) error {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	serverErr := &ServerError{StatusCode: resp.StatusCode}
-	var oauthErr struct {
-		Code        string `json:"error"`
-		Description string `json:"error_description"`
+// wrapTokenError maps an x/oauth2 token error into a ServerError when it
+// carries an RFC 6749 error response, so callers get a consistent type.
+func wrapTokenError(err error) error {
+	var re *oauth2.RetrieveError
+	if errors.As(err, &re) {
+		return &ServerError{
+			StatusCode:  re.Response.StatusCode,
+			Code:        re.ErrorCode,
+			Description: re.ErrorDescription,
+		}
 	}
-	if err := json.Unmarshal(body, &oauthErr); err == nil {
-		serverErr.Code = oauthErr.Code
-		serverErr.Description = oauthErr.Description
-	}
-	return serverErr
+	return err
 }

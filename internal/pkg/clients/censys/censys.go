@@ -83,7 +83,7 @@ func NewCensysSDK(
 
 	var oauthOrgID string
 	if isOAuth {
-		oauthClient := oauth.NewClient(oauth.Config{}, httpClient)
+		oauthClient := oauth.NewClient(oauth.Config{}, &httpClient.Client)
 		sdkOpts = append(sdkOpts, censys.WithSecuritySource(oauthSecuritySource(ds, oauthClient)))
 		// Read the org the session is locked to (empty for a free account).
 		if sess, perr := oauth.ParseSession(cred.Value); perr == nil {

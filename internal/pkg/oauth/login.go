@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 // callbackResult carries the outcome of the browser redirect back to Login.
@@ -25,11 +27,8 @@ type callbackResult struct {
 // It blocks until the flow completes, ctx is cancelled, or the login timeout
 // elapses.
 func (c *Client) Login(ctx context.Context, openURL func(authorizeURL string) error) (*Session, error) {
-	verifier, err := GenerateVerifier()
-	if err != nil {
-		return nil, err
-	}
-	state, err := GenerateState()
+	verifier := oauth2.GenerateVerifier()
+	state, err := generateState()
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +76,11 @@ func (c *Client) Login(ctx context.Context, openURL func(authorizeURL string) er
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	if err := openURL(c.AuthCodeURL(state, ChallengeS256(verifier), redirectURI)); err != nil {
+	authCodeURL := c.oauthConfig(redirectURI).AuthCodeURL(
+		state,
+		append(c.authCodeOptions(), oauth2.S256ChallengeOption(verifier))...,
+	)
+	if err := openURL(authCodeURL); err != nil {
 		return nil, err
 	}
 

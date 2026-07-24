@@ -22,13 +22,13 @@ import (
 	"github.com/censys/cencli/internal/store"
 )
 
-// stubDoer is an oauth.HTTPDoer that answers every request locally with 200 OK,
-// so tests exercise the auth commands without reaching the real authorization
-// server. The wire format of revoke/token requests is covered by the oauth
-// package's own tests against an httptest server.
-type stubDoer struct{}
+// stubTransport answers every request locally with 200 OK, so tests exercise
+// the auth commands without reaching the real authorization server. The wire
+// format of revoke/token requests is covered by the oauth package's own tests
+// against an httptest server.
+type stubTransport struct{}
 
-func (stubDoer) Do(*http.Request) (*http.Response, error) {
+func (stubTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(strings.NewReader("{}")),
@@ -42,7 +42,7 @@ func useStubOAuthClient(t *testing.T) {
 	t.Helper()
 	orig := newOAuthClient
 	newOAuthClient = func() *oauth.Client {
-		return oauth.NewClient(oauth.Config{}, stubDoer{})
+		return oauth.NewClient(oauth.Config{}, &http.Client{Transport: stubTransport{}})
 	}
 	t.Cleanup(func() { newOAuthClient = orig })
 }

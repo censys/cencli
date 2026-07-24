@@ -20,7 +20,7 @@ import (
 // The real issuer/audience are hardcoded constants (not part of Config); this
 // same-package helper is the test-only seam to point the client at a local
 // httptest server.
-func clientAt(baseURL string, doer HTTPDoer, cfg Config) *Client {
+func clientAt(baseURL string, doer *http.Client, cfg Config) *Client {
 	c := NewClient(cfg, doer)
 	if baseURL != "" {
 		c.issuer = strings.TrimRight(baseURL, "/")
@@ -28,57 +28,13 @@ func clientAt(baseURL string, doer HTTPDoer, cfg Config) *Client {
 	return c
 }
 
-func TestGenerateVerifier(t *testing.T) {
-	v1, err := GenerateVerifier()
-	require.NoError(t, err)
-	v2, err := GenerateVerifier()
-	require.NoError(t, err)
-
-	assert.Len(t, v1, 43) // 32 bytes base64url without padding
-	assert.NotEqual(t, v1, v2)
-	assert.NotContains(t, v1, "=")
-	assert.NotContains(t, v1, "+")
-	assert.NotContains(t, v1, "/")
-}
-
-func TestChallengeS256(t *testing.T) {
-	// Known vector from RFC 7636 appendix B.
-	verifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-	assert.Equal(t, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", ChallengeS256(verifier))
-}
-
 func TestGenerateState(t *testing.T) {
-	s1, err := GenerateState()
+	s1, err := generateState()
 	require.NoError(t, err)
-	s2, err := GenerateState()
+	s2, err := generateState()
 	require.NoError(t, err)
 	assert.Len(t, s1, 32)
 	assert.NotEqual(t, s1, s2)
-}
-
-func TestAuthCodeURL(t *testing.T) {
-	c := NewClient(Config{}, nil)
-
-	rawURL := c.AuthCodeURL("test-state", "test-challenge", "http://127.0.0.1:5555/callback")
-	parsed, err := url.Parse(rawURL)
-	require.NoError(t, err)
-
-	issuer, err := url.Parse(DefaultIssuer)
-	require.NoError(t, err)
-
-	assert.Equal(t, issuer.Scheme, parsed.Scheme)
-	assert.Equal(t, issuer.Host, parsed.Host)
-	assert.Equal(t, "/oauth2/auth", parsed.Path)
-
-	q := parsed.Query()
-	assert.Equal(t, ClientID, q.Get("client_id"))
-	assert.Equal(t, "code", q.Get("response_type"))
-	assert.Equal(t, "http://127.0.0.1:5555/callback", q.Get("redirect_uri"))
-	assert.Equal(t, Scopes, q.Get("scope"))
-	assert.Equal(t, "test-state", q.Get("state"))
-	assert.Equal(t, "test-challenge", q.Get("code_challenge"))
-	assert.Equal(t, "S256", q.Get("code_challenge_method"))
-	assert.Equal(t, DefaultAudience, q.Get("audience"))
 }
 
 // newTokenServer returns an httptest server acting as the authorization
@@ -250,7 +206,13 @@ func TestLogin(t *testing.T) {
 	sess, err := c.Login(context.Background(), func(authorizeURL string) error {
 		parsed, parseErr := url.Parse(authorizeURL)
 		require.NoError(t, parseErr)
+		assert.Equal(t, authorizePath, parsed.Path)
 		q := parsed.Query()
+		assert.Equal(t, ClientID, q.Get("client_id"))
+		assert.Equal(t, "code", q.Get("response_type"))
+		assert.Equal(t, Scopes, q.Get("scope"))
+		assert.Equal(t, DefaultAudience, q.Get("audience"))
+		assert.NotEmpty(t, q.Get("state"))
 		assert.Equal(t, "S256", q.Get("code_challenge_method"))
 		assert.NotEmpty(t, q.Get("code_challenge"))
 
