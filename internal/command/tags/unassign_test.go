@@ -128,7 +128,7 @@ func TestTagsUnassignCommand(t *testing.T) {
 		{
 			name:  "single positional asset does not prompt",
 			args:  []string{"alpha", "8.8.8.8"},
-			seams: func(t *testing.T) unassignSeams { return noPromptSeams(t) },
+			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -187,7 +187,7 @@ func TestTagsUnassignCommand(t *testing.T) {
 		{
 			name:  "--yes skips the prompt for multiple assets",
 			args:  []string{"alpha", "8.8.8.8", "1.1.1.1", "--yes"},
-			seams: func(t *testing.T) unassignSeams { return noPromptSeams(t) },
+			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -204,7 +204,7 @@ func TestTagsUnassignCommand(t *testing.T) {
 		{
 			name:  "comma-separated positional assets are split",
 			args:  []string{"alpha", "8.8.8.8,1.1.1.1", "--yes"},
-			seams: func(t *testing.T) unassignSeams { return noPromptSeams(t) },
+			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -222,7 +222,7 @@ func TestTagsUnassignCommand(t *testing.T) {
 			name:  "stdin input via --input-file - (prompts, skipped with --yes)",
 			args:  []string{"alpha", "--input-file", "-", "--yes"},
 			stdin: bytes.NewBufferString("8.8.8.8\n1.1.1.1\n"),
-			seams: func(t *testing.T) unassignSeams { return noPromptSeams(t) },
+			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -265,7 +265,7 @@ func TestTagsUnassignCommand(t *testing.T) {
 		{
 			name:  "partial failure is surfaced to stderr but data still renders",
 			args:  []string{"alpha", "8.8.8.8", "1.1.1.1", "--yes"},
-			seams: func(t *testing.T) unassignSeams { return noPromptSeams(t) },
+			seams: noPromptSeams,
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).Return(
