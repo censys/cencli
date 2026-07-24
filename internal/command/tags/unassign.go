@@ -12,11 +12,9 @@ import (
 	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
-	"github.com/censys/cencli/internal/pkg/domain/assets"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
-	"github.com/censys/cencli/internal/pkg/input"
 	"github.com/censys/cencli/internal/pkg/term"
 	"github.com/censys/cencli/internal/pkg/ui/form"
 )
@@ -136,20 +134,9 @@ func (c *UnassignCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors
 		return err
 	}
 
-	rawAssets, err := c.gatherRawAssets(cmd, args)
+	c.assetIDs, err = gatherAssetIDs(cmd, c.flags.inputFile, args)
 	if err != nil {
 		return err
-	}
-
-	// Don't call AssetType(): mixed types are fine here (each unassignment is
-	// independent), so reject only genuinely unparseable inputs.
-	classifier := assets.NewAssetClassifier(rawAssets...)
-	if unknown := classifier.UnknownAssets(); len(unknown) > 0 {
-		return assets.NewInvalidAssetIDError(unknown[0], "unable to infer asset type")
-	}
-	c.assetIDs = classifier.KnownAssetIDs()
-	if len(c.assetIDs) == 0 {
-		return assets.NewNoAssetsError()
 	}
 
 	// A single positional asset does not prompt.
@@ -162,23 +149,6 @@ func (c *UnassignCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors
 	}
 
 	return c.resolveTagsService()
-}
-
-// gatherRawAssets returns raw asset strings from --input-file when set,
-// otherwise from the positional args after the tag (each comma-split).
-func (c *UnassignCommand) gatherRawAssets(cmd *cobra.Command, args []string) ([]string, cenclierrors.CencliError) {
-	if c.flags.inputFile.IsSet() {
-		return c.flags.inputFile.Lines(cmd)
-	}
-	assetArgs := args[1:]
-	if len(assetArgs) == 0 {
-		return nil, assets.NewNoAssetsError()
-	}
-	var raw []string
-	for _, a := range assetArgs {
-		raw = append(raw, input.SplitString(a)...)
-	}
-	return raw, nil
 }
 
 func (c *UnassignCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
