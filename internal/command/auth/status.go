@@ -80,13 +80,15 @@ func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclie
 		return statusResult{}, cenclierrors.NewCencliError(err)
 	}
 
-	if kind == credential.KindPersonalAccessToken {
+	switch kind {
+	case credential.KindPersonalAccessToken:
 		return statusResult{
 			Authenticated: true,
 			Method:        "personal_access_token",
 			Token:         cred.Description,
 		}, nil
-	} else if kind == credential.KindOAuth {
+
+	case credential.KindOAuth:
 		sess, parseErr := oauth.ParseSession(cred.Value)
 		if parseErr != nil {
 			return statusResult{}, cenclierrors.NewCencliError(fmt.Errorf("%w (run `censys auth login` to log in again)", parseErr))
@@ -105,7 +107,8 @@ func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclie
 			result.Scope = "free_account"
 		}
 		return result, nil
-	} else {
+
+	default:
 		return statusResult{}, cenclierrors.NewCencliError(fmt.Errorf("unknown credential kind: %s", kind))
 	}
 }
