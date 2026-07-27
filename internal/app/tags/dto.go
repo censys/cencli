@@ -86,6 +86,78 @@ type AssignmentsParams struct {
 	MaxPages      mo.Option[uint64]
 }
 
+// OperationsParams bundles inputs for listing bulk tag operations. An absent
+// TagID lists operations across every tag in the organization.
+type OperationsParams struct {
+	OrgID    mo.Option[identifiers.OrganizationID]
+	TagID    mo.Option[identifiers.TagID]
+	Type     mo.Option[string]
+	Status   mo.Option[string]
+	OrderBy  mo.Option[string]
+	PageSize mo.Option[uint64]
+	MaxPages mo.Option[uint64]
+}
+
+// GetOperationParams bundles inputs for retrieving one bulk tag operation. The
+// endpoint is keyed by UUID, so a tag name is resolved first.
+type GetOperationParams struct {
+	OrgID       mo.Option[identifiers.OrganizationID]
+	TagID       identifiers.TagID
+	OperationID string
+}
+
+// WaitParams bundles inputs for polling an operation until it finishes. An
+// absent Timeout polls until a terminal status or context cancellation.
+type WaitParams struct {
+	OrgID       mo.Option[identifiers.OrganizationID]
+	TagID       identifiers.TagID
+	OperationID string
+	Timeout     mo.Option[time.Duration]
+}
+
+// TagOperation is the domain representation of an asynchronous bulk tag job.
+// The optional fields stay pointers so absent values are omitted from json and
+// yaml output rather than rendered as empty strings.
+type TagOperation struct {
+	ID      string `json:"id" yaml:"id"`
+	TagID   string `json:"tag_id" yaml:"tag_id"`
+	TagName string `json:"tag_name" yaml:"tag_name"`
+	Type    string `json:"type" yaml:"type"`
+	Status  string `json:"status" yaml:"status"`
+	// Query is only set for bulk_create operations.
+	Query *string `json:"query,omitempty" yaml:"query,omitempty"`
+	// TotalCount is approximate at start for bulk_create, and set at completion
+	// for bulk_delete.
+	TotalCount      int64 `json:"total_count" yaml:"total_count"`
+	ProcessedCount  int64 `json:"processed_count" yaml:"processed_count"`
+	SuccessfulCount int64 `json:"successful_count" yaml:"successful_count"`
+	// StatusMessage is set once the operation finishes; it mirrors ErrorMessage
+	// on failure and explains the cap on limit_reached.
+	StatusMessage *string    `json:"status_message,omitempty" yaml:"status_message,omitempty"`
+	ErrorMessage  *string    `json:"error_message,omitempty" yaml:"error_message,omitempty"`
+	CreatedAt     time.Time  `json:"created_at" yaml:"created_at"`
+	EndedAt       *time.Time `json:"ended_at,omitempty" yaml:"ended_at,omitempty"`
+}
+
+// OperationsResult is the outcome of listing bulk tag operations.
+type OperationsResult struct {
+	Meta       *responsemeta.ResponseMeta
+	Operations []TagOperation
+	// TotalSize is the API's count of operations matching the filters.
+	TotalSize int64
+	// PartialError summarizes an error hit after the first successful page.
+	PartialError cenclierrors.CencliError
+}
+
+// GetOperationResult is the outcome of retrieving or waiting on one operation.
+// A terminal status is not an error here: the operation is returned for every
+// outcome and the command layer owns the exit-code policy, which keeps the data
+// payload intact for a failed job.
+type GetOperationResult struct {
+	Meta      *responsemeta.ResponseMeta
+	Operation TagOperation
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`

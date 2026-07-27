@@ -1,8 +1,92 @@
 package tags
 
 import (
+	"fmt"
+
+	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 )
+
+// Terminal operation statuses the command layer branches on for its exit code.
+// They mirror the API's status enum; the service validates the full set.
+const (
+	statusSucceeded    = "succeeded"
+	statusLimitReached = "limit_reached"
+	statusFailed       = "failed"
+	statusCancelled    = "cancelled"
+)
+
+// timeoutWithoutWaitError signals that --timeout was set without --wait, where
+// it would have no effect.
+type timeoutWithoutWaitError struct{}
+
+func NewTimeoutWithoutWaitError() cenclierrors.CencliError { return &timeoutWithoutWaitError{} }
+
+func (e *timeoutWithoutWaitError) Error() string {
+	return "--timeout only applies while polling; add --wait or drop --timeout"
+}
+
+func (e *timeoutWithoutWaitError) Title() string { return "Conflicting Flags" }
+
+func (e *timeoutWithoutWaitError) ShouldPrintUsage() bool { return true }
+
+// operationFailedError signals that a waited-on operation finished as failed.
+// The operation itself was still rendered; this only drives the exit code.
+type operationFailedError struct {
+	operation tags.TagOperation
+}
+
+func NewOperationFailedError(op tags.TagOperation) cenclierrors.CencliError {
+	return &operationFailedError{operation: op}
+}
+
+func (e *operationFailedError) Error() string {
+	msg := fmt.Sprintf("operation %s failed after %d of %d asset(s)",
+		e.operation.ID, e.operation.SuccessfulCount, e.operation.TotalCount)
+	if detail := operationDetail(e.operation); detail != "" {
+		msg = fmt.Sprintf("%s: %s", msg, detail)
+	}
+	return msg
+}
+
+func (e *operationFailedError) Title() string { return "Operation Failed" }
+
+func (e *operationFailedError) ShouldPrintUsage() bool { return false }
+
+// operationCancelledError signals that a waited-on operation was cancelled.
+// Work already committed before the cancellation is kept by the API.
+type operationCancelledError struct {
+	operation tags.TagOperation
+}
+
+func NewOperationCancelledError(op tags.TagOperation) cenclierrors.CencliError {
+	return &operationCancelledError{operation: op}
+}
+
+func (e *operationCancelledError) Error() string {
+	msg := fmt.Sprintf("operation %s was cancelled after %d of %d asset(s)",
+		e.operation.ID, e.operation.SuccessfulCount, e.operation.TotalCount)
+	if detail := operationDetail(e.operation); detail != "" {
+		msg = fmt.Sprintf("%s: %s", msg, detail)
+	}
+	return msg
+}
+
+func (e *operationCancelledError) Title() string { return "Operation Cancelled" }
+
+func (e *operationCancelledError) ShouldPrintUsage() bool { return false }
+
+// operationDetail picks the most specific explanation the API gave. On failure
+// status_message mirrors error_message, so either one will do.
+func operationDetail(op tags.TagOperation) string {
+	if op.ErrorMessage != nil && *op.ErrorMessage != "" {
+		return *op.ErrorMessage
+	}
+	if op.StatusMessage != nil && *op.StatusMessage != "" {
+		return *op.StatusMessage
+	}
+	return ""
+}
 
 // nothingToUpdateError signals that `tags update` was invoked without any
 // mutation flag, so there is nothing to change.

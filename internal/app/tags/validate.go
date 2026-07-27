@@ -43,6 +43,47 @@ var validAssetType = []string{
 	string(operations.AssetTypeCertificate),
 }
 
+// validOperationType is the set of accepted --type values for operations, from
+// the SDK enum. Note these are the bare operations.Type consts, distinct from
+// the components.TagOperationType enum on the response.
+var validOperationType = []string{
+	string(operations.TypeBulkCreate),
+	string(operations.TypeBulkDelete),
+}
+
+// validOperationStatus is the set of accepted --status values for operations.
+// Note limit_reached, and that the in-flight state is running (no in_progress).
+var validOperationStatus = []string{
+	string(operations.StatusPending),
+	string(operations.StatusRunning),
+	string(operations.StatusSucceeded),
+	string(operations.StatusLimitReached),
+	string(operations.StatusFailed),
+	string(operations.StatusCancelled),
+}
+
+// validOperationsOrderBy is the set of accepted --order-by values for
+// operations, which sort by creation time only.
+var validOperationsOrderBy = []string{
+	string(operations.V3TagsListOperationsQueryParamOrderByCreateTimeAsc),
+	string(operations.V3TagsListOperationsQueryParamOrderByCreateTimeDesc),
+}
+
+// validateOperationType checks an optional operation type against the accepted set.
+func validateOperationType(opType mo.Option[string]) cenclierrors.CencliError {
+	return validateEnumFilter("type", opType, validOperationType)
+}
+
+// validateOperationStatus checks an optional operation status against the accepted set.
+func validateOperationStatus(status mo.Option[string]) cenclierrors.CencliError {
+	return validateEnumFilter("status", status, validOperationStatus)
+}
+
+// validateOperationsOrderBy checks order-by against the operations set.
+func validateOperationsOrderBy(orderBy mo.Option[string]) cenclierrors.CencliError {
+	return validateEnumFilter("order-by", orderBy, validOperationsOrderBy)
+}
+
 // validateOrderBy checks an optional order-by value against the accepted set. An
 // absent value is valid (the filter is omitted from the request).
 func validateOrderBy(orderBy mo.Option[string]) cenclierrors.CencliError {
