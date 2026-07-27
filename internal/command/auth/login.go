@@ -130,19 +130,17 @@ func (c *loginCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencl
 	// Best-effort: the token has only the org ID, so resolve the name via the
 	// API (authenticating with the just-stored session) and persist it so
 	// `auth status` can show it offline. On failure we keep the ID.
-	stale := previous
 	if sess.OrgID != "" {
 		if name := c.resolveOrgName(cmd.Context(), sess.OrgID); name != "" {
 			sess.OrgName = name
 			if named, mErr := sess.Marshal(); mErr == nil {
-				if _, rErr := c.Store().AddValueForAuth(cmd.Context(), config.OAuthSessionName, description, named); rErr == nil {
-					// The named row supersedes the one we just added; drop it.
-					stale = append(stale, added)
-				}
+				// Update the row inserted above in place, so the session is never
+				// duplicated and never briefly absent.
+				_, _ = c.Store().UpdateValueForAuth(cmd.Context(), added.ID, description, named)
 			}
 		}
 	}
-	for _, old := range stale {
+	for _, old := range previous {
 		if _, delErr := c.Store().DeleteValueForAuth(cmd.Context(), old.ID); delErr != nil {
 			return cenclierrors.NewCencliError(fmt.Errorf("failed to remove previous oauth session: %w", delErr))
 		}
