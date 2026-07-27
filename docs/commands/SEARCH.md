@@ -38,8 +38,11 @@ $ censys search "host.services.port: 443" --collection-id 550e8400-e29b-41d4-a71
 
 Specify the organization ID to use for the request. This overrides the default organization ID from your configuration.
 
+> [!IMPORTANT]
+> This flag applies **only to personal access tokens**, which are not organization-scoped. If you authenticated with `censys auth login`, the organization is fixed by that login and passing `--org-id` **fails with an error** — see [Organization context](AUTH.md#organization-context).
+
 **Type:** `string` (UUID format)  
-**Default:** Uses the configured organization ID (or the free-user wallet if not configured)
+**Default:** Uses the configured organization ID (or the free-user wallet if not configured). With an OAuth login, the organization that login was authorized for.
 
 ```bash
 $ censys search "host.services.port: 443" --org-id 00000000-0000-0000-0000-000000000001

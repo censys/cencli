@@ -33,10 +33,8 @@ func TestSearchCommand(t *testing.T) {
 	}{
 		// Success cases - basic functionality
 		{
-			name: "success - no fields - no org - no collection - default pagination",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - no fields - no org - no collection - default pagination",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -67,10 +65,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with matched services",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with matched services",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -111,10 +107,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with fields",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with fields",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -145,10 +139,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with orgid",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with orgid",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -179,10 +171,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with collection",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with collection",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -213,10 +203,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with custom pagination",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with custom pagination",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -247,10 +235,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - all flags combined",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - all flags combined",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -289,10 +275,8 @@ func TestSearchCommand(t *testing.T) {
 		},
 		// Pagination validation error cases
 		{
-			name: "error - page size below minimum",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - page size below minimum",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -303,10 +287,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - max pages below minimum",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - max pages below minimum",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -317,10 +299,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - negative page size",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - negative page size",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -331,10 +311,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - negative max pages",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - negative max pages",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -346,10 +324,8 @@ func TestSearchCommand(t *testing.T) {
 		},
 		// Service layer error cases
 		{
-			name: "error - service search failure",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - service search failure",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				mockSvc := searchmocks.NewMockSearchService(ctrl)
 				mockSvc.EXPECT().Search(
@@ -369,10 +345,8 @@ func TestSearchCommand(t *testing.T) {
 		},
 		// Flag validation error cases
 		{
-			name: "error - invalid collection id format",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - invalid collection id format",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -383,10 +357,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - missing query argument",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - missing query argument",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -397,10 +369,8 @@ func TestSearchCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - too many query arguments",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - too many query arguments",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) search.Service {
 				return searchmocks.NewMockSearchService(ctrl)
 			},
@@ -450,7 +420,7 @@ func TestSearchCommand_PartialError(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockStore := storemocks.NewMockStore(ctrl)
+		mockStore := newOrgLookupStore(ctrl)
 		mockSvc := searchmocks.NewMockSearchService(ctrl)
 
 		// Service returns partial results with error wrapped in NewPartialError
@@ -510,7 +480,7 @@ func TestSearchCommand_Streaming(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockStore := storemocks.NewMockStore(ctrl)
+		mockStore := newOrgLookupStore(ctrl)
 		mockSvc := searchmocks.NewMockSearchService(ctrl)
 
 		// Service returns multiple results
@@ -557,4 +527,13 @@ func TestSearchCommand_Streaming(t *testing.T) {
 		// In streaming mode, the service emits via channels, so the result.Hits is empty
 		// This test verifies that the command runs successfully with streaming mode
 	})
+}
+
+// newOrgLookupStore returns a store mock that reports no stored org-id, which is
+// what ResolveOrgID consults for a personal-access-token credential.
+func newOrgLookupStore(ctrl *gomock.Controller) store.Store {
+	ms := storemocks.NewMockStore(ctrl)
+	ms.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+	return ms
 }

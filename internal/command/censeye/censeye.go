@@ -142,7 +142,14 @@ func (c *Command) SupportedOutputTypes() []command.OutputType {
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	var err cenclierrors.CencliError
-	c.orgID, err = c.flags.orgID.Value()
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Route through the credential-aware resolver: --org-id applies only to
+	// personal access tokens, so this rejects it when the credential defines the
+	// organization itself, and otherwise supplies the credential's organization.
+	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
 	if err != nil {
 		return err
 	}

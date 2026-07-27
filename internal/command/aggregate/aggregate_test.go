@@ -32,10 +32,8 @@ func TestAggregateCommand(t *testing.T) {
 	}{
 		// Success cases - basic functionality
 		{
-			name: "success - basic query and field - no flags",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - basic query and field - no flags",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -60,10 +58,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with org ID flag",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with org ID flag",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -88,10 +84,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with collection ID flag",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with collection ID flag",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -113,10 +107,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with num-buckets flag",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with num-buckets flag",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -138,10 +130,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with count-by-level flag",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with count-by-level flag",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -163,10 +153,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - with filter-by-query flag",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - with filter-by-query flag",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -188,10 +176,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - all flags combined",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - all flags combined",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -227,10 +213,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - short flags",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - short flags",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -261,10 +245,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Error cases - argument validation
 		{
-			name: "error - no arguments",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - no arguments",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -275,10 +257,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - only one argument",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - only one argument",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -289,10 +269,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - too many arguments",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - too many arguments",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -305,10 +283,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Error cases - flag validation
 		{
-			name: "error - invalid org ID format",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - invalid org ID format",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -319,10 +295,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - invalid collection ID format",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - invalid collection ID format",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -333,10 +307,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - num-buckets too small",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - num-buckets too small",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -347,10 +319,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - num-buckets too large",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - num-buckets too large",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -361,10 +331,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "error - num-buckets invalid format",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - num-buckets invalid format",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				return aggregatemocks.NewMockAggregateService(ctrl)
 			},
@@ -377,10 +345,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Error cases - service errors
 		{
-			name: "error - service returns error",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "error - service returns error",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -398,10 +364,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Edge cases - boundary values
 		{
-			name: "success - minimum num-buckets",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - minimum num-buckets",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -423,10 +387,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - maximum num-buckets",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - maximum num-buckets",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -450,10 +412,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Special characters and edge cases in query/field
 		{
-			name: "success - query with special characters",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - query with special characters",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -475,10 +435,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - empty results",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - empty results",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -500,10 +458,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Output format tests
 		{
-			name: "success - output-format json outputs JSON",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - output-format json outputs JSON",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -529,10 +485,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - output-format json short form outputs JSON",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - output-format json short form outputs JSON",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -556,10 +510,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - default outputs short table",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - default outputs short table",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -591,10 +543,8 @@ func TestAggregateCommand(t *testing.T) {
 
 		// Header format tests
 		{
-			name: "success - header shows default values when flags not provided",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - header shows default values when flags not provided",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -617,10 +567,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - header shows values when count-by-level and filter-by-query flags provided",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - header shows values when count-by-level and filter-by-query flags provided",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -643,10 +591,8 @@ func TestAggregateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "success - header shows count-by-level only when provided",
-			store: func(ctrl *gomock.Controller) store.Store {
-				return storemocks.NewMockStore(ctrl)
-			},
+			name:  "success - header shows count-by-level only when provided",
+			store: newOrgLookupStore,
 			service: func(ctrl *gomock.Controller) aggregate.Service {
 				mockSvc := aggregatemocks.NewMockAggregateService(ctrl)
 				mockSvc.EXPECT().Aggregate(
@@ -693,4 +639,13 @@ func TestAggregateCommand(t *testing.T) {
 			tc.assert(t, stdout.String(), stderr.String(), cenclierrors.NewCencliError(execErr))
 		})
 	}
+}
+
+// newOrgLookupStore returns a store mock that reports no stored org-id, which is
+// what ResolveOrgID consults for a personal-access-token credential.
+func newOrgLookupStore(ctrl *gomock.Controller) store.Store {
+	ms := storemocks.NewMockStore(ctrl)
+	ms.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+	return ms
 }

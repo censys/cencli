@@ -20,6 +20,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/assets"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/formatter"
+	"github.com/censys/cencli/internal/store"
 )
 
 const testOrgID = "550e8400-e29b-41d4-a716-446655440001"
@@ -130,6 +131,10 @@ func TestEnrichCommand(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockStore := storemocks.NewMockStore(ctrl)
+			// With no OAuth client set, ResolveOrgID falls back to the stored
+			// org-id global; absent here so a missing --org-id fails cleanly.
+			mockStore.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+				Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
 			cmdContext := command.NewCommandContext(cfg, mockStore, command.WithEnrichService(tc.service(ctrl)))
 			rootCmd, err := command.RootCommandToCobra(NewEnrichCommand(cmdContext))
 			require.NoError(t, err)

@@ -47,6 +47,7 @@ func TestOrgDetailsCommand(t *testing.T) {
 				mockSvc.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					identifiers.NewOrganizationID(uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")),
+					gomock.Any(),
 				).Return(organizations.OrganizationDetailsResult{
 					Meta: responsemeta.NewResponseMeta(&http.Request{}, &http.Response{StatusCode: 200}, 100*time.Millisecond, 1),
 					Data: organizations.OrganizationDetails{
@@ -90,6 +91,7 @@ func TestOrgDetailsCommand(t *testing.T) {
 				mockSvc.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					identifiers.NewOrganizationID(uuid.MustParse("58857aac-4b76-46ec-a567-0e02b2c3d479")),
+					gomock.Any(),
 				).Return(organizations.OrganizationDetailsResult{
 					Meta: responsemeta.NewResponseMeta(&http.Request{}, &http.Response{StatusCode: 200}, 100*time.Millisecond, 1),
 					Data: organizations.OrganizationDetails{
@@ -115,6 +117,7 @@ func TestOrgDetailsCommand(t *testing.T) {
 				mockSvc.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					identifiers.NewOrganizationID(uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")),
+					gomock.Any(),
 				).Return(organizations.OrganizationDetailsResult{
 					Meta: responsemeta.NewResponseMeta(&http.Request{}, &http.Response{StatusCode: 200}, 50*time.Millisecond, 1),
 					Data: organizations.OrganizationDetails{
@@ -142,6 +145,7 @@ func TestOrgDetailsCommand(t *testing.T) {
 				mockSvc.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					identifiers.NewOrganizationID(uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")),
+					gomock.Any(),
 				).Return(organizations.OrganizationDetailsResult{
 					Meta: responsemeta.NewResponseMeta(&http.Request{}, &http.Response{StatusCode: 200}, 100*time.Millisecond, 1),
 					Data: organizations.OrganizationDetails{
@@ -180,7 +184,7 @@ func TestOrgDetailsCommand(t *testing.T) {
 			args: []string{"--output-format", "json"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "no organization ID configured")
+				require.Contains(t, err.Error(), "no organization ID available")
 			},
 		},
 		{
@@ -207,6 +211,7 @@ func TestOrgDetailsCommand(t *testing.T) {
 				mockSvc.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					identifiers.NewOrganizationID(uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")),
+					gomock.Any(),
 				).Return(organizations.OrganizationDetailsResult{}, cenclierrors.NewCencliError(errors.New("organization not found")))
 				return mockSvc
 			},

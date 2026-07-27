@@ -80,6 +80,10 @@ $ censys --help
 
 `cencli` supports various commands for accessing our platform. Run `censys --help` to see all available commands.
 
+### Authentication
+
+The `auth` command lets you log in to the Censys Platform with your browser (`censys auth login`). Tokens are obtained via OAuth2 and refreshed automatically. See the [auth command docs](./docs/commands/AUTH.md) for more details.
+
 ### Configuration
 
 The `config` command allows you to manage your personal access tokens and organization IDs. See the [config command docs](./docs/commands/CONFIG.md) for more details.

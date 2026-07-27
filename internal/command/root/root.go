@@ -9,6 +9,7 @@ import (
 
 	"github.com/censys/cencli/internal/command"
 	aggregatecmd "github.com/censys/cencli/internal/command/aggregate"
+	authcmd "github.com/censys/cencli/internal/command/auth"
 	censeyecmd "github.com/censys/cencli/internal/command/censeye"
 	completioncmd "github.com/censys/cencli/internal/command/completion"
 	configcmd "github.com/censys/cencli/internal/command/config"
@@ -64,6 +65,7 @@ func (c *Command) Init() error {
 
 	return c.AddSubCommands(
 		view.NewViewCommand(c.Context),
+		authcmd.NewAuthCommand(c.Context),
 		enrichcmd.NewEnrichCommand(c.Context),
 		configcmd.NewConfigCommand(c.Context),
 		versioncmd.NewVersionCommand(c.Context),

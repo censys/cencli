@@ -19,7 +19,7 @@ Flags:
   -d, --duration string   time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d (default "168h0m0s")
   -e, --end string        end time
   -h, --help              help for history
-  -o, --org-id string     override the configured organization ID
+  -o, --org-id string     organization ID to target (personal access tokens only)
   -s, --start string      start time
 
 Global Flags:

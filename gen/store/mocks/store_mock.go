@@ -189,6 +189,21 @@ func (mr *MockStoreMockRecorder) UpdateGlobalLastUsedAtToNow(ctx, id any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateGlobalLastUsedAtToNow", reflect.TypeOf((*MockStore)(nil).UpdateGlobalLastUsedAtToNow), ctx, id)
 }
 
+// UpdateValueForAuth mocks base method.
+func (m *MockStore) UpdateValueForAuth(ctx context.Context, id int64, description, value string) (*store.ValueForAuth, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateValueForAuth", ctx, id, description, value)
+	ret0, _ := ret[0].(*store.ValueForAuth)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateValueForAuth indicates an expected call of UpdateValueForAuth.
+func (mr *MockStoreMockRecorder) UpdateValueForAuth(ctx, id, description, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateValueForAuth", reflect.TypeOf((*MockStore)(nil).UpdateValueForAuth), ctx, id, description, value)
+}
+
 // MockAuthsStore is a mock of AuthsStore interface.
 type MockAuthsStore struct {
 	ctrl     *gomock.Controller
@@ -285,6 +300,21 @@ func (m *MockAuthsStore) UpdateAuthLastUsedAtToNow(ctx context.Context, id int64
 func (mr *MockAuthsStoreMockRecorder) UpdateAuthLastUsedAtToNow(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAuthLastUsedAtToNow", reflect.TypeOf((*MockAuthsStore)(nil).UpdateAuthLastUsedAtToNow), ctx, id)
+}
+
+// UpdateValueForAuth mocks base method.
+func (m *MockAuthsStore) UpdateValueForAuth(ctx context.Context, id int64, description, value string) (*store.ValueForAuth, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateValueForAuth", ctx, id, description, value)
+	ret0, _ := ret[0].(*store.ValueForAuth)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateValueForAuth indicates an expected call of UpdateValueForAuth.
+func (mr *MockAuthsStoreMockRecorder) UpdateValueForAuth(ctx, id, description, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateValueForAuth", reflect.TypeOf((*MockAuthsStore)(nil).UpdateValueForAuth), ctx, id, description, value)
 }
 
 // MockGlobalsStore is a mock of GlobalsStore interface.

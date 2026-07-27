@@ -113,7 +113,7 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err := c.parseAtTimeFlag(); err != nil {
 		return err
 	}
-	if err := c.parseOrgIDFlag(); err != nil {
+	if err := c.parseOrgIDFlag(cmd.Context()); err != nil {
 		return err
 	}
 	// gather assets and classify
@@ -154,10 +154,16 @@ func (c *Command) parseAtTimeFlag() cenclierrors.CencliError {
 	return nil
 }
 
-// parseOrgIDFlag parses the optional org-id flag into c.orgID.
-func (c *Command) parseOrgIDFlag() cenclierrors.CencliError {
-	var err cenclierrors.CencliError
-	c.orgID, err = c.flags.orgID.Value()
+// parseOrgIDFlag resolves the organization for the request into c.orgID.
+func (c *Command) parseOrgIDFlag(ctx context.Context) cenclierrors.CencliError {
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Route through the credential-aware resolver: --org-id applies only to
+	// personal access tokens, so this rejects it when the credential defines the
+	// organization itself, and otherwise supplies the credential's organization.
+	c.orgID, err = c.ResolveOrgID(ctx, flagOrgID)
 	if err != nil {
 		return err
 	}

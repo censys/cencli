@@ -16,7 +16,7 @@ Flags:
   -f, --fields strings         fields to return in response (optional)
   -h, --help                   help for search
   -p, --max-pages int          maximum number of pages to fetch (-1 for all pages) (default 1)
-  -o, --org-id string          override the configured organization ID
+  -o, --org-id string          organization ID to target (personal access tokens only)
   -n, --page-size int          number of results to return per page (default 100)
 
 Global Flags:

@@ -12,7 +12,7 @@ import (
 const (
 	orgIDFlagName  = "org-id"
 	orgIDFlagShort = "o"
-	orgIDFlagDesc  = "override the configured organization ID"
+	orgIDFlagDesc  = "organization ID to target (personal access tokens only)"
 )
 
 // OrgIDFlag is a domain-specific flag that represents an optional Organization ID.

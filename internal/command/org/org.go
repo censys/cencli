@@ -36,7 +36,7 @@ func (c *Command) Long() string {
 By default, these commands use your stored organization ID. If no organization ID is stored,
 or you want to query a different organization, use the --org-id flag on each subcommand.
 
-To set your default organization ID, run: censys config org-id set <org-id>`
+To store a default organization ID, run: censys config org-id add`
 }
 
 func (c *Command) Args() command.PositionalArgs {

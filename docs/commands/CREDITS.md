@@ -14,6 +14,8 @@ This command shows your personal free user credit balance and usage information.
 
 **Note:** This command only shows free user credits. If you want to see organization credits for a paid account, use [`censys org credits`](ORG.md#org-credits) instead.
 
+**OAuth logins:** If you logged in with `censys auth login` and selected an **organization**, your session is locked to that organization and **cannot** access free user credits — this command fails with a message directing you to `censys org credits`. To view free user credits, log out and log in again without selecting an organization (see [Organization context](AUTH.md#organization-context)).
+
 ## Output Formats
 
 The `credits` command defaults to **`short`** output format, which displays results in a human-readable format. You can override this with the `--output-format` flag (or `-O`).

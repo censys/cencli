@@ -17,6 +17,9 @@ type AuthsStore interface {
 	AddValueForAuth(ctx context.Context, name, description, value string) (*ValueForAuth, error)
 	// DeleteValueForAuth deletes an added auth value.
 	DeleteValueForAuth(ctx context.Context, id int64) (*ValueForAuth, error)
+	// UpdateValueForAuth replaces the description and value of an existing auth
+	// value in place (and marks it most-recently-used), returning the updated row.
+	UpdateValueForAuth(ctx context.Context, id int64, description, value string) (*ValueForAuth, error)
 	// GetValuesForAuth returns all added values for a given auth from the config.
 	GetValuesForAuth(ctx context.Context, name string) ([]*ValueForAuth, error)
 	// UpdateAuthLastUsedAtToNow updates the last used at timestamp for a given auth value.
@@ -97,6 +100,23 @@ func (s *authsStore) DeleteValueForAuth(ctx context.Context, id int64) (*ValueFo
 	}
 	auth := s.authFromDb(&row)
 	return auth, nil
+}
+
+func (s *authsStore) UpdateValueForAuth(ctx context.Context, id int64, description, value string) (*ValueForAuth, error) {
+	q := db.New(s.db)
+	row, err := q.UpdateAuthValue(ctx, db.UpdateAuthValueParams{
+		Description: description,
+		Value:       value,
+		LastUsedAt:  toZulu(time.Now()),
+		ID:          id,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAuthNotFound
+		}
+		return nil, fmt.Errorf("failed to update auth: %w", err)
+	}
+	return s.authFromDb(&row), nil
 }
 
 func (s *authsStore) UpdateAuthLastUsedAtToNow(ctx context.Context, id int64) error {

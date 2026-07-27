@@ -100,9 +100,17 @@ func (c *Command) SupportsStreaming() bool {
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	if err := c.parseOrgIDFlag(); err != nil {
+	orgIDFromFlag, err := c.flags.orgID.Value()
+	if err != nil {
 		return err
 	}
+	// Enrichment requires an organization; this reports precisely why one is
+	// unavailable (free-account credential vs. none configured).
+	orgID, err := c.ResolveRequiredOrgID(cmd, orgIDFromFlag)
+	if err != nil {
+		return err
+	}
+	c.orgID = mo.Some(orgID)
 
 	rawHosts, err := c.gatherRawHosts(cmd, args)
 	if err != nil {
@@ -114,12 +122,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	}
 	c.hostIDs = hostIDs
 
-	// Enrichment requires an organization ID. Fail early with a helpful message
-	// rather than letting the API reject the request.
-	if !c.orgID.IsPresent() && !c.HasOrgID() {
-		return cenclierrors.NewNoOrgIDError()
-	}
-
 	return c.resolveEnrichService()
 }
 
@@ -130,12 +132,6 @@ func (c *Command) resolveEnrichService() cenclierrors.CencliError {
 	}
 	c.enrichSvc = svc
 	return nil
-}
-
-func (c *Command) parseOrgIDFlag() cenclierrors.CencliError {
-	var err cenclierrors.CencliError
-	c.orgID, err = c.flags.orgID.Value()
-	return err
 }
 
 // gatherRawHosts returns raw host strings from file, stdin, or positional args.

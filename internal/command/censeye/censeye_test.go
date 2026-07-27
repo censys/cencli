@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	storemocks "github.com/censys/cencli/gen/store/mocks"
+
 	censeyemocks "github.com/censys/cencli/gen/app/censeye/mocks"
 	viewmocks "github.com/censys/cencli/gen/app/view/mocks"
 	"github.com/censys/cencli/internal/app/censeye"
@@ -29,6 +31,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
+	"github.com/censys/cencli/internal/store"
 )
 
 func TestCenseyeCommand(t *testing.T) {
@@ -843,7 +846,7 @@ func TestCenseyeCommand(t *testing.T) {
 			defer ctrl.Finish()
 			viewSvc := tc.viewSvc(ctrl)
 			censeyeSvc := tc.censeyeSvc(ctrl)
-			cmdContext := command.NewCommandContext(cfg, nil, command.WithViewService(viewSvc), command.WithCenseyeService(censeyeSvc))
+			cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl), command.WithViewService(viewSvc), command.WithCenseyeService(censeyeSvc))
 			rootCmd, err := command.RootCommandToCobra(NewCenseyeCommand(cmdContext))
 			require.NoError(t, err)
 
@@ -860,3 +863,12 @@ func TestCenseyeCommand(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+// newOrgLookupStore returns a store mock that reports no stored org-id, which is
+// what ResolveOrgID consults for a personal-access-token credential.
+func newOrgLookupStore(ctrl *gomock.Controller) store.Store {
+	ms := storemocks.NewMockStore(ctrl)
+	ms.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+	return ms
+}

@@ -46,6 +46,11 @@ $ censys config auth delete <id>                                  # delete a tok
 
 ### `config org-id`
 
+> [!IMPORTANT]
+> **Organization IDs apply only to personal access tokens.** A PAT is not organization-scoped, so you choose the organization yourself — either with a stored value here or per command with `--org-id`.
+>
+> If you authenticate with **`censys auth login`** (OAuth), the organization is fixed by what that login was authorized for. Stored organization IDs are **ignored**, and passing `--org-id` **fails with an error**. To target a different organization, run `censys auth logout` and `censys auth login` again, choosing that organization. See [Organization context](AUTH.md#organization-context).
+
 Manage organization IDs used for API requests. The active organization ID is automatically attached to requests that support organization-scoped operations.
 
 Use `censys config org-id add` to open an interactive prompt to add an organization ID. Use `censys config org-id` to view all stored organization IDs, activate a different one, or delete them.

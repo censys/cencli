@@ -158,3 +158,42 @@ func (q *Queries) UpdateAuthLastUsedAt(ctx context.Context, arg UpdateAuthLastUs
 	)
 	return i, err
 }
+
+const updateAuthValue = `-- name: UpdateAuthValue :one
+UPDATE
+    auths
+SET
+    description = ?,
+    value = ?,
+    last_used_at = ?
+WHERE
+    id = ?
+RETURNING
+    id, name, description, value, created_at, last_used_at
+`
+
+type UpdateAuthValueParams struct {
+	Description string
+	Value       string
+	LastUsedAt  string
+	ID          int64
+}
+
+func (q *Queries) UpdateAuthValue(ctx context.Context, arg UpdateAuthValueParams) (Auth, error) {
+	row := q.db.QueryRowContext(ctx, updateAuthValue,
+		arg.Description,
+		arg.Value,
+		arg.LastUsedAt,
+		arg.ID,
+	)
+	var i Auth
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Value,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+	)
+	return i, err
+}

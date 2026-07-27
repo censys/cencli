@@ -3,11 +3,13 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/samber/mo"
+	"github.com/spf13/cobra"
 
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
@@ -21,6 +23,7 @@ import (
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
+	"github.com/censys/cencli/internal/pkg/credential"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/formatter"
@@ -100,9 +103,108 @@ func (c *Context) HasOrgID() bool {
 	return c.censysClient != nil && c.censysClient.HasOrgID()
 }
 
-// GetStoredOrgID retrieves the stored organization ID from the store.
-// Returns the org ID if found, or None if not configured.
-func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
+// credentialInfo returns the active credential as reported by the client, or a
+// zero (KindNone) value when no client is set (e.g. before auth, or a test that
+// doesn't inject one).
+func (c *Context) credentialInfo() credential.Info {
+	if c.censysClient == nil {
+		return credential.Info{Kind: credential.KindNone}
+	}
+	return c.censysClient.CredentialInfo()
+}
+
+// ResolveOrgID determines the organization a command should target.
+//
+// The two manual sources — the --org-id flag and the stored org-id global —
+// apply only to credentials that permit it (see credential.Info.AllowsManualOrg,
+// which allowlists personal access tokens). Every other credential kind carries
+// its own organization binding: that organization is used, and --org-id is
+// rejected as a usage error because it cannot apply.
+func (c *Context) ResolveOrgID(ctx context.Context, flagOrgID mo.Option[identifiers.OrganizationID]) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
+	zero := mo.None[identifiers.OrganizationID]()
+	info := c.credentialInfo()
+
+	// ---- Not organization-scoped: the caller picks the organization per request.
+	if info.AllowsManualOrg() {
+		if flagOrgID.IsPresent() {
+			return flagOrgID, nil
+		}
+		return c.storedOrgID(ctx)
+	}
+
+	// ---- Credential carries its own organization; flags/config cannot override it.
+	if flagOrgID.IsPresent() {
+		return zero, cenclierrors.NewOrgIDNotApplicableError(credentialScopeTarget(info))
+	}
+	if info.OrgID == "" {
+		return zero, nil // e.g. a free-account OAuth session: no organization to target
+	}
+	boundOrg, err := parseOrgID(info.OrgID)
+	if err != nil {
+		return zero, err
+	}
+	return mo.Some(boundOrg), nil
+}
+
+// ResolveRequiredOrgID is ResolveOrgID for commands that cannot run without an
+// organization. It distinguishes the two reasons an organization may be missing,
+// so the message names the real problem:
+//
+//   - the credential is locked to the free account and can never target an
+//     organization, or
+//   - the credential can target one, but none was given or stored.
+func (c *Context) ResolveRequiredOrgID(
+	cmd *cobra.Command,
+	flagOrgID mo.Option[identifiers.OrganizationID],
+) (identifiers.OrganizationID, cenclierrors.CencliError) {
+	// Resolve first, so an inapplicable --org-id is always reported as such,
+	// consistently with every other command that accepts the flag.
+	orgID, err := c.ResolveOrgID(cmd.Context(), flagOrgID)
+	if err != nil {
+		return identifiers.OrganizationID{}, err
+	}
+	if orgID.IsPresent() {
+		return orgID.MustGet(), nil
+	}
+
+	// Nothing to target. Say which of the two reasons applies.
+	info := c.credentialInfo()
+	if info.IsBoundToFreeAccount() {
+		return identifiers.OrganizationID{}, cenclierrors.NewOrganizationRequiredError(
+			cmd.CommandPath(), credentialScopeTarget(info))
+	}
+	return identifiers.OrganizationID{}, cenclierrors.NewNoOrgIDError()
+}
+
+// EnsureFreeAccountAccess errors when the active credential is locked to an
+// organization, and so cannot read the user's free account. alternative is an
+// optional sentence pointing at the organization equivalent of the command.
+func (c *Context) EnsureFreeAccountAccess(cmd *cobra.Command, alternative string) cenclierrors.CencliError {
+	info := c.credentialInfo()
+	if info.IsBoundToOrg() {
+		return cenclierrors.NewFreeAccountRequiredError(
+			cmd.CommandPath(), credentialScopeTarget(info), alternative)
+	}
+	return nil
+}
+
+// credentialScopeTarget names what the active credential is scoped to, for use
+// after "…is scoped to " in error text: "the organization [X]", or "your free
+// account" when the credential carries no organization.
+func credentialScopeTarget(info credential.Info) string {
+	switch {
+	case info.OrgName != "":
+		return fmt.Sprintf("the organization [%s]", info.OrgName)
+	case info.OrgID != "":
+		return fmt.Sprintf("the organization [%s]", info.OrgID)
+	default:
+		return "your free account"
+	}
+}
+
+// storedOrgID reads the org-id global. Personal-access-token path only: an
+// OAuth login takes its organization from the login itself.
+func (c *Context) storedOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
 	zero := mo.None[identifiers.OrganizationID]()
 	storedOrgID, err := c.store.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
 	if err != nil {
@@ -111,11 +213,19 @@ func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.Org
 		}
 		return zero, cenclierrors.NewCencliError(err)
 	}
-	parsedUUID, parseErr := uuid.Parse(storedOrgID.Value)
-	if parseErr != nil {
-		return zero, cenclierrors.NewCencliError(parseErr)
+	parsed, perr := parseOrgID(storedOrgID.Value)
+	if perr != nil {
+		return zero, perr
 	}
-	return mo.Some(identifiers.NewOrganizationID(parsedUUID)), nil
+	return mo.Some(parsed), nil
+}
+
+func parseOrgID(value string) (identifiers.OrganizationID, cenclierrors.CencliError) {
+	parsedUUID, err := uuid.Parse(value)
+	if err != nil {
+		return identifiers.OrganizationID{}, cenclierrors.NewCencliError(err)
+	}
+	return identifiers.NewOrganizationID(parsedUUID), nil
 }
 
 // Logger returns a logger pre-populated with the command name field.

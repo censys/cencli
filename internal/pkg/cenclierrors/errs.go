@@ -213,7 +213,7 @@ func IsInterrupted(err error) bool {
 type noOrgIDError struct{}
 
 func (e *noOrgIDError) Error() string {
-	return "no organization ID configured. Use --org-id flag or run 'censys config org-id set <org-id>' to set a default"
+	return "no organization ID available. Pass --org-id, or run 'censys config org-id add' to store a default"
 }
 
 func (e *noOrgIDError) Title() string {
@@ -226,4 +226,85 @@ func (e *noOrgIDError) ShouldPrintUsage() bool {
 
 func NewNoOrgIDError() CencliError {
 	return &noOrgIDError{}
+}
+
+type organizationRequiredError struct {
+	cmdPath string
+	scope   string
+}
+
+func (e *organizationRequiredError) Error() string {
+	return e.cmdPath + " uses an organization API, which only organization-scoped credentials can access. " +
+		"Your current log in is scoped to " + e.scope + ". " +
+		"To access an organization, authenticate to it. " +
+		"(run 'censys auth logout' then 'censys auth login' and scope access to that organization)."
+}
+
+func (e *organizationRequiredError) Title() string { return "Organization Required" }
+
+func (e *organizationRequiredError) ShouldPrintUsage() bool { return false }
+
+// NewOrganizationRequiredError is returned when an organization-scoped command
+// runs with a credential locked to the user's free account. cmdPath is the
+// invoked command (e.g. "censys enrich") and scope is a clause describing the
+// credential, e.g. "your OAuth login is scoped to your free account".
+func NewOrganizationRequiredError(cmdPath, scope string) CencliError {
+	return &organizationRequiredError{cmdPath: cmdPath, scope: scope}
+}
+
+type freeAccountRequiredError struct {
+	cmdPath     string
+	scope       string
+	alternative string
+}
+
+func (e *freeAccountRequiredError) Error() string {
+	msg := e.cmdPath + " uses a free-account API, which only free-account credentials can access. " +
+		"Your current log in is scoped to " + e.scope + ". "
+	if e.alternative != "" {
+		// e.g. "To view your organization's credits run 'censys org credits'"
+		msg += e.alternative + " or to read your free user account, authenticate to that."
+	} else {
+		msg += "To read your free user account, authenticate to that."
+	}
+	return msg + " (run 'censys auth logout' then 'censys auth login' and scope access to your free account)."
+}
+
+func (e *freeAccountRequiredError) Title() string { return "Free User Account Required" }
+
+func (e *freeAccountRequiredError) ShouldPrintUsage() bool { return false }
+
+// NewFreeAccountRequiredError is returned when a free-account-only command runs
+// with a credential locked to an organization. cmdPath is the invoked command,
+// scope describes the credential, and alternative is an optional sentence
+// pointing at the organization equivalent of the command.
+func NewFreeAccountRequiredError(cmdPath, scope, alternative string) CencliError {
+	return &freeAccountRequiredError{cmdPath: cmdPath, scope: scope, alternative: alternative}
+}
+
+type orgIDNotApplicableError struct{ scope string }
+
+func (e *orgIDNotApplicableError) Error() string {
+	return "--org-id only applies to personal access tokens, the one credential that is not " +
+		"organization-scoped. Your current log in is scoped to " + e.scope + ", so the organization " +
+		"cannot be chosen per request. To target a different organization, authenticate to it " +
+		"(run 'censys auth logout' then 'censys auth login' and scope access to that organization), " +
+		"or switch to a personal access token with 'censys config auth activate <id>'."
+}
+
+func (e *orgIDNotApplicableError) Title() string {
+	return "Organization ID Not Applicable"
+}
+
+func (e *orgIDNotApplicableError) ShouldPrintUsage() bool {
+	return true
+}
+
+// NewOrgIDNotApplicableError is returned when --org-id is supplied while the
+// active credential carries its own organization binding, so the flag (a
+// personal-access-token concept) cannot apply. scope is a clause describing what
+// the credential is bound to, e.g. "Your OAuth login is scoped to organization
+// [Censys]".
+func NewOrgIDNotApplicableError(scope string) CencliError {
+	return &orgIDNotApplicableError{scope: scope}
 }

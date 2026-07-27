@@ -18,7 +18,7 @@ Examples:
 Flags:
   -h, --help            help for members
   -i, --interactive     display results in an interactive table (TUI)
-  -o, --org-id string   override the configured organization ID
+  -o, --org-id string   organization ID to target (personal access tokens only)
 
 Global Flags:
       --debug                   enable debug logging

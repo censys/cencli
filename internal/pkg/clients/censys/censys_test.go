@@ -3,6 +3,7 @@ package censys
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,12 +15,15 @@ import (
 
 	"github.com/censys/cencli/gen/store/mocks"
 	"github.com/censys/cencli/internal/config"
+	"github.com/censys/cencli/internal/pkg/credential"
 	authdom "github.com/censys/cencli/internal/pkg/domain/auth"
+	"github.com/censys/cencli/internal/pkg/oauth"
 	"github.com/censys/cencli/internal/store"
 )
 
 func TestNewCensysSDK(t *testing.T) {
 	ctx := context.Background()
+	cfg := &config.Config{}
 
 	t.Run("success with PAT and OrgID", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -27,6 +31,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
 			Name:       "auth",
 			Value:      "test-pat-token",
@@ -39,7 +44,7 @@ func TestNewCensysSDK(t *testing.T) {
 			LastUsedAt: time.Now(),
 		}, nil)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.True(t, client.HasOrgID())
@@ -51,6 +56,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
 			Name:       "auth",
 			Value:      "test-pat-token",
@@ -59,21 +65,108 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.False(t, client.HasOrgID())
 	})
 
-	t.Run("error when PAT not found", func(t *testing.T) {
+	t.Run("free-account OAuth session ignores stored org-id and has no org", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		// Free-account session: the org-id global is not read while OAuth is active.
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test"}`,
+			LastUsedAt: time.Now(),
+		}, nil)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+		assert.False(t, client.HasOrgID())
+	})
+
+	t.Run("org-bound OAuth session takes its org from the session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		// Org-bound session carries org_id; the org-id global is not consulted.
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test","org_id":"11111111-1111-1111-1111-111111111111"}`,
+			LastUsedAt: time.Now(),
+		}, nil)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
+
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+		assert.True(t, client.HasOrgID())
+	})
+
+	t.Run("OAuth session newer than PAT wins", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test"}`,
+			LastUsedAt: time.Now(),
+		}, nil)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
+			Name:       "auth",
+			Value:      "test-pat-token",
+			LastUsedAt: time.Now().Add(-time.Hour),
+		}, nil)
+
+		cred, kind, err := credential.Active(ctx, mockStore)
+		require.NoError(t, err)
+		assert.Equal(t, credential.KindOAuth, kind)
+		assert.Equal(t, config.OAuthSessionName, cred.Name)
+	})
+
+	t.Run("PAT newer than OAuth session wins", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return(&store.ValueForAuth{
+			Name:       config.OAuthSessionName,
+			Value:      `{"access_token":"ory_at_test"}`,
+			LastUsedAt: time.Now().Add(-time.Hour),
+		}, nil)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
+			Name:       "auth",
+			Value:      "test-pat-token",
+			LastUsedAt: time.Now(),
+		}, nil)
+
+		cred, kind, err := credential.Active(ctx, mockStore)
+		require.NoError(t, err)
+		assert.Equal(t, credential.KindPersonalAccessToken, kind)
+		assert.Equal(t, "auth", cred.Name)
+	})
+
+	t.Run("error when no credentials found", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := mocks.NewMockStore(ctrl)
+
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
+
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.True(t, errors.Is(err, authdom.ErrAuthNotFound))
@@ -85,9 +178,10 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return((*store.ValueForAuth)(nil), errors.New("db error"))
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to get last used auth")
@@ -99,6 +193,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore := mocks.NewMockStore(ctrl)
 
+		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.OAuthSessionName).Return((*store.ValueForAuth)(nil), authdom.ErrAuthNotFound)
 		mockStore.EXPECT().GetLastUsedAuthByName(ctx, config.AuthName).Return(&store.ValueForAuth{
 			Name:       "auth",
 			Value:      "test-pat-token",
@@ -107,7 +202,7 @@ func TestNewCensysSDK(t *testing.T) {
 
 		mockStore.EXPECT().GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName).Return((*store.ValueForGlobal)(nil), errors.New("db error"))
 
-		client, err := NewCensysSDK(ctx, mockStore, 0, config.RetryStrategy{}, false)
+		client, err := NewCensysSDK(ctx, mockStore, cfg)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to get last used orgID")
@@ -333,6 +428,90 @@ func TestCensysSDK_ExecuteWithRetryNilOperation(t *testing.T) {
 // helper for retry tests
 func newGenericCensysError(code int) ClientError {
 	return NewCensysClientGenericError(&sdkerrors.SDKError{Message: "retryable", StatusCode: code})
+}
+
+func TestOAuthSecuritySource(t *testing.T) {
+	const oauthName = config.OAuthSessionName
+
+	validSession := func(accessToken string) string {
+		return fmt.Sprintf(`{"access_token":%q,"refresh_token":"rt","expires_at":%q}`,
+			accessToken, time.Now().Add(time.Hour).Format(time.RFC3339))
+	}
+	expiredSession := func(accessToken, refreshToken string) string {
+		return fmt.Sprintf(`{"access_token":%q,"refresh_token":%q,"expires_at":%q}`,
+			accessToken, refreshToken, time.Now().Add(-time.Hour).Format(time.RFC3339))
+	}
+	rec := func(value string) *store.ValueForAuth {
+		return &store.ValueForAuth{ID: 1, Name: oauthName, Description: "user@censys.com", Value: value}
+	}
+
+	t.Run("valid session is used without refreshing", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ds := mocks.NewMockStore(ctrl)
+		ds.EXPECT().GetLastUsedAuthByName(gomock.Any(), oauthName).Return(rec(validSession("at-valid")), nil)
+
+		src := newOAuthSecuritySource(ds, func(context.Context, string) (*oauth.Session, error) {
+			t.Fatal("refresh should not be called for a valid session")
+			return nil, nil
+		})
+		sec, err := src(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "at-valid", sec.PersonalAccessToken)
+	})
+
+	t.Run("expired session refreshes and persists in place", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ds := mocks.NewMockStore(ctrl)
+		ds.EXPECT().GetLastUsedAuthByName(gomock.Any(), oauthName).Return(rec(expiredSession("at-old", "rt-old")), nil)
+		// Persisted in place (update), not add-then-delete.
+		ds.EXPECT().UpdateValueForAuth(gomock.Any(), int64(1), "user@censys.com", gomock.Any()).Return(rec(""), nil)
+
+		src := newOAuthSecuritySource(ds, func(_ context.Context, rt string) (*oauth.Session, error) {
+			assert.Equal(t, "rt-old", rt)
+			return &oauth.Session{AccessToken: "at-new", RefreshToken: "rt-new"}, nil
+		})
+		sec, err := src(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "at-new", sec.PersonalAccessToken)
+	})
+
+	t.Run("refresh failure falls back to a concurrently-refreshed session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ds := mocks.NewMockStore(ctrl)
+		// First read: expired. Second read (after refresh fails): a valid session
+		// another process just wrote.
+		gomock.InOrder(
+			ds.EXPECT().GetLastUsedAuthByName(gomock.Any(), oauthName).Return(rec(expiredSession("at-old", "rt-old")), nil),
+			ds.EXPECT().GetLastUsedAuthByName(gomock.Any(), oauthName).Return(rec(validSession("at-concurrent")), nil),
+		)
+
+		src := newOAuthSecuritySource(ds, func(context.Context, string) (*oauth.Session, error) {
+			return nil, errors.New("refresh token already used")
+		})
+		sec, err := src(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, "at-concurrent", sec.PersonalAccessToken)
+	})
+
+	t.Run("refresh failure with no recovery returns an error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		ds := mocks.NewMockStore(ctrl)
+		gomock.InOrder(
+			ds.EXPECT().GetLastUsedAuthByName(gomock.Any(), oauthName).Return(rec(expiredSession("at-old", "rt-old")), nil),
+			ds.EXPECT().GetLastUsedAuthByName(gomock.Any(), oauthName).Return(rec(expiredSession("at-old", "rt-old")), nil),
+		)
+
+		src := newOAuthSecuritySource(ds, func(context.Context, string) (*oauth.Session, error) {
+			return nil, errors.New("refresh token already used")
+		})
+		_, err := src(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to refresh")
+	})
 }
 
 func TestCalculateRetryDelay(t *testing.T) {

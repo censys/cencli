@@ -36,10 +36,17 @@ func newOrganizationIDCommand(cmdContext *command.Context) *organizationIDComman
 	return cmd
 }
 
-func (c *organizationIDCommand) Use() string   { return "org-id" }
-func (c *organizationIDCommand) Short() string { return "Manage organization ID global values" }
+func (c *organizationIDCommand) Use() string { return "org-id" }
+func (c *organizationIDCommand) Short() string {
+	return "Manage organization ID global values (personal access tokens only)"
+}
+
 func (c *organizationIDCommand) Long() string {
-	return "View and manage organization ID values that will be used across API requests."
+	return `View and manage organization ID values used across API requests.
+
+These values apply only when authenticating with a personal access token, which
+is not organization-scoped. If you logged in with "censys auth login", the
+organization is fixed by that login and these values are ignored.`
 }
 
 func (c *organizationIDCommand) Args() command.PositionalArgs { return command.ExactArgs(0) }

@@ -34,6 +34,18 @@ WHERE
 RETURNING
     *;
 
+-- name: UpdateAuthValue :one
+UPDATE
+    auths
+SET
+    description = ?,
+    value = ?,
+    last_used_at = ?
+WHERE
+    id = ?
+RETURNING
+    *;
+
 -- name: GetLastUsedAuthByName :one
 SELECT
     *

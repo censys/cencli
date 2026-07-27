@@ -132,7 +132,14 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	logger := c.Logger(cmdName)
 	logger.Debug("Time window", "start", c.start.Format(time.RFC3339), "end", c.end.Format(time.RFC3339))
 	// parse org id
-	c.orgID, err = c.flags.orgID.Value()
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Route through the credential-aware resolver: --org-id applies only to
+	// personal access tokens, so this rejects it when the credential defines the
+	// organization itself, and otherwise supplies the credential's organization.
+	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
 	if err != nil {
 		return err
 	}

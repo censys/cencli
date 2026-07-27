@@ -22,9 +22,12 @@ type AccountManagementClient interface {
 		ctx context.Context,
 	) (Result[components.UserCredits], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/accountmanagement#getorganizationdetails
+	// includeMemberCounts requests per-role member counts, which is expensive
+	// server-side (seconds), so ask for it only when it will be displayed.
 	GetOrganizationDetails(
 		ctx context.Context,
 		orgID string,
+		includeMemberCounts bool,
 	) (Result[components.OrganizationDetails], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/accountmanagement#listorganizationmembers
 	ListOrganizationMembers(
@@ -99,6 +102,7 @@ func (a *accountManagementSDK) GetUserCreditDetails(
 func (a *accountManagementSDK) GetOrganizationDetails(
 	ctx context.Context,
 	orgID string,
+	includeMemberCounts bool,
 ) (Result[components.OrganizationDetails], ClientError) {
 	start := time.Now()
 	var res *operations.V3AccountmanagementOrgDetailsResponse
@@ -106,7 +110,7 @@ func (a *accountManagementSDK) GetOrganizationDetails(
 		var err error
 		res, err = a.censysSDK.client.AccountManagement.GetOrganizationDetails(ctx, operations.V3AccountmanagementOrgDetailsRequest{
 			OrganizationID:      orgID,
-			IncludeMemberCounts: boolPtr(true),
+			IncludeMemberCounts: boolPtr(includeMemberCounts),
 		})
 		if err != nil {
 			return NewClientError(err)

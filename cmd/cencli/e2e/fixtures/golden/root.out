@@ -8,6 +8,7 @@ Get started by exploring the available commands below.
 
 Available Commands:
   aggregate   Aggregate results for a Platform search query
+  auth        Log in and manage your Censys credentials
   censeye     Analyze a host and generate pivotable queries with rarity bounds
   completion  Generate shell completion scripts
   config      Manage configuration

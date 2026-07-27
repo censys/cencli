@@ -10,9 +10,10 @@ $ censys org details      # display organization details
 $ censys org members      # list organization members
 ```
 
-By default, these commands use your stored organization ID. If no organization ID is stored, or you want to query a different organization, use the `--org-id` flag on each subcommand.
+Which organization these commands act on depends on how you authenticated:
 
-To set your default organization ID, run: `censys config org-id add`
+- **Personal access token** — a PAT is not organization-scoped, so you choose: the stored organization ID by default, or `--org-id` per subcommand. To store a default, run `censys config org-id add`.
+- **OAuth login (`censys auth login`)** — the organization is fixed by what that login was authorized for. Stored organization IDs are ignored and `--org-id` fails with an error; run `censys auth logout` and log in again to target a different organization. See [Organization context](AUTH.md#organization-context).
 
 ## Subcommands
 
@@ -28,7 +29,7 @@ $ censys org credits --output-format json # output as JSON
 
 #### Flags
 
-**`--org-id`, `-o`**: Override the configured organization ID.
+**`--org-id`, `-o`**: Override the configured organization ID. Personal access tokens only — see the note above.
 
 **Type:** `string` (UUID format)  
 **Default:** Uses the configured organization ID
@@ -45,7 +46,7 @@ $ censys org details --output-format json # output as JSON
 
 #### Flags
 
-**`--org-id`, `-o`**: Override the configured organization ID.
+**`--org-id`, `-o`**: Override the configured organization ID. Personal access tokens only — see the note above.
 
 **Type:** `string` (UUID format)  
 **Default:** Uses the configured organization ID
@@ -63,7 +64,7 @@ $ censys org members --output-format json # output as JSON
 
 #### Flags
 
-**`--org-id`, `-o`**: Override the configured organization ID.
+**`--org-id`, `-o`**: Override the configured organization ID. Personal access tokens only — see the note above.
 
 **Type:** `string` (UUID format)  
 **Default:** Uses the configured organization ID
