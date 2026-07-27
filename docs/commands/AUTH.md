@@ -85,7 +85,7 @@ $ censys auth logout
 $ censys auth login   # pick the organization (or skip it for your free account) on the consent screen
 ```
 
-If you run a command outside your session's scope (for example `censys credits` while logged in to an organization, or passing an `--org-id` that differs from the one you logged in with), the Platform API rejects the request.
+If you run a command outside your session's scope, `cencli` says so before making a request — for example passing `--org-id` (which never applies to an OAuth login), running `censys credits` while logged in to an organization, or running an organization command while logged in to your free account. Each error names what your login is scoped to and how to change it.
 
 ### Personal access tokens differ
 

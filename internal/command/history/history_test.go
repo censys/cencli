@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	storemocks "github.com/censys/cencli/gen/store/mocks"
+
 	historymocks "github.com/censys/cencli/gen/app/history/mocks"
 	historyapp "github.com/censys/cencli/internal/app/history"
 	"github.com/censys/cencli/internal/command"
@@ -22,6 +24,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/formatter"
+	"github.com/censys/cencli/internal/store"
 	"github.com/censys/censys-sdk-go/models/components"
 )
 
@@ -407,7 +410,7 @@ func TestHistoryCommand(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			historySvc := tc.historySvc(ctrl)
-			cmdContext := command.NewCommandContext(cfg, nil, command.WithHistoryService(historySvc))
+			cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl), command.WithHistoryService(historySvc))
 			rootCmd, err := command.RootCommandToCobra(NewHistoryCommand(cmdContext))
 			require.NoError(t, err)
 
@@ -453,7 +456,7 @@ func TestHistoryCommand_PartialError(t *testing.T) {
 		cfg, err := config.New(tempDir)
 		require.NoError(t, err)
 
-		cmdContext := command.NewCommandContext(cfg, nil, command.WithHistoryService(ms))
+		cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl), command.WithHistoryService(ms))
 		historyCmd := NewHistoryCommand(cmdContext)
 		rootCmd, err := command.RootCommandToCobra(historyCmd)
 		require.NoError(t, err)
@@ -474,4 +477,13 @@ func TestHistoryCommand_PartialError(t *testing.T) {
 		require.Contains(t, stderr.String(), "Page 2 failed", "should print partial error to stderr")
 		require.Contains(t, stderr.String(), "some data was successfully retrieved", "should include partial error message")
 	})
+}
+
+// newOrgLookupStore returns a store mock that reports no stored org-id, which is
+// what ResolveOrgID consults for a personal-access-token credential.
+func newOrgLookupStore(ctrl *gomock.Controller) store.Store {
+	ms := storemocks.NewMockStore(ctrl)
+	ms.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+	return ms
 }

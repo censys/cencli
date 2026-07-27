@@ -159,3 +159,32 @@ func TestResolveOrgID(t *testing.T) {
 		assert.False(t, got.IsPresent())
 	})
 }
+
+// Every command that accepts --org-id must reject it the same way under a
+// credential that defines its own organization — including the org-required
+// commands, which resolve through ResolveRequiredOrgID.
+func TestOrgIDFlagRejectedConsistently(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	viper.Reset()
+	cfg, cErr := config.New(t.TempDir())
+	require.NoError(t, cErr)
+
+	c := NewCommandContext(cfg, storemocks.NewMockStore(ctrl))
+	cli := clientmocks.NewMockClient(ctrl)
+	cli.EXPECT().CredentialInfo().
+		Return(credential.Info{Kind: credential.KindOAuth}).AnyTimes()
+	c.SetCensysClient(cli)
+
+	flag := mo.Some(identifiers.NewOrganizationID(uuid.New()))
+
+	// Optional-org commands (search, view, history, censeye, aggregate).
+	_, err := c.ResolveOrgID(context.Background(), flag)
+	require.NotNil(t, err)
+	assert.Equal(t, "Organization ID Not Applicable", err.Title())
+
+	// Required-org commands (enrich, org *): same error, not "Organization Required".
+	_, rErr := c.ResolveRequiredOrgID(&cobra.Command{Use: "enrich"}, flag)
+	require.NotNil(t, rErr)
+	assert.Equal(t, "Organization ID Not Applicable", rErr.Title())
+}

@@ -157,20 +157,23 @@ func (c *Context) ResolveRequiredOrgID(
 	cmd *cobra.Command,
 	flagOrgID mo.Option[identifiers.OrganizationID],
 ) (identifiers.OrganizationID, cenclierrors.CencliError) {
+	// Resolve first, so an inapplicable --org-id is always reported as such,
+	// consistently with every other command that accepts the flag.
+	orgID, err := c.ResolveOrgID(cmd.Context(), flagOrgID)
+	if err != nil {
+		return identifiers.OrganizationID{}, err
+	}
+	if orgID.IsPresent() {
+		return orgID.MustGet(), nil
+	}
+
+	// Nothing to target. Say which of the two reasons applies.
 	info := c.credentialInfo()
 	if info.IsBoundToFreeAccount() {
 		return identifiers.OrganizationID{}, cenclierrors.NewOrganizationRequiredError(
 			cmd.CommandPath(), credentialScopeTarget(info))
 	}
-
-	orgID, err := c.ResolveOrgID(cmd.Context(), flagOrgID)
-	if err != nil {
-		return identifiers.OrganizationID{}, err
-	}
-	if !orgID.IsPresent() {
-		return identifiers.OrganizationID{}, cenclierrors.NewNoOrgIDError()
-	}
-	return orgID.MustGet(), nil
+	return identifiers.OrganizationID{}, cenclierrors.NewNoOrgIDError()
 }
 
 // EnsureFreeAccountAccess errors when the active credential is locked to an
