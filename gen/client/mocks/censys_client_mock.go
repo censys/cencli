@@ -254,6 +254,21 @@ func (mr *MockClientMockRecorder) GetTag(ctx, orgID, tagID any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockClient)(nil).GetTag), ctx, orgID, tagID)
 }
 
+// GetTagOperation mocks base method.
+func (m *MockClient) GetTagOperation(ctx context.Context, orgID mo.Option[string], tagID, operationID string) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTagOperation", ctx, orgID, tagID, operationID)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTagOperation indicates an expected call of GetTagOperation.
+func (mr *MockClientMockRecorder) GetTagOperation(ctx, orgID, tagID, operationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTagOperation", reflect.TypeOf((*MockClient)(nil).GetTagOperation), ctx, orgID, tagID, operationID)
+}
+
 // GetUserCreditDetails mocks base method.
 func (m *MockClient) GetUserCreditDetails(ctx context.Context) (censys.Result[components.UserCredits], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -356,6 +371,21 @@ func (m *MockClient) ListTagAssignments(ctx context.Context, req censys.ListTagA
 func (mr *MockClientMockRecorder) ListTagAssignments(ctx, req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagAssignments", reflect.TypeOf((*MockClient)(nil).ListTagAssignments), ctx, req)
+}
+
+// ListTagOperations mocks base method.
+func (m *MockClient) ListTagOperations(ctx context.Context, req censys.ListTagOperationsRequest) (censys.Result[components.TagOperationsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagOperations", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagOperationsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTagOperations indicates an expected call of ListTagOperations.
+func (mr *MockClientMockRecorder) ListTagOperations(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagOperations", reflect.TypeOf((*MockClient)(nil).ListTagOperations), ctx, req)
 }
 
 // ListTags mocks base method.
