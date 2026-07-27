@@ -107,14 +107,10 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	orgID, err := c.ResolveOrgID(cmd.Context(), orgIDFromFlag)
+	c.orgID, err = c.ResolveRequiredOrgID(cmd, orgIDFromFlag)
 	if err != nil {
 		return err
 	}
-	if !orgID.IsPresent() {
-		return cenclierrors.NewNoOrgIDError()
-	}
-	c.orgID = orgID.MustGet()
 
 	// Get interactive flag
 	c.interactive, err = c.flags.interactive.Value()

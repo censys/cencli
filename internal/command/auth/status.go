@@ -32,6 +32,16 @@ type statusResult struct {
 	OrganizationName string `json:"organization_name,omitempty"`
 }
 
+// Values for statusResult.Method and .Scope. They are part of the data output
+// contract, so they are named rather than inlined at each use.
+const (
+	methodOAuth = "oauth"
+	methodPAT   = "personal_access_token"
+
+	scopeOrganization = "organization"
+	scopeFreeAccount  = "free_account"
+)
+
 var _ command.Command = (*statusCommand)(nil)
 
 func newStatusCommand(cmdContext *command.Context) *statusCommand {
@@ -84,7 +94,7 @@ func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclie
 	case credential.KindPersonalAccessToken:
 		return statusResult{
 			Authenticated: true,
-			Method:        "personal_access_token",
+			Method:        methodPAT,
 			Token:         cred.Description,
 		}, nil
 
@@ -96,15 +106,15 @@ func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclie
 
 		result := statusResult{
 			Authenticated: true,
-			Method:        "oauth",
+			Method:        methodOAuth,
 			Account:       sess.Account(),
 		}
 		if sess.OrgID != "" {
-			result.Scope = "organization"
+			result.Scope = scopeOrganization
 			result.OrganizationID = sess.OrgID
 			result.OrganizationName = sess.OrgName
 		} else {
-			result.Scope = "free_account"
+			result.Scope = scopeFreeAccount
 		}
 		return result, nil
 
@@ -121,9 +131,15 @@ func (c *statusCommand) RenderShort() cenclierrors.CencliError {
 		return nil
 	}
 
-	if r.Method != "oauth" {
+	switch r.Method {
+	case methodPAT:
 		formatter.Printf(formatter.Stdout, "Authenticated with a personal access token [%s]\n", r.Token)
 		formatter.Printf(formatter.Stdout, "Manage tokens with `censys config auth`.\n")
+		return nil
+	case methodOAuth:
+		// rendered below
+	default:
+		formatter.Printf(formatter.Stdout, "Authenticated with %s\n", r.Method)
 		return nil
 	}
 
@@ -132,7 +148,7 @@ func (c *statusCommand) RenderShort() cenclierrors.CencliError {
 	} else {
 		formatter.Printf(formatter.Stdout, "Logged in via `censys auth login`\n")
 	}
-	if r.Scope == "organization" {
+	if r.Scope == scopeOrganization {
 		label := r.OrganizationName
 		if label == "" {
 			label = r.OrganizationID

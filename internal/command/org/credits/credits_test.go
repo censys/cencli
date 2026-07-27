@@ -196,7 +196,7 @@ func TestOrgCreditsCommand(t *testing.T) {
 			args:   []string{"--output-format", "json"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "no organization ID configured")
+				require.Contains(t, err.Error(), "no organization ID available")
 			},
 		},
 		{

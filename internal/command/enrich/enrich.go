@@ -104,12 +104,13 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	// Resolve the org to target: the --org-id flag, else the OAuth session's
-	// binding, else the stored global.
-	c.orgID, err = c.ResolveOrgID(cmd.Context(), orgIDFromFlag)
+	// Enrichment requires an organization; this reports precisely why one is
+	// unavailable (free-account credential vs. none configured).
+	orgID, err := c.ResolveRequiredOrgID(cmd, orgIDFromFlag)
 	if err != nil {
 		return err
 	}
+	c.orgID = mo.Some(orgID)
 
 	rawHosts, err := c.gatherRawHosts(cmd, args)
 	if err != nil {
@@ -120,12 +121,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return err
 	}
 	c.hostIDs = hostIDs
-
-	// Enrichment requires an organization ID. Fail early with a helpful message
-	// rather than letting the API reject the request.
-	if !c.orgID.IsPresent() {
-		return cenclierrors.NewNoOrgIDError()
-	}
 
 	return c.resolveEnrichService()
 }

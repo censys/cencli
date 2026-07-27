@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/samber/mo"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,6 +110,43 @@ func TestResolveOrgID(t *testing.T) {
 		got, err := c.ResolveOrgID(ctx, none)
 		require.Nil(t, err)
 		assert.Equal(t, otherUUID.String(), got.MustGet().String())
+	})
+
+	t.Run("free-account credential: required-org commands say why", func(t *testing.T) {
+		c := newCtx(t, credential.Info{Kind: credential.KindOAuth}, nil)
+		_, err := c.ResolveRequiredOrgID(&cobra.Command{Use: "enrich"}, none)
+		require.NotNil(t, err)
+		assert.Equal(t, "Organization Required", err.Title())
+		assert.Contains(t, err.Error(), "uses an organization API")
+		assert.Contains(t, err.Error(), "Your current log in is scoped to your free account")
+		// Must NOT suggest --org-id or config org-id, which cannot help here.
+		assert.NotContains(t, err.Error(), "config org-id add")
+	})
+
+	t.Run("pat with no org configured still gets the org-id guidance", func(t *testing.T) {
+		c := newCtx(t, credential.Info{Kind: credential.KindPersonalAccessToken}, func(ds *storemocks.MockStore) {
+			ds.EXPECT().GetLastUsedGlobalByName(gomock.Any(), config.OrgIDGlobalName).
+				Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound)
+		})
+		_, err := c.ResolveRequiredOrgID(&cobra.Command{Use: "enrich"}, none)
+		require.NotNil(t, err)
+		assert.Contains(t, err.Error(), "config org-id add")
+	})
+
+	t.Run("org-bound credential cannot read the free account", func(t *testing.T) {
+		c := newCtx(t, credential.Info{Kind: credential.KindOAuth, OrgID: sessionUUID.String(), OrgName: "Censys"}, nil)
+		err := c.EnsureFreeAccountAccess(&cobra.Command{Use: "credits"}, "To view your organization's credits run 'censys org credits'")
+		require.NotNil(t, err)
+		assert.Equal(t, "Free User Account Required", err.Title())
+		assert.Contains(t, err.Error(), "the organization [Censys]")
+		assert.Contains(t, err.Error(), "censys org credits")
+	})
+
+	t.Run("free-account and pat credentials may read the free account", func(t *testing.T) {
+		free := newCtx(t, credential.Info{Kind: credential.KindOAuth}, nil)
+		require.Nil(t, free.EnsureFreeAccountAccess(&cobra.Command{Use: "credits"}, ""))
+		pat := newCtx(t, credential.Info{Kind: credential.KindPersonalAccessToken}, nil)
+		require.Nil(t, pat.EnsureFreeAccountAccess(&cobra.Command{Use: "credits"}, ""))
 	})
 
 	t.Run("pat with no stored global resolves to none", func(t *testing.T) {

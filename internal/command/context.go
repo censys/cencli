@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/samber/mo"
+	"github.com/spf13/cobra"
 
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
@@ -143,6 +144,45 @@ func (c *Context) ResolveOrgID(ctx context.Context, flagOrgID mo.Option[identifi
 		return zero, err
 	}
 	return mo.Some(boundOrg), nil
+}
+
+// ResolveRequiredOrgID is ResolveOrgID for commands that cannot run without an
+// organization. It distinguishes the two reasons an organization may be missing,
+// so the message names the real problem:
+//
+//   - the credential is locked to the free account and can never target an
+//     organization, or
+//   - the credential can target one, but none was given or stored.
+func (c *Context) ResolveRequiredOrgID(
+	cmd *cobra.Command,
+	flagOrgID mo.Option[identifiers.OrganizationID],
+) (identifiers.OrganizationID, cenclierrors.CencliError) {
+	info := c.credentialInfo()
+	if info.IsBoundToFreeAccount() {
+		return identifiers.OrganizationID{}, cenclierrors.NewOrganizationRequiredError(
+			cmd.CommandPath(), credentialScopeTarget(info))
+	}
+
+	orgID, err := c.ResolveOrgID(cmd.Context(), flagOrgID)
+	if err != nil {
+		return identifiers.OrganizationID{}, err
+	}
+	if !orgID.IsPresent() {
+		return identifiers.OrganizationID{}, cenclierrors.NewNoOrgIDError()
+	}
+	return orgID.MustGet(), nil
+}
+
+// EnsureFreeAccountAccess errors when the active credential is locked to an
+// organization, and so cannot read the user's free account. alternative is an
+// optional sentence pointing at the organization equivalent of the command.
+func (c *Context) EnsureFreeAccountAccess(cmd *cobra.Command, alternative string) cenclierrors.CencliError {
+	info := c.credentialInfo()
+	if info.IsBoundToOrg() {
+		return cenclierrors.NewFreeAccountRequiredError(
+			cmd.CommandPath(), credentialScopeTarget(info), alternative)
+	}
+	return nil
 }
 
 // credentialScopeTarget names what the active credential is scoped to, for use

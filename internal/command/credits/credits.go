@@ -71,7 +71,9 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	return nil
+	// Free user credits are a free-account-only API, so a credential locked to an
+	// organization can never read them.
+	return c.EnsureFreeAccountAccess(cmd, "To view your organization's credits run 'censys org credits'")
 }
 
 func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
