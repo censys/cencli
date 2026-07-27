@@ -37,6 +37,7 @@ func TestOrganizationsService_GetOrganizationDetails(t *testing.T) {
 				mockClient.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					"f47ac10b-58cc-4372-a567-0e02b2c3d479",
+					gomock.Any(),
 				).Return(client.Result[components.OrganizationDetails]{
 					Metadata: client.Metadata{
 						Request:  &http.Request{},
@@ -77,6 +78,7 @@ func TestOrganizationsService_GetOrganizationDetails(t *testing.T) {
 				mockClient.EXPECT().GetOrganizationDetails(
 					gomock.Any(),
 					"f47ac10b-58cc-4372-a567-0e02b2c3d479",
+					gomock.Any(),
 				).Return(client.Result[components.OrganizationDetails]{}, structuredErr)
 				return mockClient
 			},
@@ -106,7 +108,7 @@ func TestOrganizationsService_GetOrganizationDetails(t *testing.T) {
 				ctx = tc.ctx()
 			}
 
-			res, err := svc.GetOrganizationDetails(ctx, identifiers.NewOrganizationID(tc.orgID))
+			res, err := svc.GetOrganizationDetails(ctx, identifiers.NewOrganizationID(tc.orgID), true)
 			tc.assert(t, res, err)
 		})
 	}

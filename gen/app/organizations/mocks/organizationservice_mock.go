@@ -45,18 +45,18 @@ func (m *MockOrganizationsService) EXPECT() *MockOrganizationsServiceMockRecorde
 }
 
 // GetOrganizationDetails mocks base method.
-func (m *MockOrganizationsService) GetOrganizationDetails(ctx context.Context, orgID identifiers.OrganizationID) (organizations.OrganizationDetailsResult, cenclierrors.CencliError) {
+func (m *MockOrganizationsService) GetOrganizationDetails(ctx context.Context, orgID identifiers.OrganizationID, includeMemberCounts bool) (organizations.OrganizationDetailsResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrganizationDetails", ctx, orgID)
+	ret := m.ctrl.Call(m, "GetOrganizationDetails", ctx, orgID, includeMemberCounts)
 	ret0, _ := ret[0].(organizations.OrganizationDetailsResult)
 	ret1, _ := ret[1].(cenclierrors.CencliError)
 	return ret0, ret1
 }
 
 // GetOrganizationDetails indicates an expected call of GetOrganizationDetails.
-func (mr *MockOrganizationsServiceMockRecorder) GetOrganizationDetails(ctx, orgID any) *gomock.Call {
+func (mr *MockOrganizationsServiceMockRecorder) GetOrganizationDetails(ctx, orgID, includeMemberCounts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockOrganizationsService)(nil).GetOrganizationDetails), ctx, orgID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockOrganizationsService)(nil).GetOrganizationDetails), ctx, orgID, includeMemberCounts)
 }
 
 // ListOrganizationMembers mocks base method.

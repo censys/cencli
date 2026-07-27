@@ -16,9 +16,12 @@ import (
 // Service provides organization and member details capabilities.
 type Service interface {
 	// GetOrganizationDetails retrieves the details for an organization.
+	// includeMemberCounts requests per-role member counts, which costs seconds
+	// server-side; pass false when only the other fields are needed.
 	GetOrganizationDetails(
 		ctx context.Context,
 		orgID identifiers.OrganizationID,
+		includeMemberCounts bool,
 	) (OrganizationDetailsResult, cenclierrors.CencliError)
 	// ListOrganizationMembers retrieves the members for an organization.
 	// If no pagination is provided, the client will return all members.
@@ -41,8 +44,9 @@ func New(client client.Client) Service {
 func (s *organizationsService) GetOrganizationDetails(
 	ctx context.Context,
 	orgID identifiers.OrganizationID,
+	includeMemberCounts bool,
 ) (OrganizationDetailsResult, cenclierrors.CencliError) {
-	res, err := s.client.GetOrganizationDetails(ctx, orgID.String())
+	res, err := s.client.GetOrganizationDetails(ctx, orgID.String(), includeMemberCounts)
 	if err != nil {
 		return OrganizationDetailsResult{}, err
 	}

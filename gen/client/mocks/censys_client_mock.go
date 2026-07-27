@@ -165,18 +165,18 @@ func (mr *MockClientMockRecorder) GetOrganizationCreditDetails(ctx, orgID any) *
 }
 
 // GetOrganizationDetails mocks base method.
-func (m *MockClient) GetOrganizationDetails(ctx context.Context, orgID string) (censys.Result[components.OrganizationDetails], censys.ClientError) {
+func (m *MockClient) GetOrganizationDetails(ctx context.Context, orgID string, includeMemberCounts bool) (censys.Result[components.OrganizationDetails], censys.ClientError) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrganizationDetails", ctx, orgID)
+	ret := m.ctrl.Call(m, "GetOrganizationDetails", ctx, orgID, includeMemberCounts)
 	ret0, _ := ret[0].(censys.Result[components.OrganizationDetails])
 	ret1, _ := ret[1].(censys.ClientError)
 	return ret0, ret1
 }
 
 // GetOrganizationDetails indicates an expected call of GetOrganizationDetails.
-func (mr *MockClientMockRecorder) GetOrganizationDetails(ctx, orgID any) *gomock.Call {
+func (mr *MockClientMockRecorder) GetOrganizationDetails(ctx, orgID, includeMemberCounts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationDetails), ctx, orgID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationDetails), ctx, orgID, includeMemberCounts)
 }
 
 // GetUserCreditDetails mocks base method.

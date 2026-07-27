@@ -114,7 +114,8 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"Fetching organization details...",
 		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
-			c.result, fetchErr = c.orgSvc.GetOrganizationDetails(pctx, c.orgID)
+			// Member counts are rendered by this command, so pay for them here.
+			c.result, fetchErr = c.orgSvc.GetOrganizationDetails(pctx, c.orgID, true)
 			return fetchErr
 		},
 	)

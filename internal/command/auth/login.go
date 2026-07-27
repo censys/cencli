@@ -175,7 +175,8 @@ func (c *loginCommand) resolveOrgName(ctx context.Context, orgID string) string 
 	if err != nil {
 		return ""
 	}
-	res, orgErr := organizations.New(cli).GetOrganizationDetails(ctx, identifiers.NewOrganizationID(uid))
+	// Only the name is needed; skip member counts, which add seconds to the call.
+	res, orgErr := organizations.New(cli).GetOrganizationDetails(ctx, identifiers.NewOrganizationID(uid), false)
 	if orgErr != nil {
 		return ""
 	}
