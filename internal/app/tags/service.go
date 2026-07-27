@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/samber/mo"
 
@@ -29,6 +28,7 @@ type Service interface {
 	DeleteTag(ctx context.Context, params DeleteParams) (DeleteResult, cenclierrors.CencliError)
 	Assign(ctx context.Context, params AssignParams) (AssignResult, cenclierrors.CencliError)
 	Unassign(ctx context.Context, params UnassignParams) (UnassignResult, cenclierrors.CencliError)
+	ListAssignments(ctx context.Context, params AssignmentsParams) (AssignmentsResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
@@ -54,17 +54,11 @@ func (s *tagsService) ListTags(
 	}
 
 	// handle pagination invariants
-	if params.PageSize.IsPresent() && params.PageSize.MustGet() == 0 {
-		return ListResult{}, NewInvalidPaginationParamsError("page size must be greater than 0")
-	}
-	if params.MaxPages.IsPresent() && params.MaxPages.MustGet() == 0 {
-		return ListResult{}, NewInvalidPaginationParamsError("max pages must be greater than 0")
+	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+		return ListResult{}, err
 	}
 
-	pageSize := mo.None[int64]()
-	if params.PageSize.IsPresent() {
-		pageSize = mo.Some(int64(params.PageSize.MustGet()))
-	}
+	pageSize := optionalInt64(params.PageSize)
 
 	listFn := func(pageToken mo.Option[string]) (client.Result[components.TagsList], client.ClientError) {
 		return s.client.ListTags(ctx, client.ListTagsRequest{
@@ -78,12 +72,120 @@ func (s *tagsService) ListTags(
 		})
 	}
 
-	return s.listWithPagination(ctx, listFn, params.MaxPages)
+	page, err := paginate(ctx, params.MaxPages, "tags", listFn, extractTagsPage)
+	if err != nil {
+		return ListResult{}, err
+	}
+
+	return ListResult{
+		Meta:         page.Meta,
+		Tags:         page.Items,
+		TotalSize:    page.TotalSize,
+		PartialError: page.PartialError,
+	}, nil
+}
+
+// ListAssignments lists the assets a tag is assigned to. The endpoint is keyed by
+// UUID, so a name is resolved first.
+func (s *tagsService) ListAssignments(
+	ctx context.Context,
+	params AssignmentsParams,
+) (AssignmentsResult, cenclierrors.CencliError) {
+	// validate filter enums against the API contract before making any request
+	if err := validateAssignmentsOrderBy(params.OrderBy); err != nil {
+		return AssignmentsResult{}, err
+	}
+	if err := validateAssetType(params.AssetType); err != nil {
+		return AssignmentsResult{}, err
+	}
+	if err := validateTimeWindow(params.CreatedBefore, params.CreatedAfter); err != nil {
+		return AssignmentsResult{}, err
+	}
+
+	// handle pagination invariants
+	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+		return AssignmentsResult{}, err
+	}
+
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
+	if resolveErr != nil {
+		return AssignmentsResult{}, resolveErr
+	}
+
+	pageSize := optionalInt64(params.PageSize)
+
+	listFn := func(pageToken mo.Option[string]) (client.Result[components.TagAssignmentsList], client.ClientError) {
+		return s.client.ListTagAssignments(ctx, client.ListTagAssignmentsRequest{
+			OrgID:         orgIDStr,
+			TagID:         tagID,
+			AssetID:       params.AssetID,
+			AssetType:     params.AssetType,
+			CreatedBy:     params.CreatedBy,
+			CreatedBefore: params.CreatedBefore,
+			CreatedAfter:  params.CreatedAfter,
+			OrderBy:       params.OrderBy,
+			PageSize:      pageSize,
+			PageToken:     pageToken,
+		})
+	}
+
+	page, err := paginate(ctx, params.MaxPages, "assignments", listFn, extractAssignmentsPage)
+	if err != nil {
+		return AssignmentsResult{}, err
+	}
+
+	return AssignmentsResult{
+		Meta:         page.Meta,
+		Assignments:  page.Items,
+		TotalSize:    page.TotalSize,
+		PartialError: page.PartialError,
+	}, nil
+}
+
+// extractTagsPage adapts a tags list envelope for the paginator.
+func extractTagsPage(list *components.TagsList) pageData[Tag] {
+	items := make([]Tag, 0, len(list.Tags))
+	for _, t := range list.Tags {
+		items = append(items, mapTag(t))
+	}
+
+	nextPageToken := ""
+	if npt := list.GetNextPageToken(); npt != nil {
+		nextPageToken = *npt
+	}
+
+	return pageData[Tag]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
+}
+
+// extractAssignmentsPage adapts an assignments list envelope for the paginator.
+func extractAssignmentsPage(list *components.TagAssignmentsList) pageData[Assignment] {
+	items := make([]Assignment, 0, len(list.Assignments))
+	for _, a := range list.Assignments {
+		items = append(items, mapTagAssignment(a))
+	}
+
+	nextPageToken := ""
+	if npt := list.GetNextPageToken(); npt != nil {
+		nextPageToken = *npt
+	}
+
+	return pageData[Assignment]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
+}
+
+// optionalInt64 narrows an unsigned page size to the signed type the client sends.
+func optionalInt64(v mo.Option[uint64]) mo.Option[int64] {
+	if !v.IsPresent() {
+		return mo.None[int64]()
+	}
+	return mo.Some(int64(v.MustGet()))
 }
 
 // GetTag retrieves a single tag by name or UUID. The endpoint accepts either
 // interchangeably, so the raw identifier is passed straight through (no resolve
-// roundtrip).
+// roundtrip). When params.WithAssetCount is set, a second request counts the
+// tag's assignments.
 func (s *tagsService) GetTag(
 	ctx context.Context,
 	params GetParams,
@@ -110,7 +212,42 @@ func (s *tagsService) GetTag(
 		tag = mapTag(*result.Data)
 	}
 
-	return GetResult{Meta: meta, Tag: tag}, nil
+	var countErr cenclierrors.CencliError
+	if params.WithAssetCount && tag.ID != "" {
+		tag.AssetCount, countErr = s.assetCount(ctx, orgIDStr, tag.ID)
+	}
+
+	return GetResult{
+		Meta:         meta,
+		Tag:          tag,
+		PartialError: cenclierrors.ToPartialError(countErr),
+	}, nil
+}
+
+// assetCount reports how many assets a tag is assigned to, reading the total off
+// a single-item assignments page. The UUID comes from the tag just fetched, so no
+// resolution is needed. A failure is surfaced alongside the tag, not instead of it.
+func (s *tagsService) assetCount(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID string,
+) (*int64, cenclierrors.CencliError) {
+	progress.ReportMessage(ctx, progress.StageFetch, "Counting assigned assets...")
+
+	result, err := s.client.ListTagAssignments(ctx, client.ListTagAssignmentsRequest{
+		OrgID:    orgID,
+		TagID:    tagID,
+		PageSize: mo.Some(int64(1)),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result.Data == nil {
+		return nil, nil
+	}
+
+	count := result.Data.TotalSize
+	return &count, nil
 }
 
 // CreateTag creates a new tag. The name (non-empty) and privacy are validated
@@ -452,115 +589,6 @@ func (s *tagsService) resolveTagID(
 		return "", NewTagNotFoundError(tagID.String())
 	}
 	return result.Data.Tags[0].ID, nil
-}
-
-func (s *tagsService) listWithPagination(
-	ctx context.Context,
-	listFn func(mo.Option[string]) (client.Result[components.TagsList], client.ClientError),
-	maxPages mo.Option[uint64],
-) (ListResult, cenclierrors.CencliError) {
-	var allTags []Tag
-	var totalSize int64
-	var lastMeta *responsemeta.ResponseMeta
-	var pagesProcessed uint64
-	var firstError cenclierrors.CencliError
-	pageToken := mo.None[string]()
-
-	start := time.Now()
-
-	for {
-		if maxPages.IsPresent() && pagesProcessed >= maxPages.MustGet() {
-			break
-		}
-
-		// Check for context cancellation
-		if err := ctx.Err(); err != nil {
-			contextErr := cenclierrors.ParseContextError(err)
-			if pagesProcessed > 0 {
-				if lastMeta != nil {
-					lastMeta.Latency = time.Since(start)
-					lastMeta.PageCount = pagesProcessed
-				}
-				return ListResult{
-					Meta:         lastMeta,
-					Tags:         allTags,
-					TotalSize:    totalSize,
-					PartialError: cenclierrors.ToPartialError(contextErr),
-				}, nil
-			}
-			return ListResult{}, contextErr
-		}
-
-		s.reportListProgress(ctx, pagesProcessed, len(allTags), maxPages)
-
-		result, err := listFn(pageToken)
-		if err != nil {
-			// First page: return the error immediately.
-			if pagesProcessed == 0 {
-				return ListResult{}, err
-			}
-			// Otherwise record it, report it, and return partial results.
-			firstError = err
-			progress.ReportError(ctx, progress.StageFetch, err)
-			break
-		}
-
-		if result.Metadata.Request != nil || result.Metadata.Response != nil {
-			lastMeta = responsemeta.NewResponseMeta(result.Metadata.Request, result.Metadata.Response, 0, result.Metadata.Attempts)
-		}
-
-		if result.Data == nil {
-			pagesProcessed++
-			break
-		}
-
-		for _, t := range result.Data.Tags {
-			allTags = append(allTags, mapTag(t))
-		}
-		totalSize = result.Data.TotalSize
-		pagesProcessed++
-
-		nextPageToken := ""
-		if npt := result.Data.GetNextPageToken(); npt != nil {
-			nextPageToken = *npt
-		}
-		if nextPageToken == "" || len(result.Data.Tags) == 0 {
-			break
-		}
-
-		if maxPages.IsPresent() && pagesProcessed >= maxPages.MustGet() {
-			break
-		}
-
-		pageToken = mo.Some(nextPageToken)
-	}
-
-	if lastMeta != nil {
-		lastMeta.Latency = time.Since(start)
-		lastMeta.PageCount = pagesProcessed
-	}
-
-	return ListResult{
-		Meta:         lastMeta,
-		Tags:         allTags,
-		TotalSize:    totalSize,
-		PartialError: cenclierrors.ToPartialError(firstError),
-	}, nil
-}
-
-func (s *tagsService) reportListProgress(ctx context.Context, page uint64, collected int, maxPages mo.Option[uint64]) {
-	if page == 0 {
-		return
-	}
-
-	var msg string
-	if maxPages.IsPresent() {
-		msg = fmt.Sprintf("Fetching tags (page %d/%d, %d collected)...", page+1, maxPages.MustGet(), collected)
-	} else {
-		msg = fmt.Sprintf("Fetching tags (page %d, %d collected)...", page+1, collected)
-	}
-
-	progress.ReportMessage(ctx, progress.StageFetch, msg)
 }
 
 // mapTag converts an SDK tag into the domain DTO.

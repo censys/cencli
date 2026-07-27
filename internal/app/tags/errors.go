@@ -46,6 +46,23 @@ func (e *invalidEnumFilterError) Title() string { return "Invalid Filter Value" 
 
 func (e *invalidEnumFilterError) ShouldPrintUsage() bool { return true }
 
+// invalidTimeWindowError signals that a pair of time filters cannot match
+// anything, e.g. created-before earlier than created-after.
+type invalidTimeWindowError struct {
+	reason string
+}
+
+// NewInvalidTimeWindowError creates an invalid-time-window error.
+func NewInvalidTimeWindowError(reason string) cenclierrors.CencliError {
+	return &invalidTimeWindowError{reason: reason}
+}
+
+func (e *invalidTimeWindowError) Error() string { return e.reason }
+
+func (e *invalidTimeWindowError) Title() string { return "Invalid Time Window" }
+
+func (e *invalidTimeWindowError) ShouldPrintUsage() bool { return true }
+
 // emptyTagIDError signals that a tag command was given an empty tag identifier
 // (name or UUID). Rejected before any lookup so an empty name can never be sent
 // to ListTags — which would otherwise match no filter and resolve to an

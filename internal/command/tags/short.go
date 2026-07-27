@@ -2,6 +2,7 @@ package tags
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/censys/cencli/internal/app/tags"
@@ -76,6 +77,64 @@ func (c *ListCommand) RenderShort() cenclierrors.CencliError {
 	title := styles.GlobalStyles.Signature.Bold(true).Render(countText)
 	fmt.Fprintf(formatter.Stdout, "\n%s\n\n", title)
 	fmt.Fprint(formatter.Stdout, tbl.Render(c.result.Tags))
+	fmt.Fprintf(formatter.Stdout, "\n")
+
+	return nil
+}
+
+// RenderShort renders a tag's assignments as a styled table (TTY-aware).
+func (c *AssignmentsCommand) RenderShort() cenclierrors.CencliError {
+	if len(c.result.Assignments) == 0 {
+		fmt.Fprintf(formatter.Stdout, "\nNo assignments found.\n")
+		return nil
+	}
+
+	columns := []rawtable.Column[tags.Assignment]{
+		{
+			Title:  "Asset",
+			String: func(a tags.Assignment) string { return a.AssetID },
+			Style: func(s string, _ tags.Assignment) string {
+				return styles.NewStyle(styles.ColorTeal).Render(s)
+			},
+		},
+		{
+			Title:  "Type",
+			String: func(a tags.Assignment) string { return a.AssetType },
+			Style: func(s string, _ tags.Assignment) string {
+				return styles.NewStyle(styles.ColorSage).Render(s)
+			},
+		},
+		{
+			Title:  "Created By",
+			String: func(a tags.Assignment) string { return a.CreatedBy },
+			Style: func(s string, _ tags.Assignment) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
+			},
+		},
+		{
+			Title:  "Created At",
+			String: func(a tags.Assignment) string { return a.CreatedAt.Format("2006-01-02 15:04") },
+			Style: func(s string, _ tags.Assignment) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
+			},
+		},
+	}
+
+	tbl := rawtable.New(
+		columns,
+		rawtable.WithHeaderStyle[tags.Assignment](styles.NewStyle(styles.ColorOffWhite).Bold(true)),
+		rawtable.WithStylesDisabled[tags.Assignment](!formatter.StdoutIsTTY()),
+	)
+
+	// Show the API's total when it exceeds what was fetched, so a truncated
+	// listing says so.
+	countText := fmt.Sprintf("Assignments (%d)", len(c.result.Assignments))
+	if c.result.TotalSize > int64(len(c.result.Assignments)) {
+		countText = fmt.Sprintf("Assignments (%d of %d)", len(c.result.Assignments), c.result.TotalSize)
+	}
+	title := styles.GlobalStyles.Signature.Bold(true).Render(countText)
+	fmt.Fprintf(formatter.Stdout, "\n%s\n\n", title)
+	fmt.Fprint(formatter.Stdout, tbl.Render(c.result.Assignments))
 	fmt.Fprintf(formatter.Stdout, "\n")
 
 	return nil
@@ -233,6 +292,11 @@ func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {
 	writeField(&out, "Created By", t.CreatedBy)
 	writeField(&out, "Created At", t.CreatedAt.Format("2006-01-02 15:04:05 MST"))
 	writeField(&out, "Updated At", t.UpdatedAt.Format("2006-01-02 15:04:05 MST"))
+
+	// Only `get --asset-count` populates the count.
+	if t.AssetCount != nil {
+		writeField(&out, "Assets", strconv.FormatInt(*t.AssetCount, 10))
+	}
 
 	formatter.Println(formatter.Stdout, out.String())
 	return nil

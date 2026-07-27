@@ -102,6 +102,21 @@ func (mr *MockTagsServiceMockRecorder) GetTag(ctx, params any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockTagsService)(nil).GetTag), ctx, params)
 }
 
+// ListAssignments mocks base method.
+func (m *MockTagsService) ListAssignments(ctx context.Context, params tags.AssignmentsParams) (tags.AssignmentsResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAssignments", ctx, params)
+	ret0, _ := ret[0].(tags.AssignmentsResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// ListAssignments indicates an expected call of ListAssignments.
+func (mr *MockTagsServiceMockRecorder) ListAssignments(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAssignments", reflect.TypeOf((*MockTagsService)(nil).ListAssignments), ctx, params)
+}
+
 // ListTags mocks base method.
 func (m *MockTagsService) ListTags(ctx context.Context, params tags.ListParams) (tags.ListResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()

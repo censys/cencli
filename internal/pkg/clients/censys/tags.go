@@ -47,13 +47,18 @@ type CreateTagAssignmentRequest struct {
 }
 
 // ListTagAssignmentsRequest bundles the query parameters for ListTagAssignments.
-// TagID is the resolved tag UUID; only present options are sent. The field set is
-// minimal and grows as later tickets need more filters.
+// TagID is the resolved tag UUID; only present options are sent.
 type ListTagAssignmentsRequest struct {
-	OrgID    mo.Option[string]
-	TagID    string
-	AssetID  mo.Option[string]
-	PageSize mo.Option[int64]
+	OrgID         mo.Option[string]
+	TagID         string
+	AssetID       mo.Option[string]
+	AssetType     mo.Option[string]
+	CreatedBy     mo.Option[string]
+	CreatedBefore mo.Option[time.Time]
+	CreatedAfter  mo.Option[time.Time]
+	OrderBy       mo.Option[string]
+	PageSize      mo.Option[int64]
+	PageToken     mo.Option[string]
 }
 
 //go:generate mockgen -destination=../../../../gen/client/mocks/tags_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys TagsClient
@@ -277,10 +282,22 @@ func (t *tagsSDK) ListTagAssignments(
 			OrganizationID: req.OrgID.ToPointer(),
 			TagID:          req.TagID,
 			AssetID:        req.AssetID.ToPointer(),
+			CreatedBy:      req.CreatedBy.ToPointer(),
+			CreatedBefore:  req.CreatedBefore.ToPointer(),
+			CreatedAfter:   req.CreatedAfter.ToPointer(),
+			PageToken:      req.PageToken.ToPointer(),
 		}
 		if req.PageSize.IsPresent() {
 			ps := int(req.PageSize.MustGet())
 			sdkReq.PageSize = &ps
+		}
+		if req.AssetType.IsPresent() {
+			at := operations.AssetType(req.AssetType.MustGet())
+			sdkReq.AssetType = &at
+		}
+		if req.OrderBy.IsPresent() {
+			ob := operations.V3TagsListAssignmentsQueryParamOrderBy(req.OrderBy.MustGet())
+			sdkReq.OrderBy = &ob
 		}
 		res, err = t.censysSDK.client.TagsAndComments.ListTagAssignments(ctx, sdkReq)
 		if err != nil {
