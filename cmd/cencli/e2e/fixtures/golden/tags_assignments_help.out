@@ -1,0 +1,37 @@
+List the assets a tag, given by its name or UUID, is assigned to.                        
+                                                                                         
+Results can be filtered by asset, asset type, creator, and creation time. Use --streaming
+to emit each assignment as NDJSON as it is fetched.                                      
+
+Usage:
+  censys tags assignments <tag> [flags]
+
+Examples:
+  censys tags assignments my-tag # List a tag's assignments
+  censys tags assignments my-tag --asset-type host # Only host assignments
+  censys tags assignments my-tag --asset <ip-address> # Check whether one asset is assigned
+  censys tags assignments my-tag --created-after 2025-01-01T00:00:00Z # Only recent assignments
+  censys tags assignments my-tag --max-pages -1 # Fetch every page
+  censys tags assignments my-tag --streaming # Emit NDJSON as assignments are fetched
+
+Flags:
+      --asset string            filter by a single asset (host IP, certificate SHA-256 fingerprint, or web property hostname:port)
+      --asset-type string       filter by asset type (host, web_property, certificate)
+      --created-after string    only assignments created after this time
+      --created-before string   only assignments created before this time
+      --created-by string       filter by the user ID of the assignment's creator
+  -h, --help                    help for assignments
+  -p, --max-pages int           maximum number of pages to fetch (-1 for all pages) (default 1)
+      --order-by string         sort order (create_time_asc, create_time_desc)
+  -o, --org-id string           override the configured organization ID
+  -n, --page-size int           number of assignments to return per page (default 100)
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

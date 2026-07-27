@@ -9,6 +9,7 @@ Usage:
 
 Available Commands:
   assign      Assign a tag to one or more assets
+  assignments List the assets a tag is assigned to
   create      Create a new tag
   delete      Delete a tag
   get         Retrieve a single tag by name or ID

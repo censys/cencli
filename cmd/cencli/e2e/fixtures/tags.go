@@ -350,4 +350,91 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "confirmation required")
 		},
 	},
+	// ========== assignments subcommand ==========
+	// No live assignments fixture: the org has no tag with a deterministic set of
+	// assignments to assert against. Covered by unit tests (internal/app/tags,
+	// internal/command/tags) and verified manually against the live API.
+	{
+		Name:      "assignments help",
+		Args:      []string{"assignments", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsAssignmentsHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "assignments missing arg",
+		Args:      []string{"assignments"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 1 arg")
+		},
+	},
+	{
+		Name:      "assignments empty tag id",
+		Args:      []string{"assignments", ""},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "a tag name or ID is required")
+		},
+	},
+	{
+		// An unparseable --asset filter is rejected before anything is sent.
+		Name:      "assignments unknown asset filter",
+		Args:      []string{"assignments", "my-tag", "--asset", "not-an-asset"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-an-asset")
+		},
+	},
+	{
+		// The endpoint filters on one asset, so a list is a usage error.
+		Name:      "assignments multiple asset filters",
+		Args:      []string{"assignments", "my-tag", "--asset", "8.8.8.8,1.1.1.1"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "only 1")
+		},
+	},
+	{
+		// Page sizes above the documented maximum never reach the API.
+		Name:      "assignments page-size above maximum",
+		Args:      []string{"assignments", "my-tag", "--page-size", "1001"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "1000")
+		},
+	},
+	{
+		Name:      "assignments invalid max-pages",
+		Args:      []string{"assignments", "my-tag", "--max-pages", "0"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "max-pages")
+		},
+	},
+	{
+		Name:      "assignments invalid timestamp",
+		Args:      []string{"assignments", "my-tag", "--created-after", "yesterday"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "created-after")
+		},
+	},
 }

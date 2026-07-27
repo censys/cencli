@@ -34,6 +34,7 @@ echo "Updating golden fixtures..."
 "$BINARY" tags delete --help > tags_delete_help.out
 "$BINARY" tags assign --help > tags_assign_help.out
 "$BINARY" tags unassign --help > tags_unassign_help.out
+"$BINARY" tags assignments --help > tags_assignments_help.out
 "$BINARY" > root.out
 
 echo "✅ All golden fixtures updated"
