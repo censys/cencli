@@ -1,7 +1,10 @@
-Retrieve a single tag by its name or UUID.                                   
-                                                                             
-Tag names are unique within an organization, so a name and its ID can be used
-interchangeably.                                                             
+Retrieve a single tag by its name or UUID.                                        
+                                                                                  
+Tag names are unique within an organization, so a name and its ID can be used     
+interchangeably.                                                                  
+                                                                                  
+The tag itself carries no assignment count; pass --asset-count to fetch it with an
+additional request.                                                               
 
 Usage:
   censys tags get <tag> [flags]
@@ -9,9 +12,11 @@ Usage:
 Examples:
   censys tags get my-tag # Get a tag by name
   censys tags get <tag-id> # Get a tag by UUID
+  censys tags get my-tag --asset-count # Also report how many assets are tagged
   censys tags get my-tag --output-format json # Output as JSON
 
 Flags:
+      --asset-count     also report how many assets the tag is assigned to (one extra request)
   -h, --help            help for get
   -o, --org-id string   override the configured organization ID
 
