@@ -162,3 +162,61 @@ func TestTagsGetCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestTagsGetCommand_AssetCount(t *testing.T) {
+	t.Run("flag absent - WithAssetCount not requested and no Assets line", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := tagsmocks.NewMockTagsService(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, p apptags.GetParams) (apptags.GetResult, cenclierrors.CencliError) {
+				require.False(t, p.WithAssetCount)
+				return apptags.GetResult{Meta: okMeta(), Tag: tag("alpha")}, nil
+			})
+
+		stdout, _, err := runGetCommand(t, m, []string{"alpha"})
+		require.NoError(t, err)
+		require.NotContains(t, stdout, "Assets:")
+	})
+
+	t.Run("flag set - count requested and rendered", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		count := int64(7)
+		counted := tag("alpha")
+		counted.AssetCount = &count
+
+		m := tagsmocks.NewMockTagsService(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, p apptags.GetParams) (apptags.GetResult, cenclierrors.CencliError) {
+				require.True(t, p.WithAssetCount)
+				return apptags.GetResult{Meta: okMeta(), Tag: counted}, nil
+			})
+
+		stdout, _, err := runGetCommand(t, m, []string{"alpha", "--asset-count"})
+		require.NoError(t, err)
+		require.Contains(t, stdout, "Assets:")
+		require.Contains(t, stdout, "7")
+	})
+
+	t.Run("count failure still renders the tag and reports the error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := tagsmocks.NewMockTagsService(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), gomock.Any()).Return(
+			apptags.GetResult{
+				Meta:         okMeta(),
+				Tag:          tag("alpha"),
+				PartialError: cenclierrors.NewCencliError(errors.New("permission denied")),
+			}, nil)
+
+		stdout, stderr, err := runGetCommand(t, m, []string{"alpha", "--asset-count"})
+		require.NoError(t, err)
+		require.Contains(t, stdout, "alpha")
+		require.NotContains(t, stdout, "Assets:")
+		require.Contains(t, stderr, "permission denied")
+	})
+}

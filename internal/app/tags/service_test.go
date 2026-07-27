@@ -3,6 +3,7 @@ package tags
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/censys/cencli/gen/client/mocks"
 	"github.com/censys/cencli/internal/app/progress"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
@@ -1340,4 +1342,437 @@ func TestTagsService_DeleteTag(t *testing.T) {
 			tc.assert(t, res, err)
 		})
 	}
+}
+
+// assignmentsPage builds a multi-assignment page, optionally with a next-page token.
+func assignmentsPage(assetIDs []string, total int64, nextToken string) client.Result[components.TagAssignmentsList] {
+	assignments := make([]components.TagAssignment, 0, len(assetIDs))
+	for i, a := range assetIDs {
+		assignments = append(assignments, components.TagAssignment{
+			ID:          fmt.Sprintf("assignment-%d", i),
+			TagID:       "tag-id",
+			AssetID:     a,
+			AssetType:   components.TagAssignmentAssetTypeHost,
+			PlatformRef: "https://platform.censys.io/hosts/" + a,
+		})
+	}
+	list := &components.TagAssignmentsList{Assignments: assignments, TotalSize: total}
+	if nextToken != "" {
+		list.NextPageToken = strPtr(nextToken)
+	}
+	return client.Result[components.TagAssignmentsList]{Metadata: okMeta(), Data: list}
+}
+
+func TestTagsService_ListAssignments(t *testing.T) {
+	orgUUID := uuid.New()
+	tagUUID := uuid.New()
+	before := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	after := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params AssignmentsParams
+		ctx    func() context.Context
+		assert func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "success - UUID input skips resolution and maps assignments",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(),
+				}).Return(assignmentsPage([]string{"8.8.8.8", "1.1.1.1"}, 2, ""), nil)
+				return m
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 2)
+				require.Equal(t, int64(2), res.TotalSize)
+				require.Equal(t, "8.8.8.8", res.Assignments[0].AssetID)
+				require.Equal(t, "host", res.Assignments[0].AssetType)
+				require.Equal(t, "https://platform.censys.io/hosts/8.8.8.8", res.Assignments[0].PlatformRef)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "name resolved to UUID before listing",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), client.ListTagsRequest{
+					Name:     mo.Some("my-tag"),
+					PageSize: mo.Some(int64(1)),
+				}).Return(client.Result[components.TagsList]{Data: &components.TagsList{
+					Tags: []components.Tag{{ID: "resolved-id", Name: "my-tag"}},
+				}}, nil)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: "resolved-id",
+				}).Return(assignmentsPage([]string{"8.8.8.8"}, 1, ""), nil)
+				return m
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID("my-tag")},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 1)
+			},
+		},
+		{
+			name: "filters and org threaded to client",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					OrgID:         mo.Some(orgUUID.String()),
+					TagID:         tagUUID.String(),
+					AssetID:       mo.Some("8.8.8.8"),
+					AssetType:     mo.Some("host"),
+					CreatedBy:     mo.Some("creator-id"),
+					CreatedBefore: mo.Some(before),
+					CreatedAfter:  mo.Some(after),
+					OrderBy:       mo.Some("create_time_asc"),
+					PageSize:      mo.Some(int64(50)),
+				}).Return(assignmentsPage([]string{"8.8.8.8"}, 1, ""), nil)
+				return m
+			},
+			params: AssignmentsParams{
+				OrgID:         mo.Some(identifiers.NewOrganizationID(orgUUID)),
+				TagID:         identifiers.NewTagID(tagUUID.String()),
+				AssetID:       mo.Some("8.8.8.8"),
+				AssetType:     mo.Some("host"),
+				CreatedBy:     mo.Some("creator-id"),
+				CreatedBefore: mo.Some(before),
+				CreatedAfter:  mo.Some(after),
+				OrderBy:       mo.Some("create_time_asc"),
+				PageSize:      mo.Some(uint64(50)),
+			},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 1)
+			},
+		},
+		{
+			name: "pagination - multiple pages collected",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+						TagID: tagUUID.String(), PageSize: mo.Some(int64(2)),
+					}).Return(assignmentsPage([]string{"8.8.8.8", "1.1.1.1"}, 3, "token1"), nil),
+					m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+						TagID: tagUUID.String(), PageSize: mo.Some(int64(2)), PageToken: mo.Some("token1"),
+					}).Return(assignmentsPage([]string{"9.9.9.9"}, 3, ""), nil),
+				)
+				return m
+			},
+			params: AssignmentsParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				PageSize: mo.Some(uint64(2)),
+			},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 3)
+				require.Equal(t, int64(3), res.TotalSize)
+			},
+		},
+		{
+			name: "pagination - limited by max-pages",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					TagID: tagUUID.String(), PageSize: mo.Some(int64(2)),
+				}).Return(assignmentsPage([]string{"8.8.8.8", "1.1.1.1"}, 10, "token1"), nil)
+				// the second page must NOT be fetched
+				return m
+			},
+			params: AssignmentsParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				PageSize: mo.Some(uint64(2)),
+				MaxPages: mo.Some(uint64(1)),
+			},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 2)
+				require.Equal(t, int64(10), res.TotalSize)
+			},
+		},
+		{
+			name: "pagination stops when the server repeats a page token",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+						TagID: tagUUID.String(),
+					}).Return(assignmentsPage([]string{"8.8.8.8"}, 2, "stuck"), nil),
+					// The server echoes back the same token; the loop must not continue.
+					m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+						TagID: tagUUID.String(), PageToken: mo.Some("stuck"),
+					}).Return(assignmentsPage([]string{"1.1.1.1"}, 2, "stuck"), nil),
+				)
+				return m
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 2)
+			},
+		},
+		{
+			name: "first page error returns hard",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+					Return(client.Result[components.TagAssignmentsList]{}, clientStructuredError("Permission denied", 403))
+				return m
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Empty(t, res.Assignments)
+				require.Contains(t, err.Error(), "Permission denied")
+			},
+		},
+		{
+			name: "later page error returns partial results",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+						TagID: tagUUID.String(),
+					}).Return(assignmentsPage([]string{"8.8.8.8"}, 5, "token1"), nil),
+					m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+						TagID: tagUUID.String(), PageToken: mo.Some("token1"),
+					}).Return(client.Result[components.TagAssignmentsList]{}, clientStructuredError("Server error", 500)),
+				)
+				return m
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, res AssignmentsResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Len(t, res.Assignments, 1)
+				require.Error(t, res.PartialError)
+				require.Contains(t, res.PartialError.Error(), "Server error")
+			},
+		},
+		{
+			name: "invalid order-by rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			params: AssignmentsParams{
+				TagID:   identifiers.NewTagID(tagUUID.String()),
+				OrderBy: mo.Some("name_asc"),
+			},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "create_time_asc")
+			},
+		},
+		{
+			name: "invalid asset-type rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			params: AssignmentsParams{
+				TagID:     identifiers.NewTagID(tagUUID.String()),
+				AssetType: mo.Some("hosts"),
+			},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "web_property")
+			},
+		},
+		{
+			name: "impossible time window rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			params: AssignmentsParams{
+				TagID:         identifiers.NewTagID(tagUUID.String()),
+				CreatedBefore: mo.Some(after),
+				CreatedAfter:  mo.Some(before),
+			},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "created-before must be after created-after")
+			},
+		},
+		{
+			name: "zero page size rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			params: AssignmentsParams{
+				TagID:    identifiers.NewTagID(tagUUID.String()),
+				PageSize: mo.Some(uint64(0)),
+			},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "page size")
+			},
+		},
+		{
+			name: "empty identifier rejected before any lookup",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID("  ")},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "tag name or ID is required")
+			},
+		},
+		{
+			name: "unresolvable name returns tag-not-found",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).
+					Return(client.Result[components.TagsList]{Data: &components.TagsList{}}, nil)
+				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID("missing")},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), `tag "missing" not found`)
+			},
+		},
+		{
+			name: "context cancellation propagates",
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			params: AssignmentsParams{TagID: identifiers.NewTagID(tagUUID.String())},
+			assert: func(t *testing.T, _ AssignmentsResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.ErrorIs(t, err, context.Canceled)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+
+			ctx := context.Background()
+			if tc.ctx != nil {
+				ctx = tc.ctx()
+			}
+
+			res, err := svc.ListAssignments(ctx, tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
+
+// TestTagsService_ListAssignments_Streaming verifies assignments are emitted
+// instead of collected when a streaming emitter is attached.
+func TestTagsService_ListAssignments_Streaming(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tagUUID := uuid.New()
+	m := mocks.NewMockClient(ctrl)
+	gomock.InOrder(
+		m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+			TagID: tagUUID.String(), PageSize: mo.Some(int64(2)),
+		}).Return(assignmentsPage([]string{"8.8.8.8", "1.1.1.1"}, 3, "token1"), nil),
+		m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+			TagID: tagUUID.String(), PageSize: mo.Some(int64(2)), PageToken: mo.Some("token1"),
+		}).Return(assignmentsPage([]string{"9.9.9.9"}, 3, ""), nil),
+	)
+
+	emitter, items := streaming.NewChannelEmitter(8)
+	ctx := streaming.WithEmitter(context.Background(), emitter)
+
+	res, err := New(m).ListAssignments(ctx, AssignmentsParams{
+		TagID:    identifiers.NewTagID(tagUUID.String()),
+		PageSize: mo.Some(uint64(2)),
+	})
+	require.NoError(t, err)
+	require.Empty(t, res.Assignments, "streamed assignments must not also be collected")
+	require.Equal(t, int64(3), res.TotalSize)
+
+	emitter.Close(nil)
+	var streamed []string
+	for item := range items {
+		if item.Done {
+			break
+		}
+		assignment, ok := item.Data.(Assignment)
+		require.True(t, ok)
+		streamed = append(streamed, assignment.AssetID)
+	}
+	require.Equal(t, []string{"8.8.8.8", "1.1.1.1", "9.9.9.9"}, streamed)
+}
+
+func TestTagsService_GetTag_AssetCount(t *testing.T) {
+	tagUUID := uuid.New()
+	tagResult := client.Result[components.Tag]{
+		Metadata: okMeta(),
+		Data:     &components.Tag{ID: tagUUID.String(), Name: "my-tag", Privacy: components.TagPrivacyPrivate},
+	}
+
+	t.Run("not requested - no count request is made", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").Return(tagResult, nil)
+		m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+
+		res, err := New(m).GetTag(context.Background(), GetParams{TagID: identifiers.NewTagID("my-tag")})
+		require.NoError(t, err)
+		require.Nil(t, res.Tag.AssetCount)
+		require.NoError(t, res.PartialError)
+	})
+
+	t.Run("requested - counts assignments off the tag's own UUID", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").Return(tagResult, nil)
+		m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+			TagID:    tagUUID.String(),
+			PageSize: mo.Some(int64(1)),
+		}).Return(assignmentsPage([]string{"8.8.8.8"}, 7, ""), nil)
+
+		res, err := New(m).GetTag(context.Background(), GetParams{
+			TagID:          identifiers.NewTagID("my-tag"),
+			WithAssetCount: true,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, res.Tag.AssetCount)
+		require.Equal(t, int64(7), *res.Tag.AssetCount)
+		require.NoError(t, res.PartialError)
+	})
+
+	t.Run("count failure keeps the tag and reports a partial error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").Return(tagResult, nil)
+		m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+			Return(client.Result[components.TagAssignmentsList]{}, clientStructuredError("Permission denied", 403))
+
+		res, err := New(m).GetTag(context.Background(), GetParams{
+			TagID:          identifiers.NewTagID("my-tag"),
+			WithAssetCount: true,
+		})
+		require.NoError(t, err)
+		require.Equal(t, "my-tag", res.Tag.Name)
+		require.Nil(t, res.Tag.AssetCount)
+		require.Error(t, res.PartialError)
+		require.Contains(t, res.PartialError.Error(), "Permission denied")
+	})
 }
