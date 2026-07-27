@@ -23,10 +23,12 @@ type ListParams struct {
 	MaxPages  mo.Option[uint64]
 }
 
-// GetParams bundles inputs for retrieving a single tag by name or UUID.
+// GetParams bundles inputs for retrieving a single tag by name or UUID. The tag
+// payload carries no assignment count, so WithAssetCount opts into a second request.
 type GetParams struct {
-	OrgID mo.Option[identifiers.OrganizationID]
-	TagID identifiers.TagID
+	OrgID          mo.Option[identifiers.OrganizationID]
+	TagID          identifiers.TagID
+	WithAssetCount bool
 }
 
 // CreateParams bundles inputs for creating a tag.
@@ -69,6 +71,21 @@ type UnassignParams struct {
 	AssetIDs []string
 }
 
+// AssignmentsParams bundles inputs for listing a tag's assignments. Filters left
+// empty are omitted from the request.
+type AssignmentsParams struct {
+	OrgID         mo.Option[identifiers.OrganizationID]
+	TagID         identifiers.TagID
+	AssetID       mo.Option[string]
+	AssetType     mo.Option[string]
+	CreatedBy     mo.Option[string]
+	CreatedBefore mo.Option[time.Time]
+	CreatedAfter  mo.Option[time.Time]
+	OrderBy       mo.Option[string]
+	PageSize      mo.Option[uint64]
+	MaxPages      mo.Option[uint64]
+}
+
 // Tag is the domain representation of a Censys tag, decoupled from the SDK type.
 type Tag struct {
 	ID          string    `json:"id" yaml:"id"`
@@ -78,12 +95,18 @@ type Tag struct {
 	CreatedBy   string    `json:"created_by" yaml:"created_by"`
 	CreatedAt   time.Time `json:"created_at" yaml:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" yaml:"updated_at"`
+	// AssetCount is only populated where it was asked for (`get --asset-count`);
+	// the API does not return it with the tag.
+	AssetCount *int64 `json:"asset_count,omitempty" yaml:"asset_count,omitempty"`
 }
 
 // GetResult is the outcome of retrieving a single tag.
 type GetResult struct {
 	Meta *responsemeta.ResponseMeta
 	Tag  Tag
+	// PartialError is set when the tag was fetched but the opted-in asset count
+	// could not be; the tag itself is still valid.
+	PartialError cenclierrors.CencliError
 }
 
 // CreateResult is the outcome of creating a tag.
@@ -142,6 +165,17 @@ type UnassignResult struct {
 	TagID        string
 	Unassigned   []Assignment
 	Failures     []AssignmentFailure
+	PartialError cenclierrors.CencliError
+}
+
+// AssignmentsResult is the outcome of listing a tag's assignments.
+type AssignmentsResult struct {
+	Meta *responsemeta.ResponseMeta
+	// Empty in streaming mode, where each assignment is emitted as it arrives.
+	Assignments []Assignment
+	// TotalSize is the API's count of assignments matching the filters.
+	TotalSize int64
+	// PartialError summarizes an error hit after the first successful page.
 	PartialError cenclierrors.CencliError
 }
 

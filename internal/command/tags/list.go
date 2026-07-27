@@ -19,6 +19,9 @@ const (
 
 	defaultPageSize = 100
 	minPageSize     = 1
+	// maxPageSize is the largest page the tags endpoints accept; rejecting more
+	// here saves a request that could only come back as a 422.
+	maxPageSize     = 1000
 	defaultMaxPages = 1
 )
 
@@ -109,7 +112,7 @@ func (c *ListCommand) Init() error {
 		mo.Some[int64](defaultPageSize),
 		"number of tags to return per page",
 		mo.Some[int64](minPageSize),
-		mo.None[int64](), // no maximum
+		mo.Some[int64](maxPageSize),
 	)
 	c.flags.maxPages = flags.NewIntegerFlag(
 		c.Flags(),
@@ -145,6 +148,8 @@ func (c *ListCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencli
 		"pageSize_set", c.pageSize.IsPresent(),
 		"maxPages_set", c.maxPages.IsPresent(),
 	)
+
+	warnFetchingAllPages(c.Config().Quiet, logger, c.maxPages)
 
 	err := c.WithProgress(
 		cmd.Context(),
@@ -197,8 +202,7 @@ func (c *ListCommand) parseOrgIDFlag() cenclierrors.CencliError {
 	return err
 }
 
-// parseFilterFlags reads the optional string filters. An empty value means the
-// filter was not provided and is omitted from the request.
+// parseFilterFlags reads the optional string filters; a blank value omits the filter.
 func (c *ListCommand) parseFilterFlags() cenclierrors.CencliError {
 	privacy, err := c.flags.privacy.Value()
 	if err != nil {
@@ -227,38 +231,8 @@ func (c *ListCommand) parseFilterFlags() cenclierrors.CencliError {
 	return nil
 }
 
-// parsePaginationFlags validates and parses page-size and max-pages flags.
 func (c *ListCommand) parsePaginationFlags() cenclierrors.CencliError {
-	pageSize, err := c.flags.pageSize.Value()
-	if err != nil {
-		return err
-	}
-	if pageSize.IsPresent() {
-		c.pageSize = mo.Some(uint64(pageSize.MustGet()))
-	}
-
-	maxPages, err := c.flags.maxPages.Value()
-	if err != nil {
-		return err
-	}
-	if maxPages.IsPresent() {
-		// The flag itself does no lower-bound check (min is None, to allow the -1
-		// "all pages" sentinel), so this switch owns rejection of 0 and negatives.
-		switch v := maxPages.MustGet(); {
-		case v == -1:
-			c.maxPages = mo.None[uint64]()
-		case v <= 0:
-			return flags.NewIntegerFlagInvalidValueError("max-pages", v, "must be -1 or >= 1")
-		default:
-			c.maxPages = mo.Some(uint64(v))
-		}
-	}
-	return nil
-}
-
-func optionalNonEmpty(v string) mo.Option[string] {
-	if v == "" {
-		return mo.None[string]()
-	}
-	return mo.Some(v)
+	var err cenclierrors.CencliError
+	c.pageSize, c.maxPages, err = parsePaginationFlags(c.flags.pageSize, c.flags.maxPages)
+	return err
 }
