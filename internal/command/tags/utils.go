@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 
@@ -25,6 +26,17 @@ func requireTagID(raw string) (identifiers.TagID, cenclierrors.CencliError) {
 		return id, tags.NewEmptyTagIDError()
 	}
 	return id, nil
+}
+
+// requireOperationID validates a positional operation identifier. The endpoint
+// declares operation_id as a UUID, so anything else is rejected here rather than
+// spent on a request that could only come back as a 422.
+func requireOperationID(raw string) (string, cenclierrors.CencliError) {
+	trimmed := strings.TrimSpace(raw)
+	if _, err := uuid.Parse(trimmed); err != nil {
+		return "", tags.NewInvalidOperationIDError(trimmed)
+	}
+	return trimmed, nil
 }
 
 // parsePaginationFlags reads the shared --page-size/--max-pages pair. The

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/samber/mo"
 
@@ -29,14 +30,34 @@ type Service interface {
 	Assign(ctx context.Context, params AssignParams) (AssignResult, cenclierrors.CencliError)
 	Unassign(ctx context.Context, params UnassignParams) (UnassignResult, cenclierrors.CencliError)
 	ListAssignments(ctx context.Context, params AssignmentsParams) (AssignmentsResult, cenclierrors.CencliError)
+	ListOperations(ctx context.Context, params OperationsParams) (OperationsResult, cenclierrors.CencliError)
+	GetOperation(ctx context.Context, params GetOperationParams) (GetOperationResult, cenclierrors.CencliError)
+	WaitForOperation(ctx context.Context, params WaitParams) (GetOperationResult, cenclierrors.CencliError)
 }
 
 type tagsService struct {
 	client client.Client
+	// sleep paces the WaitForOperation poll loop. It is a field so tests can
+	// substitute a fake clock; the repo has no shared clock abstraction.
+	sleep func(ctx context.Context, d time.Duration) error
 }
 
 func New(client client.Client) Service {
-	return &tagsService{client: client}
+	return &tagsService{client: client, sleep: sleepWithContext}
+}
+
+// sleepWithContext waits for d, returning early if the context is cancelled.
+// Mirrors the timer/select pattern the client's retry loop uses.
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *tagsService) ListTags(

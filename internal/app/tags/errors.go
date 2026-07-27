@@ -3,6 +3,7 @@ package tags
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 )
@@ -77,6 +78,53 @@ func (e *emptyTagIDError) Error() string { return "a tag name or ID is required"
 func (e *emptyTagIDError) Title() string { return "Invalid Tag" }
 
 func (e *emptyTagIDError) ShouldPrintUsage() bool { return true }
+
+// invalidOperationIDError signals that an operation identifier is not a UUID.
+// The endpoint declares operation_id as format:uuid, so anything else is a
+// guaranteed 422 — rejected at the boundary instead of after a round trip.
+type invalidOperationIDError struct {
+	provided string
+}
+
+// NewInvalidOperationIDError creates an invalid-operation-ID error.
+func NewInvalidOperationIDError(provided string) cenclierrors.CencliError {
+	return &invalidOperationIDError{provided: provided}
+}
+
+func (e *invalidOperationIDError) Error() string {
+	if e.provided == "" {
+		return "an operation ID is required"
+	}
+	return fmt.Sprintf("operation ID %q is not a valid UUID", e.provided)
+}
+
+func (e *invalidOperationIDError) Title() string { return "Invalid Operation ID" }
+
+func (e *invalidOperationIDError) ShouldPrintUsage() bool { return true }
+
+// operationWaitTimeoutError signals that --wait gave up before the operation
+// reached a terminal status. The job keeps running server-side.
+type operationWaitTimeoutError struct {
+	operationID string
+	status      string
+	timeout     time.Duration
+}
+
+// NewOperationWaitTimeoutError creates a wait-timeout error carrying the last
+// status seen before giving up.
+func NewOperationWaitTimeoutError(operationID, status string, timeout time.Duration) cenclierrors.CencliError {
+	return &operationWaitTimeoutError{operationID: operationID, status: status, timeout: timeout}
+}
+
+func (e *operationWaitTimeoutError) Error() string {
+	return fmt.Sprintf(
+		"timed out after %s waiting for operation %s; it is still %s and continues server-side",
+		e.timeout, e.operationID, e.status)
+}
+
+func (e *operationWaitTimeoutError) Title() string { return "Timeout" }
+
+func (e *operationWaitTimeoutError) ShouldPrintUsage() bool { return false }
 
 // tagNotFoundError signals that a tag name could not be resolved to an existing
 // tag during a name→UUID lookup.

@@ -270,6 +270,137 @@ func (c *UnassignCommand) RenderShort() cenclierrors.CencliError {
 	return nil
 }
 
+// RenderShort renders the bulk tag operations as a styled table (TTY-aware).
+func (c *OperationsListCommand) RenderShort() cenclierrors.CencliError {
+	if len(c.result.Operations) == 0 {
+		fmt.Fprintf(formatter.Stdout, "\nNo operations found.\n")
+		return nil
+	}
+
+	columns := []rawtable.Column[tags.TagOperation]{
+		{
+			Title:  "ID",
+			String: func(o tags.TagOperation) string { return o.ID },
+			Style: func(s string, _ tags.TagOperation) string {
+				return styles.NewStyle(styles.ColorTeal).Render(s)
+			},
+		},
+		{
+			Title:  "Tag",
+			String: func(o tags.TagOperation) string { return o.TagName },
+			Style: func(s string, _ tags.TagOperation) string {
+				return styles.NewStyle(styles.ColorOffWhite).Render(s)
+			},
+		},
+		{
+			Title:  "Type",
+			String: func(o tags.TagOperation) string { return o.Type },
+			Style: func(s string, _ tags.TagOperation) string {
+				return styles.NewStyle(styles.ColorSage).Render(s)
+			},
+		},
+		{
+			Title:  "Status",
+			String: func(o tags.TagOperation) string { return o.Status },
+			Style:  func(s string, o tags.TagOperation) string { return styleOperationStatus(s, o.Status) },
+		},
+		{
+			Title:  "Progress",
+			String: operationProgress,
+			Style: func(s string, _ tags.TagOperation) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
+			},
+		},
+		{
+			Title:  "Created At",
+			String: func(o tags.TagOperation) string { return o.CreatedAt.Format("2006-01-02 15:04") },
+			Style: func(s string, _ tags.TagOperation) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
+			},
+		},
+	}
+
+	tbl := rawtable.New(
+		columns,
+		rawtable.WithHeaderStyle[tags.TagOperation](styles.NewStyle(styles.ColorOffWhite).Bold(true)),
+		rawtable.WithStylesDisabled[tags.TagOperation](!formatter.StdoutIsTTY()),
+	)
+
+	// Show the API's total when it exceeds what was fetched, so a truncated
+	// listing says so.
+	countText := fmt.Sprintf("Operations (%d)", len(c.result.Operations))
+	if c.result.TotalSize > int64(len(c.result.Operations)) {
+		countText = fmt.Sprintf("Operations (%d of %d)", len(c.result.Operations), c.result.TotalSize)
+	}
+	title := styles.GlobalStyles.Signature.Bold(true).Render(countText)
+	fmt.Fprintf(formatter.Stdout, "\n%s\n\n", title)
+	fmt.Fprint(formatter.Stdout, tbl.Render(c.result.Operations))
+	fmt.Fprintf(formatter.Stdout, "\n")
+
+	return nil
+}
+
+// RenderShort renders a single operation as a labeled detail view (TTY-aware).
+func (c *OperationsGetCommand) RenderShort() cenclierrors.CencliError {
+	op := c.result.Operation
+
+	var out strings.Builder
+	out.WriteRune('\n')
+	out.WriteString(styles.GlobalStyles.Signature.Render("━━━ Tag Operation ━━━"))
+	out.WriteRune('\n')
+	out.WriteRune('\n')
+
+	writeField(&out, "ID", op.ID)
+	writeField(&out, "Tag", op.TagName)
+	writeField(&out, "Tag ID", op.TagID)
+	writeField(&out, "Type", op.Type)
+	writeField(&out, "Status", styleOperationStatus(op.Status, op.Status))
+	writeField(&out, "Progress", operationProgress(op))
+	writeField(&out, "Succeeded", strconv.FormatInt(op.SuccessfulCount, 10))
+
+	// Only bulk_create operations carry the query that produced them.
+	if op.Query != nil && *op.Query != "" {
+		writeField(&out, "Query", *op.Query)
+	}
+
+	writeField(&out, "Created At", op.CreatedAt.Format("2006-01-02 15:04:05 MST"))
+	if op.EndedAt != nil {
+		writeField(&out, "Ended At", op.EndedAt.Format("2006-01-02 15:04:05 MST"))
+	}
+	if op.StatusMessage != nil && *op.StatusMessage != "" {
+		writeField(&out, "Message", *op.StatusMessage)
+	}
+	if op.ErrorMessage != nil && *op.ErrorMessage != "" {
+		writeField(&out, "Error", *op.ErrorMessage)
+	}
+
+	formatter.Println(formatter.Stdout, out.String())
+	return nil
+}
+
+// operationProgress renders how far an operation got. The total is unknown until
+// completion for bulk_delete, so it is only shown once the API reports one.
+func operationProgress(o tags.TagOperation) string {
+	if o.TotalCount > 0 {
+		return fmt.Sprintf("%d/%d", o.ProcessedCount, o.TotalCount)
+	}
+	return strconv.FormatInt(o.ProcessedCount, 10)
+}
+
+// styleOperationStatus colors a status by outcome: done, capped, or broken.
+func styleOperationStatus(s, status string) string {
+	switch status {
+	case statusSucceeded:
+		return styles.NewStyle(styles.ColorSage).Render(s)
+	case statusFailed, statusCancelled:
+		return styles.NewStyle(styles.ColorRed).Render(s)
+	case statusLimitReached:
+		return styles.GlobalStyles.Warning.Render(s)
+	default:
+		return styles.NewStyle(styles.ColorTeal).Render(s)
+	}
+}
+
 // renderTagDetail renders a single tag as a labeled detail view (TTY-aware),
 // under the given section header. Shared by the get and create commands.
 func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {
