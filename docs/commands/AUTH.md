@@ -75,7 +75,7 @@ $ censys auth logout
 $ censys auth login   # pick the organization (or skip it for your free account) on the consent screen
 ```
 
-`cencli` fails fast with a clear message when you run a command that the current session isn't scoped for (for example `censys credits` while logged in to an organization), so you don't have to interpret a raw API error.
+If you run a command outside your session's scope (for example `censys credits` while logged in to an organization, or passing an `--org-id` that differs from the one you logged in with), the Platform API rejects the request.
 
 ### Personal access tokens differ
 

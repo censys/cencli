@@ -15,6 +15,7 @@ import (
 	time "time"
 
 	censys "github.com/censys/cencli/internal/pkg/clients/censys"
+	credential "github.com/censys/cencli/internal/pkg/credential"
 	components "github.com/censys/censys-sdk-go/models/components"
 	mo "github.com/samber/mo"
 	gomock "go.uber.org/mock/gomock"
@@ -72,6 +73,20 @@ func (m *MockClient) AggregateCollection(ctx context.Context, collectionID strin
 func (mr *MockClientMockRecorder) AggregateCollection(ctx, collectionID, orgID, query, field, numBuckets, countByLevel, filterByQuery any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AggregateCollection", reflect.TypeOf((*MockClient)(nil).AggregateCollection), ctx, collectionID, orgID, query, field, numBuckets, countByLevel, filterByQuery)
+}
+
+// CredentialInfo mocks base method.
+func (m *MockClient) CredentialInfo() credential.Info {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CredentialInfo")
+	ret0, _ := ret[0].(credential.Info)
+	return ret0
+}
+
+// CredentialInfo indicates an expected call of CredentialInfo.
+func (mr *MockClientMockRecorder) CredentialInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CredentialInfo", reflect.TypeOf((*MockClient)(nil).CredentialInfo))
 }
 
 // EnrichHost mocks base method.

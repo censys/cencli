@@ -100,7 +100,14 @@ func (c *Command) SupportsStreaming() bool {
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	if err := c.parseOrgIDFlag(); err != nil {
+	orgIDFromFlag, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Reconcile the flag with the active credential's org (OAuth binding or
+	// stored global); rejects a free-account session or a conflicting flag.
+	c.orgID, err = c.ResolveOrgID(cmd.Context(), orgIDFromFlag)
+	if err != nil {
 		return err
 	}
 
@@ -114,13 +121,9 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	}
 	c.hostIDs = hostIDs
 
-	if c.IsFreeAccountOAuth() {
-		return cenclierrors.NewFreeAccountOrgError()
-	}
-
 	// Enrichment requires an organization ID. Fail early with a helpful message
 	// rather than letting the API reject the request.
-	if !c.orgID.IsPresent() && !c.HasOrgID() {
+	if !c.orgID.IsPresent() {
 		return cenclierrors.NewNoOrgIDError()
 	}
 
@@ -134,12 +137,6 @@ func (c *Command) resolveEnrichService() cenclierrors.CencliError {
 	}
 	c.enrichSvc = svc
 	return nil
-}
-
-func (c *Command) parseOrgIDFlag() cenclierrors.CencliError {
-	var err cenclierrors.CencliError
-	c.orgID, err = c.flags.orgID.Value()
-	return err
 }
 
 // gatherRawHosts returns raw host strings from file, stdin, or positional args.

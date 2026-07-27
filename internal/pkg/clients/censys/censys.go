@@ -15,7 +15,7 @@ import (
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	clienthttp "github.com/censys/cencli/internal/pkg/clients/http"
-	authdom "github.com/censys/cencli/internal/pkg/domain/auth"
+	"github.com/censys/cencli/internal/pkg/credential"
 	applog "github.com/censys/cencli/internal/pkg/log"
 	"github.com/censys/cencli/internal/pkg/oauth"
 	"github.com/censys/cencli/internal/store"
@@ -29,15 +29,15 @@ type Client interface {
 	ThreatHuntingClient
 	AccountManagementClient
 	HasOrgID() bool
+	// CredentialInfo describes the credential authenticating requests.
+	CredentialInfo() credential.Info
 }
 
 type censysSDK struct {
 	client        *censys.SDK
 	retryStrategy config.RetryStrategy
 	hasOrgID      bool
-	isOAuth       bool
-	oauthOrgID    string
-	oauthOrgName  string
+	cred          credential.Info
 	logger        *slog.Logger
 }
 
@@ -45,10 +45,10 @@ func (c *censysSDK) HasOrgID() bool {
 	return c.hasOrgID
 }
 
-// OAuthSession reports whether an OAuth login is active and the org it is locked
-// to (empty for a free-account session).
-func (c *censysSDK) OAuthSession() (isOAuth bool, orgID string) {
-	return c.isOAuth, c.oauthOrgID
+// CredentialInfo describes the credential authenticating requests (kind and, for
+// OAuth logins, the consent scope).
+func (c *censysSDK) CredentialInfo() credential.Info {
+	return c.cred
 }
 
 type censysSDKImpl struct {
@@ -77,32 +77,34 @@ func NewCensysSDK(
 		censys.WithClient(httpClient),
 	}
 
-	cred, isOAuth, err := ActiveCredential(ctx, ds)
+	rec, kind, err := credential.Active(ctx, ds)
 	if err != nil {
 		return nil, err
 	}
 
-	var oauthOrgID, oauthOrgName string
-	if isOAuth {
+	var cred credential.Info
+	cred.Kind = kind
+	if kind == credential.KindOAuth {
 		oauthClient := oauth.NewClient(oauth.Config{}, &httpClient.Client)
 		sdkOpts = append(sdkOpts, censys.WithSecuritySource(oauthSecuritySource(ds, oauthClient)))
-		// Read the org the session is locked to (empty for a free account).
-		if sess, perr := oauth.ParseSession(cred.Value); perr == nil {
-			oauthOrgID = sess.OrgID
-			oauthOrgName = sess.OrgName
+		// Read the account and org the session is locked to (empty org = free account).
+		if sess, perr := oauth.ParseSession(rec.Value); perr == nil {
+			cred.Account = sess.Account()
+			cred.OrgID = sess.OrgID
+			cred.OrgName = sess.OrgName
 		}
 	} else {
-		sdkOpts = append(sdkOpts, censys.WithSecurity(cred.Value))
+		sdkOpts = append(sdkOpts, censys.WithSecurity(rec.Value))
 	}
 
 	// An OAuth login is self-scoped: the session dictates the org, so the stored
 	// org-id global is ignored. PATs are not org-scoped and fall back to it.
 	hasOrgID := false
 	switch {
-	case isOAuth:
-		if oauthOrgID != "" {
+	case kind == credential.KindOAuth:
+		if cred.OrgID != "" {
 			hasOrgID = true
-			sdkOpts = append(sdkOpts, censys.WithOrganizationID(oauthOrgID))
+			sdkOpts = append(sdkOpts, censys.WithOrganizationID(cred.OrgID))
 		}
 	default:
 		storedOrgID, orgErr := ds.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
@@ -118,9 +120,7 @@ func NewCensysSDK(
 		client:        censys.New(sdkOpts...),
 		retryStrategy: cfg.RetryStrategy,
 		hasOrgID:      hasOrgID,
-		isOAuth:       isOAuth,
-		oauthOrgID:    oauthOrgID,
-		oauthOrgName:  oauthOrgName,
+		cred:          cred,
 		logger:        logger,
 	}
 
@@ -131,35 +131,6 @@ func NewCensysSDK(
 		ThreatHuntingClient:     newThreatHuntingSDK(censysSDK),
 		AccountManagementClient: newAccountManagementSDK(censysSDK),
 	}, nil
-}
-
-// ActiveCredential resolves the credential API requests should authenticate
-// with: the OAuth session from `censys auth login` or a stored personal
-// access token, whichever was most recently used/activated. Returns
-// auth.ErrAuthNotFound when neither is configured.
-func ActiveCredential(ctx context.Context, ds store.Store) (*store.ValueForAuth, bool, error) {
-	oauthRec, oauthErr := ds.GetLastUsedAuthByName(ctx, config.OAuthSessionName)
-	if oauthErr != nil && !errors.Is(oauthErr, authdom.ErrAuthNotFound) {
-		return nil, false, fmt.Errorf("failed to get oauth session: %w", oauthErr)
-	}
-	patRec, patErr := ds.GetLastUsedAuthByName(ctx, config.AuthName)
-	if patErr != nil && !errors.Is(patErr, authdom.ErrAuthNotFound) {
-		return nil, false, fmt.Errorf("failed to get last used auth: %w", patErr)
-	}
-
-	switch {
-	case oauthErr == nil && patErr == nil:
-		if oauthRec.LastUsedAt.Before(patRec.LastUsedAt) {
-			return patRec, false, nil
-		}
-		return oauthRec, true, nil
-	case oauthErr == nil:
-		return oauthRec, true, nil
-	case patErr == nil:
-		return patRec, false, nil
-	default:
-		return nil, false, authdom.ErrAuthNotFound
-	}
 }
 
 // sessionRefresher exchanges a refresh token for a new session. It is a seam
@@ -283,7 +254,7 @@ func (c *censysSDK) executeWithRetry(ctx context.Context, operationFn func() Cli
 
 		lastErr = err
 		if attempt == maxAttempts || !shouldRetryCensysError(err) {
-			return c.annotateAuthError(err), attempt
+			return err, attempt
 		}
 
 		delay := calculateRetryDelay(baseDelay, c.retryStrategy.MaxDelay, c.retryStrategy.Backoff, attempt)
@@ -305,43 +276,7 @@ func (c *censysSDK) executeWithRetry(ctx context.Context, operationFn func() Cli
 		}
 	}
 
-	return c.annotateAuthError(lastErr), maxAttempts
-}
-
-// oauthScopeError augments an underlying client error with guidance about the
-// active OAuth session's scope. It embeds the original error so status code,
-// title, and exit-code behavior are unchanged.
-type oauthScopeError struct {
-	ClientError
-	hint string
-}
-
-func (e *oauthScopeError) Error() string { return e.ClientError.Error() + "\n\n" + e.hint }
-
-func (e *oauthScopeError) Unwrap() error { return e.ClientError }
-
-// annotateAuthError appends OAuth-scope guidance to a 403 so a request that
-// targets an organization (or the free account) outside the session's scope
-// yields an actionable message instead of a bare "forbidden". The API is the
-// source of truth; this only adds a hint for the OAuth case.
-func (c *censysSDK) annotateAuthError(err ClientError) ClientError {
-	if err == nil || !c.isOAuth {
-		return err
-	}
-	if status := err.StatusCode(); !status.IsPresent() || status.MustGet() != 403 {
-		return err
-	}
-	var hint string
-	if c.oauthOrgID != "" {
-		org := c.oauthOrgName
-		if org == "" {
-			org = c.oauthOrgID
-		}
-		hint = fmt.Sprintf("This login is scoped to organization %s; it cannot act on a different organization or your free account. Run `censys auth logout` then `censys auth login` to switch.", org)
-	} else {
-		hint = "This login is scoped to your free account; it cannot access organizations. Run `censys auth logout` then `censys auth login` and select the organization to access it."
-	}
-	return &oauthScopeError{ClientError: err, hint: hint}
+	return lastErr, maxAttempts
 }
 
 func shouldRetryCensysError(err ClientError) bool {

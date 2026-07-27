@@ -9,7 +9,7 @@ import (
 
 	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
-	client "github.com/censys/cencli/internal/pkg/clients/censys"
+	"github.com/censys/cencli/internal/pkg/credential"
 	authdom "github.com/censys/cencli/internal/pkg/domain/auth"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/oauth"
@@ -72,7 +72,7 @@ func (c *statusCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 
 // gatherStatus resolves the active credential into a statusResult.
 func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclierrors.CencliError) {
-	cred, isOAuth, err := client.ActiveCredential(ctx, c.Store())
+	cred, kind, err := credential.Active(ctx, c.Store())
 	if err != nil {
 		if errors.Is(err, authdom.ErrAuthNotFound) {
 			return statusResult{Authenticated: false}, nil
@@ -80,32 +80,34 @@ func (c *statusCommand) gatherStatus(ctx context.Context) (statusResult, cenclie
 		return statusResult{}, cenclierrors.NewCencliError(err)
 	}
 
-	if !isOAuth {
+	if kind == credential.KindPersonalAccessToken {
 		return statusResult{
 			Authenticated: true,
 			Method:        "personal_access_token",
 			Token:         cred.Description,
 		}, nil
-	}
+	} else if kind == credential.KindOAuth {
+		sess, parseErr := oauth.ParseSession(cred.Value)
+		if parseErr != nil {
+			return statusResult{}, cenclierrors.NewCencliError(fmt.Errorf("%w (run `censys auth login` to log in again)", parseErr))
+		}
 
-	sess, parseErr := oauth.ParseSession(cred.Value)
-	if parseErr != nil {
-		return statusResult{}, cenclierrors.NewCencliError(fmt.Errorf("%w (run `censys auth login` to log in again)", parseErr))
-	}
-
-	result := statusResult{
-		Authenticated: true,
-		Method:        "oauth",
-		Account:       sess.Account(),
-	}
-	if sess.OrgID != "" {
-		result.Scope = "organization"
-		result.OrganizationID = sess.OrgID
-		result.OrganizationName = sess.OrgName
+		result := statusResult{
+			Authenticated: true,
+			Method:        "oauth",
+			Account:       sess.Account(),
+		}
+		if sess.OrgID != "" {
+			result.Scope = "organization"
+			result.OrganizationID = sess.OrgID
+			result.OrganizationName = sess.OrgName
+		} else {
+			result.Scope = "free_account"
+		}
+		return result, nil
 	} else {
-		result.Scope = "free_account"
+		return statusResult{}, cenclierrors.NewCencliError(fmt.Errorf("unknown credential kind: %s", kind))
 	}
-	return result, nil
 }
 
 func (c *statusCommand) RenderShort() cenclierrors.CencliError {

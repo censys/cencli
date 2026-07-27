@@ -21,6 +21,7 @@ import (
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
+	"github.com/censys/cencli/internal/pkg/credential"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 	"github.com/censys/cencli/internal/pkg/formatter"
@@ -100,48 +101,48 @@ func (c *Context) HasOrgID() bool {
 	return c.censysClient != nil && c.censysClient.HasOrgID()
 }
 
-// oauthBinding reports whether an OAuth login is active and the org it is locked
-// to (empty for a free account). Returns (false, "") when the client is absent
-// or doesn't expose the binding (e.g. a test mock).
-func (c *Context) oauthBinding() (isOAuth bool, orgID string) {
+// credentialInfo returns the active credential as reported by the client, or a
+// zero (KindNone) value when no client is set (e.g. before auth, or a test that
+// doesn't inject one).
+func (c *Context) credentialInfo() credential.Info {
 	if c.censysClient == nil {
-		return false, ""
+		return credential.Info{Kind: credential.KindNone}
 	}
-	if p, ok := c.censysClient.(interface {
-		OAuthSession() (bool, string)
-	}); ok {
-		return p.OAuthSession()
+	return c.censysClient.CredentialInfo()
+}
+
+// ResolveOrgID determines the organization a command should target, without
+// pre-emptively rejecting anything based on the credential's scope — the API is
+// the authority and returns an actionable error if a request is out of scope:
+//
+//   - An explicit --org-id flag always wins (even under OAuth: the API decides).
+//   - Otherwise an org-bound OAuth session supplies its org; a free-account
+//     session supplies none.
+//   - A personal access token falls back to the stored org-id global.
+func (c *Context) ResolveOrgID(ctx context.Context, flagOrgID mo.Option[identifiers.OrganizationID]) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
+	if flagOrgID.IsPresent() {
+		return flagOrgID, nil
 	}
-	return false, ""
+
+	info := c.credentialInfo()
+	switch {
+	case info.IsOrgBoundOAuth():
+		sessionOrg, err := parseOrgID(info.OrgID)
+		if err != nil {
+			return mo.None[identifiers.OrganizationID](), err
+		}
+		return mo.Some(sessionOrg), nil
+	case info.IsFreeAccountOAuth():
+		// Free-account OAuth session: no organization to target.
+		return mo.None[identifiers.OrganizationID](), nil
+	default:
+		return c.storedOrgID(ctx)
+	}
 }
 
-// IsOrgBoundOAuth reports whether an OAuth login locked to an organization is active.
-func (c *Context) IsOrgBoundOAuth() bool {
-	isOAuth, orgID := c.oauthBinding()
-	return isOAuth && orgID != ""
-}
-
-// IsFreeAccountOAuth reports whether an OAuth login scoped to the free account is active.
-func (c *Context) IsFreeAccountOAuth() bool {
-	isOAuth, orgID := c.oauthBinding()
-	return isOAuth && orgID == ""
-}
-
-// GetStoredOrgID returns the organization ID requests should target, or None.
-// While an OAuth login is active the session dictates the org (org-bound → its
-// org; free account → none) and the stored org-id global is ignored.
-func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
+// storedOrgID reads the org-id global (used for personal access tokens).
+func (c *Context) storedOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
 	zero := mo.None[identifiers.OrganizationID]()
-	if isOAuth, orgID := c.oauthBinding(); isOAuth {
-		if orgID == "" {
-			return zero, nil
-		}
-		parsedUUID, parseErr := uuid.Parse(orgID)
-		if parseErr != nil {
-			return zero, cenclierrors.NewCencliError(parseErr)
-		}
-		return mo.Some(identifiers.NewOrganizationID(parsedUUID)), nil
-	}
 	storedOrgID, err := c.store.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
 	if err != nil {
 		if errors.Is(err, store.ErrGlobalNotFound) {
@@ -149,11 +150,19 @@ func (c *Context) GetStoredOrgID(ctx context.Context) (mo.Option[identifiers.Org
 		}
 		return zero, cenclierrors.NewCencliError(err)
 	}
-	parsedUUID, parseErr := uuid.Parse(storedOrgID.Value)
-	if parseErr != nil {
-		return zero, cenclierrors.NewCencliError(parseErr)
+	parsed, perr := parseOrgID(storedOrgID.Value)
+	if perr != nil {
+		return zero, perr
 	}
-	return mo.Some(identifiers.NewOrganizationID(parsedUUID)), nil
+	return mo.Some(parsed), nil
+}
+
+func parseOrgID(value string) (identifiers.OrganizationID, cenclierrors.CencliError) {
+	parsedUUID, err := uuid.Parse(value)
+	if err != nil {
+		return identifiers.OrganizationID{}, cenclierrors.NewCencliError(err)
+	}
+	return identifiers.NewOrganizationID(parsedUUID), nil
 }
 
 // Logger returns a logger pre-populated with the command name field.

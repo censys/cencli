@@ -91,29 +91,18 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return err
 	}
 
-	if c.IsFreeAccountOAuth() {
-		return cenclierrors.NewFreeAccountOrgError()
-	}
-
 	orgIDFromFlag, err := c.flags.orgID.Value()
 	if err != nil {
 		return err
 	}
-	if orgIDFromFlag.IsPresent() {
-		c.orgID = orgIDFromFlag.MustGet()
-	} else {
-		storedOrgID, err := c.GetStoredOrgID(cmd.Context())
-		if err != nil {
-			return err
-		}
-		if storedOrgID.IsPresent() {
-			c.orgID = storedOrgID.MustGet()
-		}
+	orgID, err := c.ResolveOrgID(cmd.Context(), orgIDFromFlag)
+	if err != nil {
+		return err
 	}
-	// if no org ID is found, return an error
-	if c.orgID.IsZero() {
+	if !orgID.IsPresent() {
 		return cenclierrors.NewNoOrgIDError()
 	}
+	c.orgID = orgID.MustGet()
 	return nil
 }
 
