@@ -87,6 +87,21 @@ func (mr *MockTagsServiceMockRecorder) DeleteTag(ctx, params any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockTagsService)(nil).DeleteTag), ctx, params)
 }
 
+// GetOperation mocks base method.
+func (m *MockTagsService) GetOperation(ctx context.Context, params tags.GetOperationParams) (tags.GetOperationResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOperation", ctx, params)
+	ret0, _ := ret[0].(tags.GetOperationResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// GetOperation indicates an expected call of GetOperation.
+func (mr *MockTagsServiceMockRecorder) GetOperation(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOperation", reflect.TypeOf((*MockTagsService)(nil).GetOperation), ctx, params)
+}
+
 // GetTag mocks base method.
 func (m *MockTagsService) GetTag(ctx context.Context, params tags.GetParams) (tags.GetResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()
@@ -115,6 +130,21 @@ func (m *MockTagsService) ListAssignments(ctx context.Context, params tags.Assig
 func (mr *MockTagsServiceMockRecorder) ListAssignments(ctx, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAssignments", reflect.TypeOf((*MockTagsService)(nil).ListAssignments), ctx, params)
+}
+
+// ListOperations mocks base method.
+func (m *MockTagsService) ListOperations(ctx context.Context, params tags.OperationsParams) (tags.OperationsResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOperations", ctx, params)
+	ret0, _ := ret[0].(tags.OperationsResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// ListOperations indicates an expected call of ListOperations.
+func (mr *MockTagsServiceMockRecorder) ListOperations(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOperations", reflect.TypeOf((*MockTagsService)(nil).ListOperations), ctx, params)
 }
 
 // ListTags mocks base method.
@@ -160,4 +190,19 @@ func (m *MockTagsService) UpdateTag(ctx context.Context, params tags.UpdateParam
 func (mr *MockTagsServiceMockRecorder) UpdateTag(ctx, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTag", reflect.TypeOf((*MockTagsService)(nil).UpdateTag), ctx, params)
+}
+
+// WaitForOperation mocks base method.
+func (m *MockTagsService) WaitForOperation(ctx context.Context, params tags.WaitParams) (tags.GetOperationResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitForOperation", ctx, params)
+	ret0, _ := ret[0].(tags.GetOperationResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// WaitForOperation indicates an expected call of WaitForOperation.
+func (mr *MockTagsServiceMockRecorder) WaitForOperation(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForOperation", reflect.TypeOf((*MockTagsService)(nil).WaitForOperation), ctx, params)
 }
