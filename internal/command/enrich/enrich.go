@@ -104,8 +104,8 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	// Reconcile the flag with the active credential's org (OAuth binding or
-	// stored global); rejects a free-account session or a conflicting flag.
+	// Resolve the org to target: the --org-id flag, else the OAuth session's
+	// binding, else the stored global.
 	c.orgID, err = c.ResolveOrgID(cmd.Context(), orgIDFromFlag)
 	if err != nil {
 		return err

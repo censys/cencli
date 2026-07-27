@@ -213,7 +213,9 @@ func IsInterrupted(err error) bool {
 type noOrgIDError struct{}
 
 func (e *noOrgIDError) Error() string {
-	return "no organization ID configured. Use --org-id flag or run 'censys config org-id set <org-id>' to set a default"
+	return "no organization ID configured. Pass --org-id, or run 'censys config org-id add' to store a default. " +
+		"If you logged in with 'censys auth login', the organization comes from that login: " +
+		"log out and log in again, choosing an organization"
 }
 
 func (e *noOrgIDError) Title() string {
