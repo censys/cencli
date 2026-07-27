@@ -61,6 +61,19 @@ type ListTagAssignmentsRequest struct {
 	PageToken     mo.Option[string]
 }
 
+// ListTagOperationsRequest bundles the query parameters for ListTagOperations.
+// TagID is a resolved tag UUID, or "-" to list operations across every tag in
+// the organization; only present options are sent.
+type ListTagOperationsRequest struct {
+	OrgID     mo.Option[string]
+	TagID     string
+	Type      mo.Option[string]
+	Status    mo.Option[string]
+	OrderBy   mo.Option[string]
+	PageSize  mo.Option[int64]
+	PageToken mo.Option[string]
+}
+
 //go:generate mockgen -destination=../../../../gen/client/mocks/tags_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys TagsClient
 type TagsClient interface {
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtags
@@ -87,6 +100,14 @@ type TagsClient interface {
 	//
 	// DeleteTagAssignment returns only response metadata; the endpoint has no body.
 	DeleteTagAssignment(ctx context.Context, orgID mo.Option[string], tagID, assignmentID string) (Metadata, ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtagoperations
+	ListTagOperations(ctx context.Context, req ListTagOperationsRequest) (Result[components.TagOperationsList], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#gettagoperation
+	GetTagOperation(
+		ctx context.Context,
+		orgID mo.Option[string],
+		tagID, operationID string,
+	) (Result[components.TagOperation], ClientError)
 }
 
 type tagsSDK struct {
@@ -173,6 +194,87 @@ func (t *tagsSDK) GetTag(
 	return Result[components.Tag]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     tag,
+	}, nil
+}
+
+func (t *tagsSDK) ListTagOperations(
+	ctx context.Context,
+	req ListTagOperationsRequest,
+) (Result[components.TagOperationsList], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsListOperationsResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		sdkReq := operations.V3TagsListOperationsRequest{
+			OrganizationID: req.OrgID.ToPointer(),
+			TagID:          req.TagID,
+			PageToken:      req.PageToken.ToPointer(),
+		}
+		if req.PageSize.IsPresent() {
+			ps := int(req.PageSize.MustGet())
+			sdkReq.PageSize = &ps
+		}
+		// The SDK names the operation filter enums bare Type and Status; they are
+		// distinct from the components.TagOperation* enums on the response.
+		if req.Type.IsPresent() {
+			ty := operations.Type(req.Type.MustGet())
+			sdkReq.Type = &ty
+		}
+		if req.Status.IsPresent() {
+			st := operations.Status(req.Status.MustGet())
+			sdkReq.Status = &st
+		}
+		if req.OrderBy.IsPresent() {
+			ob := operations.V3TagsListOperationsQueryParamOrderBy(req.OrderBy.MustGet())
+			sdkReq.OrderBy = &ob
+		}
+		res, err = t.censysSDK.client.TagsAndComments.ListTagOperations(ctx, sdkReq)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TagOperationsList]{}
+		return zero, err
+	}
+	opsList := res.GetResponseEnvelopeTagOperationsList().GetResult()
+	return Result[components.TagOperationsList]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     opsList,
+	}, nil
+}
+
+func (t *tagsSDK) GetTagOperation(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID, operationID string,
+) (Result[components.TagOperation], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsGetOperationResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		req := operations.V3TagsGetOperationRequest{
+			OrganizationID: orgID.ToPointer(),
+			TagID:          tagID,
+			OperationID:    operationID,
+		}
+		res, err = t.censysSDK.client.TagsAndComments.GetTagOperation(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TagOperation]{}
+		return zero, err
+	}
+	op := res.GetResponseEnvelopeTagOperation().GetResult()
+	return Result[components.TagOperation]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     op,
 	}, nil
 }
 
