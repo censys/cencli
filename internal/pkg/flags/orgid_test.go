@@ -75,7 +75,8 @@ func TestOrgIDFlag_Properties(t *testing.T) {
 	// Check that the flag exists and has correct properties
 	flag := cmd.Flags().Lookup("org-id")
 	require.NotNil(t, flag, "org-id flag should exist")
-	assert.Equal(t, "override the configured organization ID", flag.Usage)
+	assert.Equal(t, orgIDFlagDesc, flag.Usage)
+	assert.Contains(t, flag.Usage, "personal access tokens only")
 	assert.Equal(t, "o", flag.Shorthand)
 	assert.Equal(t, "", flag.DefValue) // Should have no default value
 }

@@ -54,27 +54,37 @@ func TestResolveOrgID(t *testing.T) {
 		assert.Equal(t, sessionUUID.String(), got.MustGet().String())
 	})
 
-	t.Run("org-bound oauth with a matching flag is allowed", func(t *testing.T) {
+	// --org-id is a personal-access-token concept, so it is rejected under OAuth
+	// even when it names the very org the session is bound to.
+	t.Run("org-bound oauth rejects --org-id naming the same org", func(t *testing.T) {
+		c := newCtx(t, credential.Info{Kind: credential.KindOAuth, OrgID: sessionUUID.String(), OrgName: "Censys"}, nil)
+		_, err := c.ResolveOrgID(ctx, orgFlag(sessionUUID))
+		require.NotNil(t, err)
+		assert.Contains(t, err.Error(), "only applies to personal access tokens")
+		assert.True(t, err.ShouldPrintUsage())
+	})
+
+	t.Run("org-bound oauth rejects --org-id naming a different org", func(t *testing.T) {
+		c := newCtx(t, credential.Info{Kind: credential.KindOAuth, OrgID: sessionUUID.String(), OrgName: "Censys"}, nil)
+		_, err := c.ResolveOrgID(ctx, orgFlag(otherUUID))
+		require.NotNil(t, err)
+		assert.Contains(t, err.Error(), "the organization [Censys]")
+	})
+
+	t.Run("free-account oauth rejects --org-id", func(t *testing.T) {
+		c := newCtx(t, credential.Info{Kind: credential.KindOAuth}, nil)
+		_, err := c.ResolveOrgID(ctx, orgFlag(otherUUID))
+		require.NotNil(t, err)
+		assert.Contains(t, err.Error(), "scoped to your free account")
+	})
+
+	t.Run("oauth never consults the stored org-id global", func(t *testing.T) {
+		// No GetLastUsedGlobalByName expectation: the mock controller fails the
+		// test if the OAuth path reads the global.
 		c := newCtx(t, credential.Info{Kind: credential.KindOAuth, OrgID: sessionUUID.String()}, nil)
-		got, err := c.ResolveOrgID(ctx, orgFlag(sessionUUID))
+		got, err := c.ResolveOrgID(ctx, none)
 		require.Nil(t, err)
 		assert.Equal(t, sessionUUID.String(), got.MustGet().String())
-	})
-
-	// A flag that disagrees with the session is NOT rejected locally: it is sent
-	// and the API decides (and its 403 carries a scope hint).
-	t.Run("org-bound oauth passes a differing flag through", func(t *testing.T) {
-		c := newCtx(t, credential.Info{Kind: credential.KindOAuth, OrgID: sessionUUID.String(), OrgName: "Censys"}, nil)
-		got, err := c.ResolveOrgID(ctx, orgFlag(otherUUID))
-		require.Nil(t, err)
-		assert.Equal(t, otherUUID.String(), got.MustGet().String())
-	})
-
-	t.Run("free-account oauth passes an org flag through", func(t *testing.T) {
-		c := newCtx(t, credential.Info{Kind: credential.KindOAuth}, nil)
-		got, err := c.ResolveOrgID(ctx, orgFlag(otherUUID))
-		require.Nil(t, err)
-		assert.Equal(t, otherUUID.String(), got.MustGet().String())
 	})
 
 	t.Run("free-account oauth without a flag resolves to none", func(t *testing.T) {

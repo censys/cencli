@@ -19,7 +19,7 @@ Examples:
 Flags:
   -h, --help                help for enrich
   -i, --input-file string   file to read the host IPs from. Overrides the positional argument.
-  -o, --org-id string       override the configured organization ID
+  -o, --org-id string       organization ID to target (personal access tokens only)
 
 Global Flags:
       --debug                   enable debug logging

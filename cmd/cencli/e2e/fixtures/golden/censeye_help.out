@@ -17,7 +17,7 @@ Flags:
       --include-url         include a Platform search URL in the output
   -i, --input-file string   file to read the assets from. Overrides the positional argument.
   -I, --interactive         display results in an interactive table (TUI)
-  -o, --org-id string       override the configured organization ID
+  -o, --org-id string       organization ID to target (personal access tokens only)
   -M, --rarity-max int      maximum host count for interesting results (must be non-zero) (default 100)
   -m, --rarity-min int      minimum host count for interesting results (must be non-zero) (default 2)
 

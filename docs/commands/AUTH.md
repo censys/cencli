@@ -64,7 +64,17 @@ An OAuth login is **locked to a single context**, chosen when you log in: either
 - A session logged in to an **organization** acts only on that organization. It **cannot** access free-user endpoints such as `censys credits` (free user credits).
 - A session logged in to your **free account** acts only on your free account. It **cannot** access any organization — even one you belong to, and even one you join later — so `censys org ...` and `censys enrich` are unavailable.
 
-Because the session carries its own context, you do **not** set or pass an organization ID with an OAuth login. The Platform API resolves (and enforces) the organization from the token.
+Because the session carries its own context, you do **not** pass an organization ID with an OAuth login. The Platform API resolves (and enforces) the organization from the token.
+
+Concretely, the two ways of choosing an organization manually are **personal-access-token features only**:
+
+| | Personal access token | OAuth login |
+|---|---|---|
+| `--org-id` flag | chooses the organization for that request | **error** — the organization is fixed by the login |
+| stored `censys config org-id` | used when `--org-id` is absent | **ignored** |
+| no organization anywhere | free-user wallet | the organization (or free account) the login was authorized for |
+
+To act on a different organization with an OAuth login, log out and log in again choosing that organization (see below), or switch to a personal access token with `censys config auth activate <id>`.
 
 ### Switching organizations or your free account
 

@@ -82,9 +82,11 @@ func NewCensysSDK(
 		return nil, err
 	}
 
-	var cred credential.Info
-	cred.Kind = kind
-	if kind == credential.KindOAuth {
+	// Attach credentials. Each kind is handled explicitly so a kind added later
+	// fails loudly here instead of being sent as a raw bearer token.
+	cred := credential.Info{Kind: kind}
+	switch kind {
+	case credential.KindOAuth:
 		oauthClient := oauth.NewClient(oauth.Config{}, &httpClient.Client)
 		sdkOpts = append(sdkOpts, censys.WithSecuritySource(oauthSecuritySource(ds, oauthClient)))
 		// Read the account and org the session is locked to (empty org = free account).
@@ -93,27 +95,28 @@ func NewCensysSDK(
 			cred.OrgID = sess.OrgID
 			cred.OrgName = sess.OrgName
 		}
-	} else {
+	case credential.KindPersonalAccessToken:
 		sdkOpts = append(sdkOpts, censys.WithSecurity(rec.Value))
+	default:
+		return nil, fmt.Errorf("unsupported credential kind: %s", kind)
 	}
 
-	// An OAuth login is self-scoped: the session dictates the org, so the stored
-	// org-id global is ignored. PATs are not org-scoped and fall back to it.
+	// Resolve the organization applied to every request. Only credentials that
+	// are not organization-scoped fall back to the stored org-id global; the rest
+	// use the organization their credential is bound to.
 	hasOrgID := false
-	switch {
-	case kind == credential.KindOAuth:
-		if cred.OrgID != "" {
-			hasOrgID = true
-			sdkOpts = append(sdkOpts, censys.WithOrganizationID(cred.OrgID))
-		}
-	default:
+	if cred.AllowsManualOrg() {
 		storedOrgID, orgErr := ds.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)
-		if orgErr == nil {
+		switch {
+		case orgErr == nil:
 			hasOrgID = true
 			sdkOpts = append(sdkOpts, censys.WithOrganizationID(storedOrgID.Value))
-		} else if !errors.Is(orgErr, store.ErrGlobalNotFound) {
+		case !errors.Is(orgErr, store.ErrGlobalNotFound):
 			return nil, fmt.Errorf("failed to get last used orgID: %w", orgErr)
 		}
+	} else if cred.OrgID != "" {
+		hasOrgID = true
+		sdkOpts = append(sdkOpts, censys.WithOrganizationID(cred.OrgID))
 	}
 
 	censysSDK := &censysSDK{

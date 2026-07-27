@@ -60,6 +60,21 @@ func TestActive(t *testing.T) {
 	})
 }
 
+// AllowsManualOrg must be an allowlist: a credential kind added later has to be
+// restrictive by default rather than inheriting personal-access-token behavior.
+func TestAllowsManualOrg(t *testing.T) {
+	assert.True(t, Info{Kind: KindPersonalAccessToken}.AllowsManualOrg())
+	assert.True(t, Info{Kind: KindNone}.AllowsManualOrg(), "no credential: fail on auth, not here")
+	assert.False(t, Info{Kind: KindOAuth}.AllowsManualOrg())
+	assert.False(t, Info{Kind: KindOAuth, OrgID: "org-1"}.AllowsManualOrg())
+
+	// Stand-in for a future kind (e.g. service accounts): must NOT be treated
+	// like a personal access token.
+	future := Kind(99)
+	assert.False(t, Info{Kind: future}.AllowsManualOrg())
+	assert.Equal(t, "unknown(99)", future.String())
+}
+
 func TestResolve(t *testing.T) {
 	ctx := context.Background()
 
@@ -81,8 +96,8 @@ func TestResolve(t *testing.T) {
 		assert.Equal(t, "u@censys.com", info.Account)
 		assert.Equal(t, "org-1", info.OrgID)
 		assert.Equal(t, "Censys", info.OrgName)
-		assert.True(t, info.IsOrgBoundOAuth())
-		assert.False(t, info.IsFreeAccountOAuth())
+		assert.True(t, info.IsBoundToOrg())
+		assert.False(t, info.IsBoundToFreeAccount())
 	})
 
 	t.Run("nothing configured yields KindNone without error", func(t *testing.T) {

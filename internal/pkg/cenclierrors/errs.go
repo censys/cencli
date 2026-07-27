@@ -229,3 +229,30 @@ func (e *noOrgIDError) ShouldPrintUsage() bool {
 func NewNoOrgIDError() CencliError {
 	return &noOrgIDError{}
 }
+
+type orgIDNotApplicableError struct{ scope string }
+
+func (e *orgIDNotApplicableError) Error() string {
+	return "--org-id only applies to personal access tokens, the one credential that is not " +
+		"organization-scoped. Your current log in is scoped to " + e.scope + ", so the organization " +
+		"cannot be chosen per request. To target a different organization, authenticate to it " +
+		"(run 'censys auth logout' then 'censys auth login' and scope access to that organization), " +
+		"or switch to a personal access token with 'censys config auth activate <id>'."
+}
+
+func (e *orgIDNotApplicableError) Title() string {
+	return "Organization ID Not Applicable"
+}
+
+func (e *orgIDNotApplicableError) ShouldPrintUsage() bool {
+	return true
+}
+
+// NewOrgIDNotApplicableError is returned when --org-id is supplied while the
+// active credential carries its own organization binding, so the flag (a
+// personal-access-token concept) cannot apply. scope is a clause describing what
+// the credential is bound to, e.g. "Your OAuth login is scoped to organization
+// [Censys]".
+func NewOrgIDNotApplicableError(scope string) CencliError {
+	return &orgIDNotApplicableError{scope: scope}
+}

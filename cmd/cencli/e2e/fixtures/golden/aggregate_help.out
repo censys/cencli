@@ -16,7 +16,7 @@ Flags:
   -h, --help                    help for aggregate
   -i, --interactive             display results in an interactive table (TUI)
   -n, --num-buckets int         number of buckets to split results into (default 25)
-  -o, --org-id string           override the configured organization ID
+  -o, --org-id string           organization ID to target (personal access tokens only)
 
 Global Flags:
       --debug                   enable debug logging

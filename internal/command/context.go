@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -111,36 +112,55 @@ func (c *Context) credentialInfo() credential.Info {
 	return c.censysClient.CredentialInfo()
 }
 
-// ResolveOrgID determines the organization a command should target, without
-// pre-emptively rejecting anything based on the credential's scope — the API is
-// the authority and returns an actionable error if a request is out of scope:
+// ResolveOrgID determines the organization a command should target.
 //
-//   - An explicit --org-id flag always wins (even under OAuth: the API decides).
-//   - Otherwise an org-bound OAuth session supplies its org; a free-account
-//     session supplies none.
-//   - A personal access token falls back to the stored org-id global.
+// The two manual sources — the --org-id flag and the stored org-id global —
+// apply only to credentials that permit it (see credential.Info.AllowsManualOrg,
+// which allowlists personal access tokens). Every other credential kind carries
+// its own organization binding: that organization is used, and --org-id is
+// rejected as a usage error because it cannot apply.
 func (c *Context) ResolveOrgID(ctx context.Context, flagOrgID mo.Option[identifiers.OrganizationID]) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
-	if flagOrgID.IsPresent() {
-		return flagOrgID, nil
+	zero := mo.None[identifiers.OrganizationID]()
+	info := c.credentialInfo()
+
+	// ---- Not organization-scoped: the caller picks the organization per request.
+	if info.AllowsManualOrg() {
+		if flagOrgID.IsPresent() {
+			return flagOrgID, nil
+		}
+		return c.storedOrgID(ctx)
 	}
 
-	info := c.credentialInfo()
+	// ---- Credential carries its own organization; flags/config cannot override it.
+	if flagOrgID.IsPresent() {
+		return zero, cenclierrors.NewOrgIDNotApplicableError(credentialScopeTarget(info))
+	}
+	if info.OrgID == "" {
+		return zero, nil // e.g. a free-account OAuth session: no organization to target
+	}
+	boundOrg, err := parseOrgID(info.OrgID)
+	if err != nil {
+		return zero, err
+	}
+	return mo.Some(boundOrg), nil
+}
+
+// credentialScopeTarget names what the active credential is scoped to, for use
+// after "…is scoped to " in error text: "the organization [X]", or "your free
+// account" when the credential carries no organization.
+func credentialScopeTarget(info credential.Info) string {
 	switch {
-	case info.IsOrgBoundOAuth():
-		sessionOrg, err := parseOrgID(info.OrgID)
-		if err != nil {
-			return mo.None[identifiers.OrganizationID](), err
-		}
-		return mo.Some(sessionOrg), nil
-	case info.IsFreeAccountOAuth():
-		// Free-account OAuth session: no organization to target.
-		return mo.None[identifiers.OrganizationID](), nil
+	case info.OrgName != "":
+		return fmt.Sprintf("the organization [%s]", info.OrgName)
+	case info.OrgID != "":
+		return fmt.Sprintf("the organization [%s]", info.OrgID)
 	default:
-		return c.storedOrgID(ctx)
+		return "your free account"
 	}
 }
 
-// storedOrgID reads the org-id global (used for personal access tokens).
+// storedOrgID reads the org-id global. Personal-access-token path only: an
+// OAuth login takes its organization from the login itself.
 func (c *Context) storedOrgID(ctx context.Context) (mo.Option[identifiers.OrganizationID], cenclierrors.CencliError) {
 	zero := mo.None[identifiers.OrganizationID]()
 	storedOrgID, err := c.store.GetLastUsedGlobalByName(ctx, config.OrgIDGlobalName)

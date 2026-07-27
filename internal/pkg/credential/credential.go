@@ -52,11 +52,28 @@ type Info struct {
 	OrgName string
 }
 
-// IsOrgBoundOAuth reports an OAuth login locked to a specific organization.
-func (i Info) IsOrgBoundOAuth() bool { return i.Kind == KindOAuth && i.OrgID != "" }
+// IsBoundToOrg reports whether the credential is locked to one organization, so
+// it can act only on that organization — not on another, and not on the user's
+// free account.
+func (i Info) IsBoundToOrg() bool { return !i.AllowsManualOrg() && i.OrgID != "" }
 
-// IsFreeAccountOAuth reports an OAuth login scoped to the user's free account.
-func (i Info) IsFreeAccountOAuth() bool { return i.Kind == KindOAuth && i.OrgID == "" }
+// IsBoundToFreeAccount reports whether the credential is locked to the user's
+// free account, so it cannot act on any organization.
+func (i Info) IsBoundToFreeAccount() bool { return !i.AllowsManualOrg() && i.OrgID == "" }
+
+// AllowsManualOrg reports whether the organization may be chosen per request,
+// via the --org-id flag or the stored org-id global.
+//
+// Only a personal access token works that way, because it is the one credential
+// that is not organization-scoped. KindNone is included because no credential is
+// configured at all, so the command fails on authentication rather than here.
+//
+// Every other kind carries its own organization binding, so this is deliberately
+// an allowlist: a credential kind added later is restrictive by default instead
+// of silently inheriting personal-access-token behavior.
+func (i Info) AllowsManualOrg() bool {
+	return i.Kind == KindPersonalAccessToken || i.Kind == KindNone
+}
 
 // Active resolves the credential requests should authenticate with: the OAuth
 // session from `censys auth login` or a stored personal access token, whichever
