@@ -28,6 +28,7 @@ type Service interface {
 	UpdateTag(ctx context.Context, params UpdateParams) (UpdateResult, cenclierrors.CencliError)
 	DeleteTag(ctx context.Context, params DeleteParams) (DeleteResult, cenclierrors.CencliError)
 	Assign(ctx context.Context, params AssignParams) (AssignResult, cenclierrors.CencliError)
+	BulkAssign(ctx context.Context, params BulkAssignParams) (BulkAssignResult, cenclierrors.CencliError)
 	Unassign(ctx context.Context, params UnassignParams) (UnassignResult, cenclierrors.CencliError)
 	ListAssignments(ctx context.Context, params AssignmentsParams) (AssignmentsResult, cenclierrors.CencliError)
 	ListOperations(ctx context.Context, params OperationsParams) (OperationsResult, cenclierrors.CencliError)

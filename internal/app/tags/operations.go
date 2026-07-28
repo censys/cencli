@@ -235,19 +235,30 @@ func reportOperationProgress(ctx context.Context, op TagOperation) {
 
 // newGetOperationResult builds the single-operation result from a client call.
 func newGetOperationResult(result client.Result[components.TagOperation]) GetOperationResult {
-	var out GetOperationResult
+	meta, operation := mapOperationResult(result)
+	return GetOperationResult{Meta: meta, Operation: operation}
+}
+
+// mapOperationResult unpacks a client response carrying one operation. Shared by
+// every endpoint that answers with a TagOperation: get, wait, and bulk submit.
+func mapOperationResult(
+	result client.Result[components.TagOperation],
+) (*responsemeta.ResponseMeta, TagOperation) {
+	var meta *responsemeta.ResponseMeta
 	if result.Metadata.Request != nil || result.Metadata.Response != nil {
-		out.Meta = responsemeta.NewResponseMeta(
+		meta = responsemeta.NewResponseMeta(
 			result.Metadata.Request,
 			result.Metadata.Response,
 			result.Metadata.Latency,
 			result.Metadata.Attempts,
 		)
 	}
+
+	var operation TagOperation
 	if result.Data != nil {
-		out.Operation = mapTagOperation(*result.Data)
+		operation = mapTagOperation(*result.Data)
 	}
-	return out
+	return meta, operation
 }
 
 // extractOperationsPage adapts an operations list envelope for the paginator.

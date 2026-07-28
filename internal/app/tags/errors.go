@@ -170,6 +170,19 @@ func (e *noAssetsError) Title() string { return "No Assets Provided" }
 
 func (e *noAssetsError) ShouldPrintUsage() bool { return true }
 
+// emptyQueryError signals that a bulk command was given a blank CenQL query,
+// which would otherwise match nothing and waste an operation.
+type emptyQueryError struct{}
+
+// NewEmptyQueryError creates an empty-query error.
+func NewEmptyQueryError() cenclierrors.CencliError { return &emptyQueryError{} }
+
+func (e *emptyQueryError) Error() string { return "--query must not be empty" }
+
+func (e *emptyQueryError) Title() string { return "Invalid Query" }
+
+func (e *emptyQueryError) ShouldPrintUsage() bool { return true }
+
 // assignPartialError summarizes an assign run where some assets failed.
 type assignPartialError struct {
 	failed int

@@ -57,6 +57,21 @@ func (mr *MockTagsServiceMockRecorder) Assign(ctx, params any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Assign", reflect.TypeOf((*MockTagsService)(nil).Assign), ctx, params)
 }
 
+// BulkAssign mocks base method.
+func (m *MockTagsService) BulkAssign(ctx context.Context, params tags.BulkAssignParams) (tags.BulkAssignResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkAssign", ctx, params)
+	ret0, _ := ret[0].(tags.BulkAssignResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// BulkAssign indicates an expected call of BulkAssign.
+func (mr *MockTagsServiceMockRecorder) BulkAssign(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkAssign", reflect.TypeOf((*MockTagsService)(nil).BulkAssign), ctx, params)
+}
+
 // CreateTag mocks base method.
 func (m *MockTagsService) CreateTag(ctx context.Context, params tags.CreateParams) (tags.CreateResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()

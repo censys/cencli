@@ -43,6 +43,21 @@ func (m *MockTagsClient) EXPECT() *MockTagsClientMockRecorder {
 	return m.recorder
 }
 
+// BulkCreateTagAssignments mocks base method.
+func (m *MockTagsClient) BulkCreateTagAssignments(ctx context.Context, req censys.BulkCreateTagAssignmentsRequest) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkCreateTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// BulkCreateTagAssignments indicates an expected call of BulkCreateTagAssignments.
+func (mr *MockTagsClientMockRecorder) BulkCreateTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkCreateTagAssignments", reflect.TypeOf((*MockTagsClient)(nil).BulkCreateTagAssignments), ctx, req)
+}
+
 // CreateTag mocks base method.
 func (m *MockTagsClient) CreateTag(ctx context.Context, req censys.CreateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
 	m.ctrl.T.Helper()
