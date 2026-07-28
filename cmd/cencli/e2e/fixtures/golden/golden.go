@@ -47,4 +47,10 @@ var (
 	TagsUnassignHelpStdout []byte
 	//go:embed tags_assignments_help.out
 	TagsAssignmentsHelpStdout []byte
+	//go:embed tags_operations_help.out
+	TagsOperationsHelpStdout []byte
+	//go:embed tags_operations_list_help.out
+	TagsOperationsListHelpStdout []byte
+	//go:embed tags_operations_get_help.out
+	TagsOperationsGetHelpStdout []byte
 )
