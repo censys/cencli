@@ -16,7 +16,7 @@ Examples:
 Flags:
   -h, --help             help for get
   -o, --org-id string    organization ID to target (personal access tokens only)
-      --timeout string   how long to wait before giving up (requires --wait) (default "30m0s")
+      --timeout string   how long to wait before giving up (requires --wait) - use 0 for no limit (default "30m0s")
   -w, --wait             poll until the operation reaches a final status
 
 Global Flags:
