@@ -204,6 +204,37 @@ func TestTagsOperationsGetCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "--timeout 0 waits without a limit",
+			service: func(ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ any, params apptags.WaitParams) (apptags.GetOperationResult, cenclierrors.CencliError) {
+						// Zero means unbounded, matching the global --timeout-http.
+						require.False(t, params.Timeout.IsPresent())
+						return apptags.GetOperationResult{Meta: okMeta(), Operation: finishedOperation("succeeded")}, nil
+					})
+				return m
+			},
+			args: []string{"my-tag", testOperationID, "--wait", "--timeout", "0"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "a negative --timeout is rejected before the service",
+			service: func(ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().GetOperation(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			args: []string{"my-tag", testOperationID, "--wait", "--timeout", "-5m"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--timeout must not be negative")
+			},
+		},
+		{
 			name: "--timeout without --wait is rejected before the service",
 			service: func(ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
