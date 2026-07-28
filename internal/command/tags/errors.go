@@ -2,6 +2,7 @@ package tags
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -29,6 +30,56 @@ func (e *timeoutWithoutWaitError) Error() string {
 func (e *timeoutWithoutWaitError) Title() string { return "Conflicting Flags" }
 
 func (e *timeoutWithoutWaitError) ShouldPrintUsage() bool { return true }
+
+// invalidWaitTimeoutError signals a negative --timeout, which would give up
+// before the first poll ever ran.
+type invalidWaitTimeoutError struct {
+	value time.Duration
+}
+
+func NewInvalidWaitTimeoutError(value time.Duration) cenclierrors.CencliError {
+	return &invalidWaitTimeoutError{value: value}
+}
+
+func (e *invalidWaitTimeoutError) Error() string {
+	return fmt.Sprintf("--timeout must not be negative (got %s); use 0 to wait without a time limit", e.value)
+}
+
+func (e *invalidWaitTimeoutError) Title() string { return "Invalid Timeout" }
+
+func (e *invalidWaitTimeoutError) ShouldPrintUsage() bool { return true }
+
+// assignModeConflictError signals that explicit assets and --query were given
+// together. Bulk is never inferred, so the two input modes cannot be mixed.
+type assignModeConflictError struct{}
+
+func NewAssignModeConflictError() cenclierrors.CencliError { return &assignModeConflictError{} }
+
+func (e *assignModeConflictError) Error() string {
+	return "--query assigns by search results, so it cannot be combined with explicit assets or --input-file"
+}
+
+func (e *assignModeConflictError) Title() string { return "Conflicting Input Modes" }
+
+func (e *assignModeConflictError) ShouldPrintUsage() bool { return true }
+
+// flagRequiresQueryError signals that a bulk-only flag was set without --query,
+// where it would have no effect.
+type flagRequiresQueryError struct {
+	flag string
+}
+
+func NewFlagRequiresQueryError(flag string) cenclierrors.CencliError {
+	return &flagRequiresQueryError{flag: flag}
+}
+
+func (e *flagRequiresQueryError) Error() string {
+	return fmt.Sprintf("--%s only applies to a bulk assignment; add --query or drop --%s", e.flag, e.flag)
+}
+
+func (e *flagRequiresQueryError) Title() string { return "Conflicting Flags" }
+
+func (e *flagRequiresQueryError) ShouldPrintUsage() bool { return true }
 
 // operationFailedError signals that a waited-on operation finished as failed.
 // The operation itself was still rendered; this only drives the exit code.

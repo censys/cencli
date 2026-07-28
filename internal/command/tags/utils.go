@@ -1,6 +1,8 @@
 package tags
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"strings"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/input"
 	"github.com/censys/cencli/internal/pkg/styles"
+	"github.com/censys/cencli/internal/pkg/ui/form"
 )
 
 // requireTagID builds a TagID from a positional argument and rejects an empty
@@ -101,6 +104,33 @@ func optionalNonEmpty(v string) mo.Option[string] {
 		return mo.None[string]()
 	}
 	return mo.Some(trimmed)
+}
+
+// printNote writes an advisory line to stderr unless --quiet asked for silence.
+// Outcome messages (an abort, an error) are not notes and always print.
+func printNote(quiet bool, message string) {
+	if quiet {
+		return
+	}
+	formatter.Println(formatter.Stderr, message)
+}
+
+// confirmAction asks the user to approve a destructive action, translating an
+// aborted prompt into the repo's interrupted error. A false answer means the
+// caller should stop without treating it as a failure.
+func confirmAction(
+	ctx context.Context,
+	confirm func(ctx context.Context, message string) (bool, error),
+	message string,
+) (bool, cenclierrors.CencliError) {
+	confirmed, err := confirm(ctx, message)
+	if err != nil {
+		if errors.Is(err, form.ErrUserAborted) {
+			return false, cenclierrors.NewInterruptedError()
+		}
+		return false, cenclierrors.NewCencliError(err)
+	}
+	return confirmed, nil
 }
 
 // gatherAssetIDs collects the assets an assign/unassign command should act on:

@@ -2,7 +2,6 @@ package tags
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -139,12 +138,9 @@ func (c *DeleteCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 
 	if !c.yes {
 		message := fmt.Sprintf("Delete tag %q? This cannot be undone.", c.tagID.String())
-		confirmed, err := c.confirm(cmd.Context(), message)
+		confirmed, err := confirmAction(cmd.Context(), c.confirm, message)
 		if err != nil {
-			if errors.Is(err, form.ErrUserAborted) {
-				return cenclierrors.NewInterruptedError()
-			}
-			return cenclierrors.NewCencliError(err)
+			return err
 		}
 		if !confirmed {
 			formatter.Println(formatter.Stderr, "Deletion aborted.")

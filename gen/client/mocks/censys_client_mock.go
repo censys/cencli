@@ -75,6 +75,21 @@ func (mr *MockClientMockRecorder) AggregateCollection(ctx, collectionID, orgID, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AggregateCollection", reflect.TypeOf((*MockClient)(nil).AggregateCollection), ctx, collectionID, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// BulkCreateTagAssignments mocks base method.
+func (m *MockClient) BulkCreateTagAssignments(ctx context.Context, req censys.BulkCreateTagAssignmentsRequest) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkCreateTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// BulkCreateTagAssignments indicates an expected call of BulkCreateTagAssignments.
+func (mr *MockClientMockRecorder) BulkCreateTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkCreateTagAssignments", reflect.TypeOf((*MockClient)(nil).BulkCreateTagAssignments), ctx, req)
+}
+
 // CreateTag mocks base method.
 func (m *MockClient) CreateTag(ctx context.Context, req censys.CreateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
 	m.ctrl.T.Helper()

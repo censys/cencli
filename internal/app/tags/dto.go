@@ -71,6 +71,24 @@ type UnassignParams struct {
 	AssetIDs []string
 }
 
+// BulkAssignParams bundles inputs for assigning a tag (by name or UUID) to every
+// asset matching a CenQL query. An absent MaxAssets leaves the cap to the plan's
+// tag asset limit.
+type BulkAssignParams struct {
+	OrgID     mo.Option[identifiers.OrganizationID]
+	TagID     identifiers.TagID
+	Query     string
+	MaxAssets mo.Option[int64]
+}
+
+// BulkAssignResult is the outcome of submitting a bulk assignment. The endpoint
+// answers 202 with the operation tracking the job, not the assignments, so the
+// caller polls the operation to learn how it ended.
+type BulkAssignResult struct {
+	Meta      *responsemeta.ResponseMeta
+	Operation TagOperation
+}
+
 // AssignmentsParams bundles inputs for listing a tag's assignments. Filters left
 // empty are omitted from the request.
 type AssignmentsParams struct {

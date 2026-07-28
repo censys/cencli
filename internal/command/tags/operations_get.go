@@ -14,17 +14,9 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
-	"github.com/censys/cencli/internal/pkg/formatter"
-	"github.com/censys/cencli/internal/pkg/styles"
 )
 
-const (
-	operationsGetCmdName = "get"
-
-	// defaultWaitTimeout bounds --wait so a stalled job cannot hang a script
-	// indefinitely. The operation keeps running server-side either way.
-	defaultWaitTimeout = 30 * time.Minute
-)
+const operationsGetCmdName = "get"
 
 // OperationsGetCommand implements `tags operations get <tag> <op-id>`,
 // retrieving one bulk job and optionally polling it until it finishes.
@@ -96,7 +88,7 @@ func (c *OperationsGetCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
 	c.flags.wait = flags.NewBoolFlag(c.Flags(), "wait", "w", false, "poll until the operation reaches a final status")
 	c.flags.timeout = flags.NewHumanDurationFlag(c.Flags(), false, "timeout", "",
-		mo.Some(defaultWaitTimeout), "how long to wait before giving up (requires --wait)")
+		mo.Some(defaultWaitTimeout), "how long to wait before giving up (requires --wait) - use 0 for no limit")
 	return nil
 }
 
@@ -116,19 +108,9 @@ func (c *OperationsGetCommand) PreRun(cmd *cobra.Command, args []string) cenclie
 		return err
 	}
 
-	c.wait, err = c.flags.wait.Value()
+	c.wait, c.timeout, err = parseWaitFlags(cmd, c.flags.wait, c.flags.timeout)
 	if err != nil {
 		return err
-	}
-	c.timeout, err = c.flags.timeout.Value()
-	if err != nil {
-		return err
-	}
-
-	// A timeout only means something while polling; silently ignoring it would
-	// make the flag look like it worked.
-	if !c.wait && cmd.Flags().Changed("timeout") {
-		return NewTimeoutWithoutWaitError()
 	}
 
 	return c.resolveTagsService()
@@ -144,7 +126,7 @@ func (c *OperationsGetCommand) Run(cmd *cobra.Command, args []string) cenclierro
 
 	if err := c.fetch(cmd.Context(), logger); err != nil {
 		if c.wait && cenclierrors.IsInterrupted(err) {
-			c.printStillRunningNote()
+			printOperationStillRunningNote(c.Config().Quiet, c.tagID.String(), c.operationID)
 		}
 		logger.Debug("get operation failed", "error", err)
 		return err
@@ -161,7 +143,7 @@ func (c *OperationsGetCommand) Run(cmd *cobra.Command, args []string) cenclierro
 	if !c.wait {
 		return nil
 	}
-	return c.reportTerminalStatus()
+	return reportOperationTerminalStatus(c.result.Operation)
 }
 
 // fetch retrieves the operation once, or polls it when --wait is set.
@@ -179,52 +161,14 @@ func (c *OperationsGetCommand) fetch(ctx context.Context, logger *slog.Logger) c
 			})
 	}
 
-	return c.WithProgress(ctx, logger, "Waiting for operation to finish...",
-		func(pctx context.Context) cenclierrors.CencliError {
-			var waitErr cenclierrors.CencliError
-			c.result, waitErr = c.tagsSvc.WaitForOperation(pctx, tags.WaitParams{
-				OrgID:       c.orgID,
-				TagID:       c.tagID,
-				OperationID: c.operationID,
-				Timeout:     c.timeout,
-			})
-			return waitErr
-		})
-}
-
-// reportTerminalStatus maps a finished operation onto the exit code. A capped
-// run still succeeded, so it warns rather than failing.
-func (c *OperationsGetCommand) reportTerminalStatus() cenclierrors.CencliError {
-	op := c.result.Operation
-	switch op.Status {
-	case statusFailed:
-		return NewOperationFailedError(op)
-	case statusCancelled:
-		return NewOperationCancelledError(op)
-	case statusLimitReached:
-		msg := fmt.Sprintf(
-			"Warning: operation %s stopped at its asset limit after %d of %d asset(s).",
-			op.ID, op.SuccessfulCount, op.TotalCount)
-		if op.StatusMessage != nil && *op.StatusMessage != "" {
-			msg = fmt.Sprintf("%s %s", msg, *op.StatusMessage)
-		}
-		formatter.Println(formatter.Stderr, styles.GlobalStyles.Warning.Render(msg))
-		return nil
-	default:
-		return nil
-	}
-}
-
-// printStillRunningNote reminds the user that interrupting the poll does not
-// stop the job, and how to pick tracking back up.
-func (c *OperationsGetCommand) printStillRunningNote() {
-	if c.Config().Quiet {
-		return
-	}
-	formatter.Println(formatter.Stderr, styles.GlobalStyles.Warning.Render(
-		"Stopped waiting; the operation continues server-side."))
-	formatter.Println(formatter.Stderr, fmt.Sprintf(
-		"Track with: censys tags operations get %s %s --wait", c.tagID.String(), c.operationID))
+	result, err := waitForOperation(ctx, c.BaseCommand, logger, c.tagsSvc, tags.WaitParams{
+		OrgID:       c.orgID,
+		TagID:       c.tagID,
+		OperationID: c.operationID,
+		Timeout:     c.timeout,
+	})
+	c.result = result
+	return err
 }
 
 func (c *OperationsGetCommand) resolveTagsService() cenclierrors.CencliError {

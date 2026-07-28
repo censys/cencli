@@ -2,7 +2,6 @@ package tags
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -161,12 +160,9 @@ func (c *UnassignCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Ce
 
 	if c.confirmNeeded && !c.yes {
 		message := fmt.Sprintf("Unassign tag %q from %d asset(s)?", c.tagID.String(), len(c.assetIDs))
-		confirmed, err := c.confirm(cmd.Context(), message)
+		confirmed, err := confirmAction(cmd.Context(), c.confirm, message)
 		if err != nil {
-			if errors.Is(err, form.ErrUserAborted) {
-				return cenclierrors.NewInterruptedError()
-			}
-			return cenclierrors.NewCencliError(err)
+			return err
 		}
 		if !confirmed {
 			formatter.Println(formatter.Stderr, "Unassign aborted.")
@@ -200,7 +196,7 @@ func (c *UnassignCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Ce
 	}
 
 	if len(c.result.Unassigned) > 0 {
-		formatter.Println(formatter.Stderr,
+		printNote(c.Config().Quiet,
 			"Note: unassigned tags may take a few minutes to disappear from `tags:` search results.")
 	}
 
