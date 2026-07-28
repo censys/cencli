@@ -152,7 +152,7 @@ func TestTagsAssignmentsCommand(t *testing.T) {
 						require.Equal(t, "my-tag", p.TagID.String())
 						require.Equal(t, mo.Some("8.8.8.8"), p.AssetID)
 						require.Equal(t, mo.Some("host"), p.AssetType)
-						require.Equal(t, mo.Some("creator-id"), p.CreatedBy)
+						require.Equal(t, mo.Some("f47ac10b-58cc-4372-a567-0e02b2c3d479"), p.CreatedBy)
 						require.Equal(t, mo.Some("create_time_asc"), p.OrderBy)
 						require.Equal(t, mo.Some(uint64(25)), p.PageSize)
 						require.Equal(t, mo.Some(uint64(3)), p.MaxPages)
@@ -166,7 +166,7 @@ func TestTagsAssignmentsCommand(t *testing.T) {
 				"my-tag",
 				"--asset", "8.8.8.8",
 				"--asset-type", "host",
-				"--created-by", "creator-id",
+				"--created-by", "f47ac10b-58cc-4372-a567-0e02b2c3d479",
 				"--created-after", "2025-01-01T00:00:00Z",
 				"--order-by", "create_time_asc",
 				"--page-size", "25",
@@ -220,6 +220,17 @@ func TestTagsAssignmentsCommand(t *testing.T) {
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "tag name or ID is required")
+			},
+		},
+		{
+			// The API declares created_by as a UUID and 422s on anything else, so
+			// it is rejected here instead of costing a round trip.
+			name:    "non-UUID --created-by rejected before the service",
+			service: assignmentsNoCallService,
+			args:    []string{"my-tag", "--created-by", "not-a-uuid"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "invalid uuid")
 			},
 		},
 		{

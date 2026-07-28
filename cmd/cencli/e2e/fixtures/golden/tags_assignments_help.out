@@ -19,7 +19,7 @@ Flags:
       --asset-type string       filter by asset type (host, web_property, certificate)
       --created-after string    only assignments created after this time
       --created-before string   only assignments created before this time
-      --created-by string       filter by the user ID of the assignment's creator
+      --created-by string       filter by the UUID of the assignment's creator
   -h, --help                    help for assignments
   -p, --max-pages int           maximum number of pages to fetch (-1 for all pages) (default 1)
       --order-by string         sort order (create_time_asc, create_time_desc)

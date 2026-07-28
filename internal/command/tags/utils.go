@@ -84,6 +84,15 @@ func warnFetchingAllPages(quiet bool, logger *slog.Logger, maxPages mo.Option[ui
 	logger.Debug("fetching all pages", "message", msg)
 }
 
+// uuidFilterString renders an optional UUID filter as the string the service
+// layer threads through, leaving an absent filter absent.
+func uuidFilterString(v mo.Option[uuid.UUID]) mo.Option[string] {
+	if !v.IsPresent() {
+		return mo.None[string]()
+	}
+	return mo.Some(v.MustGet().String())
+}
+
 // optionalNonEmpty treats a blank flag value as "filter not provided", so it is
 // omitted from the request rather than sent as an empty filter.
 func optionalNonEmpty(v string) mo.Option[string] {
