@@ -437,4 +437,145 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "created-after")
 		},
 	},
+	{
+		// The API declares created_by as a UUID and 422s on anything else.
+		Name:      "assignments non-uuid created-by",
+		Args:      []string{"assignments", "my-tag", "--created-by", "not-a-uuid"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-a-uuid")
+		},
+	},
+	{
+		Name:      "list non-uuid created-by",
+		Args:      []string{"list", "--created-by", "not-a-uuid"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-a-uuid")
+		},
+	},
+
+	// ========== operations subcommand ==========
+	{
+		Name:      "operations help",
+		Args:      []string{"operations", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsOperationsHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "operations list help",
+		Args:      []string{"operations", "list", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsOperationsListHelpStdout, stdout, 0)
+		},
+	},
+	{
+		Name:      "operations get help",
+		Args:      []string{"operations", "get", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsOperationsGetHelpStdout, stdout, 0)
+		},
+	},
+	{
+		// The parent lists nothing itself; subcommands do the work.
+		Name:      "operations rejects a positional argument",
+		Args:      []string{"operations", "my-tag"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 0 arg")
+		},
+	},
+	{
+		Name:      "operations list empty tag",
+		Args:      []string{"operations", "list", "   "},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "tag name or ID is required")
+		},
+	},
+	// No fixtures for invalid --status/--type/--order-by: those enums are checked
+	// in the service layer, and PreRun resolves the service (requiring auth)
+	// before Run reaches the validation, so without credentials they fail as
+	// "not configured" instead. Same gap as list's --order-by/--privacy; covered
+	// by the service unit tests in internal/app/tags.
+	{
+		Name:      "operations list invalid max-pages",
+		Args:      []string{"operations", "list", "--max-pages", "0"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "max-pages")
+		},
+	},
+	{
+		// operation_id is format:uuid, so a bad one never reaches the API.
+		Name:      "operations get non-uuid operation id",
+		Args:      []string{"operations", "get", "my-tag", "not-a-uuid"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-a-uuid")
+		},
+	},
+	{
+		Name:      "operations get missing operation id",
+		Args:      []string{"operations", "get", "my-tag"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 2 arg")
+		},
+	},
+	{
+		// A timeout that silently does nothing would be a dead flag.
+		Name:      "operations get timeout without wait",
+		Args:      []string{"operations", "get", "my-tag", "d421a231-eb5e-4927-a0be-8aa749eb731c", "--timeout", "5m"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--timeout only applies while polling")
+		},
+	},
+	{
+		// Read-only and safe to run live; the org may legitimately have none.
+		Name:      "operations list basic",
+		Args:      []string{"operations", "list", "--output-format", "json"},
+		ExitCode:  0,
+		Timeout:   10 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			data := unmarshalJSONAny[[]tags.TagOperation](t, stdout)
+			for _, op := range data {
+				assert.NotEmpty(t, op.ID)
+				assert.NotEmpty(t, op.TagID)
+				assert.Contains(t, []string{"bulk_create", "bulk_delete"}, op.Type)
+				assert.Contains(t,
+					[]string{"pending", "running", "succeeded", "limit_reached", "failed", "cancelled"},
+					op.Status)
+			}
+		},
+	},
 }
