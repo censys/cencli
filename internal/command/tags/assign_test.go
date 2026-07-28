@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -22,13 +23,39 @@ import (
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
 
+// assignSeams overrides the interactive dependencies a bulk assignment uses. The
+// explicit-asset mode never touches them, so they can be left unset there.
+type assignSeams struct {
+	confirm    func(ctx context.Context, message string) (bool, error)
+	stdinIsTTY func() bool
+	// quiet stands in for the global --quiet flag, which lives on the real root
+	// command and so is not registered when a subcommand is mounted alone.
+	quiet bool
+}
+
 func runAssignCommand(t *testing.T, svc apptags.Service, args []string, stdin io.Reader) (stdout, stderr string, err error) {
+	t.Helper()
+	return runAssignCommandWithSeams(t, svc, assignSeams{}, args, stdin)
+}
+
+func runAssignCommandWithSeams(
+	t *testing.T,
+	svc apptags.Service,
+	seams assignSeams,
+	args []string,
+	stdin io.Reader,
+) (stdout, stderr string, err error) {
 	t.Helper()
 
 	tempDir := t.TempDir()
 	viper.Reset()
 	cfg, cfgErr := config.New(tempDir)
 	require.NoError(t, cfgErr)
+	if seams.quiet {
+		// PreRun re-reads the config from viper, so setting the struct field would
+		// be overwritten; viper is also where the real --quiet flag lands.
+		viper.Set("quiet", true)
+	}
 
 	var outBuf, errBuf bytes.Buffer
 	formatter.Stdout = &outBuf
@@ -39,7 +66,14 @@ func runAssignCommand(t *testing.T, svc apptags.Service, args []string, stdin io
 
 	mockStore := storemocks.NewMockStore(ctrl)
 	cmdContext := command.NewCommandContext(cfg, mockStore, command.WithTagsService(svc))
-	rootCmd, buildErr := command.RootCommandToCobra(NewAssignCommand(cmdContext))
+	cmd := NewAssignCommand(cmdContext)
+	if seams.confirm != nil {
+		cmd.confirm = seams.confirm
+	}
+	if seams.stdinIsTTY != nil {
+		cmd.stdinIsTTY = seams.stdinIsTTY
+	}
+	rootCmd, buildErr := command.RootCommandToCobra(cmd)
 	require.NoError(t, buildErr)
 
 	if stdin != nil {
@@ -83,6 +117,7 @@ func TestTagsAssignCommand(t *testing.T) {
 		name    string
 		args    []string
 		stdin   io.Reader
+		seams   assignSeams
 		service func(t *testing.T, ctrl *gomock.Controller) apptags.Service
 		assert  func(t *testing.T, stdout, stderr string, err error)
 	}{
@@ -220,6 +255,37 @@ func TestTagsAssignCommand(t *testing.T) {
 			},
 		},
 		{
+			// Explicit assignment never prompts, but -y is a defensive scripting
+			// habit and rejecting it would buy nothing.
+			name: "--yes is accepted and does nothing in explicit mode",
+			args: []string{"alpha", "8.8.8.8", "--yes"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().Assign(gomock.Any(), gomock.Any()).Return(
+					assignResult("alpha", []string{"8.8.8.8"}, nil), nil)
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "8.8.8.8")
+			},
+		},
+		{
+			name:  "--quiet suppresses the index-lag note in explicit mode",
+			args:  []string{"alpha", "8.8.8.8"},
+			seams: assignSeams{quiet: true},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().Assign(gomock.Any(), gomock.Any()).Return(
+					assignResult("alpha", []string{"8.8.8.8"}, nil), nil)
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Empty(t, stderr)
+			},
+		},
+		{
 			name: "org id flag is threaded to the service",
 			args: []string{"alpha", "8.8.8.8", "--org-id", "11111111-1111-1111-1111-111111111111"},
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
@@ -242,8 +308,458 @@ func TestTagsAssignCommand(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			stdout, stderr, err := runAssignCommand(t, tc.service(t, ctrl), tc.args, tc.stdin)
+			stdout, stderr, err := runAssignCommandWithSeams(t, tc.service(t, ctrl), tc.seams, tc.args, tc.stdin)
 			tc.assert(t, stdout, stderr, err)
+		})
+	}
+}
+
+// bulkSubmitted is what the service returns for an accepted bulk job.
+func bulkSubmitted(status string) apptags.BulkAssignResult {
+	return apptags.BulkAssignResult{Meta: okMeta(), Operation: operation(testOperationID, status)}
+}
+
+// bulkNoCallService asserts no bulk submit happens, proving the input was
+// rejected at the command boundary.
+func bulkNoCallService(ctrl *gomock.Controller) apptags.Service {
+	m := tagsmocks.NewMockTagsService(ctrl)
+	m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Times(0)
+	m.EXPECT().Assign(gomock.Any(), gomock.Any()).Times(0)
+	return m
+}
+
+// bulkSubmitOnly expects a submit and no polling.
+func bulkSubmitOnly(ctrl *gomock.Controller, status string) apptags.Service {
+	m := tagsmocks.NewMockTagsService(ctrl)
+	m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Times(0)
+	m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(bulkSubmitted(status), nil)
+	return m
+}
+
+// bulkSubmitAndWait expects a submit followed by polling that ends on the given
+// status.
+func bulkSubmitAndWait(ctrl *gomock.Controller, finalStatus string) apptags.Service {
+	m := tagsmocks.NewMockTagsService(ctrl)
+	m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(bulkSubmitted("pending"), nil)
+	m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Return(
+		apptags.GetOperationResult{Meta: okMeta(), Operation: finishedOperation(finalStatus)}, nil)
+	return m
+}
+
+// alwaysTTY makes the command believe it can prompt.
+func alwaysTTY() func() bool { return func() bool { return true } }
+
+func TestTagsAssignCommand_Bulk(t *testing.T) {
+	const query = "host.services.port: 22"
+
+	testCases := []struct {
+		name    string
+		args    []string
+		seams   assignSeams
+		service func(t *testing.T, ctrl *gomock.Controller) apptags.Service
+		assert  func(t *testing.T, stdout, stderr string, err error)
+	}{
+		{
+			name: "--query with positional assets is a mode conflict",
+			args: []string{"alpha", "8.8.8.8", "--query", query},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "cannot be combined with explicit assets")
+			},
+		},
+		{
+			name: "--query with --input-file is a mode conflict",
+			args: []string{"alpha", "--input-file", "-", "--query", query},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "cannot be combined with explicit assets")
+			},
+		},
+		{
+			name: "blank --query is rejected",
+			args: []string{"alpha", "--query", "   "},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--query must not be empty")
+			},
+		},
+		{
+			name: "--max-assets without --query is rejected",
+			args: []string{"alpha", "8.8.8.8", "--max-assets", "10"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--max-assets only applies to a bulk assignment")
+			},
+		},
+		{
+			name: "--wait without --query is rejected",
+			args: []string{"alpha", "8.8.8.8", "--wait"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--wait only applies to a bulk assignment")
+			},
+		},
+		{
+			name: "--timeout without --wait is rejected",
+			args: []string{"alpha", "--query", query, "--timeout", "5m"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--timeout only applies while polling")
+			},
+		},
+		{
+			name:  "non-interactive without --yes refuses to submit",
+			args:  []string{"alpha", "--query", query},
+			seams: assignSeams{stdinIsTTY: func() bool { return false }},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "confirmation required")
+			},
+		},
+		{
+			name: "declining the prompt aborts without submitting",
+			args: []string{"alpha", "--query", query},
+			seams: assignSeams{
+				stdinIsTTY: alwaysTTY(),
+				confirm:    func(context.Context, string) (bool, error) { return false, nil },
+			},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stderr, "Assignment aborted.")
+			},
+		},
+		{
+			name: "--yes submits and reports the operation with a track hint",
+			args: []string{"alpha", "--query", query, "--yes"},
+			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p apptags.BulkAssignParams) (apptags.BulkAssignResult, cenclierrors.CencliError) {
+						require.Equal(t, query, p.Query)
+						require.Equal(t, "alpha", p.TagID.String())
+						require.False(t, p.MaxAssets.IsPresent())
+						return bulkSubmitted("pending"), nil
+					})
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "Tag Operation")
+				require.Contains(t, stdout, testOperationID)
+				require.Contains(t, stderr, "Track with: censys tags operations get alpha "+testOperationID)
+				require.Contains(t, stderr, "few minutes")
+			},
+		},
+		{
+			name: "--max-assets is threaded to the service",
+			args: []string{"alpha", "--query", query, "--max-assets", "250", "--yes"},
+			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p apptags.BulkAssignParams) (apptags.BulkAssignResult, cenclierrors.CencliError) {
+						require.True(t, p.MaxAssets.IsPresent())
+						require.Equal(t, int64(250), p.MaxAssets.MustGet())
+						return bulkSubmitted("pending"), nil
+					})
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "org id is threaded to the service",
+			args: []string{"alpha", "--query", query, "--yes", "--org-id", "11111111-1111-1111-1111-111111111111"},
+			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p apptags.BulkAssignParams) (apptags.BulkAssignResult, cenclierrors.CencliError) {
+						require.True(t, p.OrgID.IsPresent())
+						return bulkSubmitted("pending"), nil
+					})
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "json output renders the operation payload",
+			args: []string{"alpha", "--query", query, "--yes", "--output-format", "json"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkSubmitOnly(ctrl, "pending")
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, `"status": "pending"`)
+				require.Contains(t, stdout, `"type": "bulk_create"`)
+			},
+		},
+		{
+			name: "--wait polls the submitted operation and renders the final status",
+			args: []string{"alpha", "--query", query, "--yes", "--wait"},
+			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(bulkSubmitted("pending"), nil)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p apptags.WaitParams) (apptags.GetOperationResult, cenclierrors.CencliError) {
+						// The wait must follow the operation the submit just created.
+						require.Equal(t, testOperationID, p.OperationID)
+						require.True(t, p.Timeout.IsPresent())
+						return apptags.GetOperationResult{
+							Meta: okMeta(), Operation: finishedOperation("succeeded"),
+						}, nil
+					})
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "succeeded")
+				// Waiting to the end replaces the hint with the outcome.
+				require.NotContains(t, stderr, "Track with")
+			},
+		},
+		{
+			name: "--wait ending at the asset limit warns but succeeds",
+			args: []string{"alpha", "--query", query, "--yes", "--wait"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkSubmitAndWait(ctrl, "limit_reached")
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stderr, "asset limit")
+				require.Contains(t, stderr, "few minutes")
+			},
+		},
+		{
+			name: "--wait ending failed exits non-zero",
+			args: []string{"alpha", "--query", query, "--yes", "--wait"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkSubmitAndWait(ctrl, "failed")
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				// The payload still renders; only the exit code reports the outcome.
+				require.Contains(t, stdout, "failed")
+			},
+		},
+		{
+			name: "--wait ending cancelled exits non-zero",
+			args: []string{"alpha", "--query", query, "--yes", "--wait"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkSubmitAndWait(ctrl, "cancelled")
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, stdout, "cancelled")
+			},
+		},
+		{
+			name: "interrupting the wait keeps the job and prints how to follow it",
+			args: []string{"alpha", "--query", query, "--yes", "--wait"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(bulkSubmitted("pending"), nil)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Return(
+					apptags.GetOperationResult{}, cenclierrors.NewInterruptedError())
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, stderr, "continues server-side")
+				require.Contains(t, stderr, "Track with: censys tags operations get alpha "+testOperationID)
+			},
+		},
+		{
+			name: "a wait that times out still points at the running job",
+			args: []string{"alpha", "--query", query, "--yes", "--wait", "--timeout", "5s"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(bulkSubmitted("pending"), nil)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Return(
+					apptags.GetOperationResult{},
+					apptags.NewOperationWaitTimeoutError(testOperationID, "running", 5*time.Second))
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, stderr, "Track with: censys tags operations get alpha "+testOperationID)
+			},
+		},
+		{
+			name: "--timeout 0 waits without a limit",
+			args: []string{"alpha", "--query", query, "--yes", "--wait", "--timeout", "0"},
+			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(bulkSubmitted("pending"), nil)
+				m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p apptags.WaitParams) (apptags.GetOperationResult, cenclierrors.CencliError) {
+						// Zero means unbounded, not "give up before the first poll".
+						require.False(t, p.Timeout.IsPresent())
+						return apptags.GetOperationResult{
+							Meta: okMeta(), Operation: finishedOperation("succeeded"),
+						}, nil
+					})
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "a negative --timeout is rejected",
+			args: []string{"alpha", "--query", query, "--yes", "--wait", "--timeout", "-5m"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkNoCallService(ctrl)
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--timeout must not be negative")
+			},
+		},
+		{
+			name:  "--quiet suppresses the hint and the index-lag note",
+			args:  []string{"alpha", "--query", query, "--yes"},
+			seams: assignSeams{quiet: true},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkSubmitOnly(ctrl, "pending")
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Empty(t, stderr)
+				// The operation itself is the result, so it still renders.
+				require.Contains(t, stdout, testOperationID)
+			},
+		},
+		{
+			name: "a tag name needing quoting is safe to paste back",
+			args: []string{"my tag", "--query", query, "--yes"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				return bulkSubmitOnly(ctrl, "pending")
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stderr, `operations get "my tag" `+testOperationID)
+			},
+		},
+		{
+			name: "--max-assets 0 is passed through as no explicit cap",
+			args: []string{"alpha", "--query", query, "--max-assets", "0", "--yes"},
+			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, p apptags.BulkAssignParams) (apptags.BulkAssignResult, cenclierrors.CencliError) {
+						require.True(t, p.MaxAssets.IsPresent())
+						require.Equal(t, int64(0), p.MaxAssets.MustGet())
+						return bulkSubmitted("pending"), nil
+					})
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "a failed submit reports the error and nothing to track",
+			args: []string{"alpha", "--query", query, "--yes"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
+				m := tagsmocks.NewMockTagsService(ctrl)
+				m.EXPECT().BulkAssign(gomock.Any(), gomock.Any()).Return(
+					apptags.BulkAssignResult{}, cenclierrors.NewCencliError(errors.New("Permission denied")))
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.NotContains(t, stderr, "Track with")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			// Bulk always confirms, so default to an accepted prompt on a TTY.
+			seams := tc.seams
+			if seams.stdinIsTTY == nil {
+				seams.stdinIsTTY = alwaysTTY()
+			}
+			if seams.confirm == nil {
+				seams.confirm = func(context.Context, string) (bool, error) { return true, nil }
+			}
+
+			stdout, stderr, err := runAssignCommandWithSeams(t, tc.service(t, ctrl), seams, tc.args, nil)
+			tc.assert(t, stdout, stderr, err)
+		})
+	}
+}
+
+// TestTagsAssignCommand_BulkConfirmationMessage pins what the prompt tells the
+// user before they approve a job that could tag a very large number of assets.
+func TestTagsAssignCommand_BulkConfirmationMessage(t *testing.T) {
+	testCases := []struct {
+		name     string
+		args     []string
+		contains []string
+	}{
+		{
+			name:     "without --max-assets the plan limit applies",
+			args:     []string{"alpha", "--query", "host.services.port: 22"},
+			contains: []string{`"alpha"`, "host.services.port: 22", "your plan's tag asset limit"},
+		},
+		{
+			name:     "with --max-assets the cap is spelled out",
+			args:     []string{"alpha", "--query", "host.services.port: 22", "--max-assets", "250"},
+			contains: []string{"at most 250 asset(s)"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			var prompt string
+			seams := assignSeams{
+				stdinIsTTY: alwaysTTY(),
+				confirm: func(_ context.Context, message string) (bool, error) {
+					prompt = message
+					// Declining keeps the test off the submit path.
+					return false, nil
+				},
+			}
+
+			_, _, err := runAssignCommandWithSeams(t, bulkNoCallService(ctrl), seams, tc.args, nil)
+			require.NoError(t, err)
+			for _, want := range tc.contains {
+				require.Contains(t, prompt, want)
+			}
 		})
 	}
 }
