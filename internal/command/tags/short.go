@@ -141,8 +141,12 @@ func (c *AssignmentsCommand) RenderShort() cenclierrors.CencliError {
 }
 
 // RenderShort renders the per-asset assignment outcomes as a styled table
-// (TTY-aware).
+// (TTY-aware), or the tracking operation when the assignment was a bulk job.
 func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
+	if c.bulk {
+		return renderOperationDetail(c.operation)
+	}
+
 	views := c.assignmentViews()
 	if len(views) == 0 {
 		fmt.Fprintf(formatter.Stdout, "\nNo assets assigned.\n")
@@ -342,8 +346,13 @@ func (c *OperationsListCommand) RenderShort() cenclierrors.CencliError {
 
 // RenderShort renders a single operation as a labeled detail view (TTY-aware).
 func (c *OperationsGetCommand) RenderShort() cenclierrors.CencliError {
-	op := c.result.Operation
+	return renderOperationDetail(c.result.Operation)
+}
 
+// renderOperationDetail renders one bulk operation as a labeled detail view
+// (TTY-aware). Shared by `operations get` and the bulk assign submit, so a job
+// reads the same however you arrived at it.
+func renderOperationDetail(op tags.TagOperation) cenclierrors.CencliError {
 	var out strings.Builder
 	out.WriteRune('\n')
 	out.WriteString(styles.GlobalStyles.Signature.Render("━━━ Tag Operation ━━━"))
