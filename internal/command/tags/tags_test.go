@@ -137,7 +137,7 @@ func TestTagsListCommand(t *testing.T) {
 					func(_ context.Context, params apptags.ListParams) (apptags.ListResult, cenclierrors.CencliError) {
 						require.Equal(t, "shared", params.Privacy.MustGet())
 						require.Equal(t, "my-tag", params.Name.MustGet())
-						require.Equal(t, "creator-id", params.CreatedBy.MustGet())
+						require.Equal(t, "f47ac10b-58cc-4372-a567-0e02b2c3d479", params.CreatedBy.MustGet())
 						require.Equal(t, "name_desc", params.OrderBy.MustGet())
 						require.Equal(t, uint64(50), params.PageSize.MustGet())
 						require.Equal(t, uint64(3), params.MaxPages.MustGet())
@@ -149,7 +149,7 @@ func TestTagsListCommand(t *testing.T) {
 			args: []string{
 				"--privacy", "shared",
 				"--name", "my-tag",
-				"--created-by", "creator-id",
+				"--created-by", "f47ac10b-58cc-4372-a567-0e02b2c3d479",
 				"--order-by", "name_desc",
 				"--page-size", "50",
 				"--max-pages", "3",
@@ -178,6 +178,19 @@ func TestTagsListCommand(t *testing.T) {
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "max-pages")
+			},
+		},
+		{
+			// The API declares created_by as a UUID and 422s on anything else, so
+			// it is rejected here instead of costing a round trip.
+			name: "error - non-UUID created-by",
+			service: func(ctrl *gomock.Controller) apptags.Service {
+				return tagsmocks.NewMockTagsService(ctrl) // not called
+			},
+			args: []string{"--created-by", "not-a-uuid"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "invalid uuid")
 			},
 		},
 	}

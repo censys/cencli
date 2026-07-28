@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 
@@ -48,7 +49,7 @@ type assignmentsCommandFlags struct {
 	orgID         flags.OrgIDFlag
 	asset         flags.StringFlag
 	assetType     flags.StringFlag
-	createdBy     flags.StringFlag
+	createdBy     flags.UUIDFlag
 	createdBefore flags.TimestampFlag
 	createdAfter  flags.TimestampFlag
 	orderBy       flags.StringFlag
@@ -109,7 +110,8 @@ func (c *AssignmentsCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
 	c.flags.asset = flags.NewStringFlag(c.Flags(), false, "asset", "", "", "filter by a single asset (host IP, certificate SHA-256 fingerprint, or web property hostname:port)")
 	c.flags.assetType = flags.NewStringFlag(c.Flags(), false, "asset-type", "", "", "filter by asset type (host, web_property, certificate)")
-	c.flags.createdBy = flags.NewStringFlag(c.Flags(), false, "created-by", "", "", "filter by the user ID of the assignment's creator")
+	c.flags.createdBy = flags.NewUUIDFlag(c.Flags(), false, "created-by", "", mo.None[uuid.UUID](),
+		"filter by the UUID of the assignment's creator")
 	c.flags.createdBefore = flags.NewTimestampFlag(c.Flags(), false, "created-before", "", mo.None[time.Time](), "only assignments created before this time")
 	c.flags.createdAfter = flags.NewTimestampFlag(c.Flags(), false, "created-after", "", mo.None[time.Time](), "only assignments created after this time")
 	c.flags.orderBy = flags.NewStringFlag(c.Flags(), false, "order-by", "", "", "sort order (create_time_asc, create_time_desc)")
@@ -243,7 +245,7 @@ func (c *AssignmentsCommand) parseFilterFlags() cenclierrors.CencliError {
 	if err != nil {
 		return err
 	}
-	c.createdBy = optionalNonEmpty(createdBy)
+	c.createdBy = uuidFilterString(createdBy)
 
 	orderBy, err := c.flags.orderBy.Value()
 	if err != nil {
