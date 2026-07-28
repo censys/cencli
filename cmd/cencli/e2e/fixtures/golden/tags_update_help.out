@@ -17,7 +17,7 @@ Flags:
       --description string   a new description for the tag
   -h, --help                 help for update
       --name string          a new name for the tag
-  -o, --org-id string        override the configured organization ID
+  -o, --org-id string        organization ID to target (personal access tokens only)
       --privacy string       tag visibility (private, shared)
 
 Global Flags:

@@ -18,7 +18,7 @@ Flags:
   -p, --max-pages int       maximum number of pages to fetch (-1 for all pages) (default 1)
       --name string         filter by exact tag name
       --order-by string     sort order (name_asc, name_desc, created_at_asc, created_at_desc, updated_at_asc, updated_at_desc)
-  -o, --org-id string       override the configured organization ID
+  -o, --org-id string       organization ID to target (personal access tokens only)
   -n, --page-size int       number of tags to return per page (default 100)
       --privacy string      filter by privacy (private, shared)
 

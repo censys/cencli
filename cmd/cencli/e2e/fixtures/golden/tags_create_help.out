@@ -14,7 +14,7 @@ Examples:
 Flags:
       --description string   a human-readable description of the tag
   -h, --help                 help for create
-  -o, --org-id string        override the configured organization ID
+  -o, --org-id string        organization ID to target (personal access tokens only)
       --privacy string       tag visibility (private, shared) (default "private")
 
 Global Flags:
