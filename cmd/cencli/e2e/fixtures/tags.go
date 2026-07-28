@@ -282,6 +282,83 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "a tag name or ID is required")
 		},
 	},
+	// No live bulk-assign fixture either: a bulk job mutates at scale and cannot
+	// be undone deterministically. These cover what the command rejects before
+	// any request is sent.
+	{
+		// Bulk is never inferred, so the two input modes cannot be mixed.
+		Name:      "assign query with explicit assets",
+		Args:      []string{"assign", "my-tag", "8.8.8.8", "--query", "host.services.port: 22"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "cannot be combined with explicit assets")
+		},
+	},
+	{
+		Name:      "assign query with input file",
+		Args:      []string{"assign", "my-tag", "--input-file", "-", "--query", "host.services.port: 22"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "cannot be combined with explicit assets")
+		},
+	},
+	{
+		// A blank query would match nothing; rejected before it can prompt.
+		Name:      "assign empty query",
+		Args:      []string{"assign", "my-tag", "--query", "   "},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--query must not be empty")
+		},
+	},
+	{
+		Name:      "assign max assets without query",
+		Args:      []string{"assign", "my-tag", "8.8.8.8", "--max-assets", "10"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--max-assets only applies to a bulk assignment")
+		},
+	},
+	{
+		Name:      "assign wait without query",
+		Args:      []string{"assign", "my-tag", "8.8.8.8", "--wait"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--wait only applies to a bulk assignment")
+		},
+	},
+	{
+		Name:      "assign timeout without wait",
+		Args:      []string{"assign", "my-tag", "--query", "host.services.port: 22", "--timeout", "5m"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--timeout only applies while polling")
+		},
+	},
+	{
+		// e2e runs without a TTY, so a bulk assignment cannot prompt and must
+		// refuse rather than submit silently.
+		Name:      "assign query non-interactive without yes",
+		Args:      []string{"assign", "my-tag", "--query", "host.services.port: 22"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "confirmation required")
+		},
+	},
 	// ========== unassign subcommand ==========
 	// No live unassign fixture: unassign is a non-idempotent write with no
 	// deterministic teardown. Covered by unit tests (internal/app/tags,
