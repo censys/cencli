@@ -18,7 +18,7 @@ Examples:
 Flags:
       --asset-count     also report how many assets the tag is assigned to (one extra request)
   -h, --help            help for get
-  -o, --org-id string   override the configured organization ID
+  -o, --org-id string   organization ID to target (personal access tokens only)
 
 Global Flags:
       --debug                   enable debug logging

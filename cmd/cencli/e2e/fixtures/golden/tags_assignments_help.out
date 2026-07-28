@@ -23,7 +23,7 @@ Flags:
   -h, --help                    help for assignments
   -p, --max-pages int           maximum number of pages to fetch (-1 for all pages) (default 1)
       --order-by string         sort order (create_time_asc, create_time_desc)
-  -o, --org-id string           override the configured organization ID
+  -o, --org-id string           organization ID to target (personal access tokens only)
   -n, --page-size int           number of assignments to return per page (default 100)
 
 Global Flags:

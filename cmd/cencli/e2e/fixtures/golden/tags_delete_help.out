@@ -12,7 +12,7 @@ Examples:
 
 Flags:
   -h, --help            help for delete
-  -o, --org-id string   override the configured organization ID
+  -o, --org-id string   organization ID to target (personal access tokens only)
   -y, --yes             skip the confirmation prompt
 
 Global Flags:
