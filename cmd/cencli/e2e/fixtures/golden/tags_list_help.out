@@ -13,7 +13,7 @@ Examples:
   censys tags list --output-format json # Output as JSON
 
 Flags:
-      --created-by string   filter by the user ID of the tag's creator
+      --created-by string   filter by the UUID of the tag's creator
   -h, --help                help for list
   -p, --max-pages int       maximum number of pages to fetch (-1 for all pages) (default 1)
       --name string         filter by exact tag name

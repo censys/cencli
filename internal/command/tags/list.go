@@ -3,6 +3,7 @@ package tags
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
 
@@ -48,7 +49,7 @@ type listCommandFlags struct {
 	orgID     flags.OrgIDFlag
 	privacy   flags.StringFlag
 	name      flags.StringFlag
-	createdBy flags.StringFlag
+	createdBy flags.UUIDFlag
 	orderBy   flags.StringFlag
 	pageSize  flags.IntegerFlag
 	maxPages  flags.IntegerFlag
@@ -102,7 +103,8 @@ func (c *ListCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
 	c.flags.privacy = flags.NewStringFlag(c.Flags(), false, "privacy", "", "", "filter by privacy (private, shared)")
 	c.flags.name = flags.NewStringFlag(c.Flags(), false, "name", "", "", "filter by exact tag name")
-	c.flags.createdBy = flags.NewStringFlag(c.Flags(), false, "created-by", "", "", "filter by the user ID of the tag's creator")
+	c.flags.createdBy = flags.NewUUIDFlag(c.Flags(), false, "created-by", "", mo.None[uuid.UUID](),
+		"filter by the UUID of the tag's creator")
 	c.flags.orderBy = flags.NewStringFlag(c.Flags(), false, "order-by", "", "", "sort order (name_asc, name_desc, created_at_asc, created_at_desc, updated_at_asc, updated_at_desc)")
 	c.flags.pageSize = flags.NewIntegerFlag(
 		c.Flags(),
@@ -220,7 +222,7 @@ func (c *ListCommand) parseFilterFlags() cenclierrors.CencliError {
 	if err != nil {
 		return err
 	}
-	c.createdBy = optionalNonEmpty(createdBy)
+	c.createdBy = uuidFilterString(createdBy)
 
 	orderBy, err := c.flags.orderBy.Value()
 	if err != nil {
