@@ -12,6 +12,11 @@ import (
 	"github.com/censys/cencli/internal/pkg/ui/rawtable"
 )
 
+// detailTimeLayout is the timestamp format the detail views and confirmation
+// prompts share. It keeps the zone, so a value the user gave in local time is
+// never shown back to them as another.
+const detailTimeLayout = "2006-01-02 15:04:05 MST"
+
 // RenderShort renders the tag list as a styled table (TTY-aware).
 func (c *ListCommand) RenderShort() cenclierrors.CencliError {
 	if len(c.result.Tags) == 0 {
@@ -210,8 +215,12 @@ func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
 }
 
 // RenderShort renders the per-asset unassignment outcomes as a styled table
-// (TTY-aware).
+// (TTY-aware), or the tracking operation when the removal was a bulk job.
 func (c *UnassignCommand) RenderShort() cenclierrors.CencliError {
+	if c.bulk {
+		return renderOperationDetail(c.operation)
+	}
+
 	views := c.unassignmentViews()
 	if len(views) == 0 {
 		fmt.Fprintf(formatter.Stdout, "\nNo assets unassigned.\n")
@@ -372,9 +381,9 @@ func renderOperationDetail(op tags.TagOperation) cenclierrors.CencliError {
 		writeField(&out, "Query", *op.Query)
 	}
 
-	writeField(&out, "Created At", op.CreatedAt.Format("2006-01-02 15:04:05 MST"))
+	writeField(&out, "Created At", op.CreatedAt.Format(detailTimeLayout))
 	if op.EndedAt != nil {
-		writeField(&out, "Ended At", op.EndedAt.Format("2006-01-02 15:04:05 MST"))
+		writeField(&out, "Ended At", op.EndedAt.Format(detailTimeLayout))
 	}
 	if op.StatusMessage != nil && *op.StatusMessage != "" {
 		writeField(&out, "Message", *op.StatusMessage)
@@ -430,8 +439,8 @@ func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {
 	writeField(&out, "Description", description)
 
 	writeField(&out, "Created By", t.CreatedBy)
-	writeField(&out, "Created At", t.CreatedAt.Format("2006-01-02 15:04:05 MST"))
-	writeField(&out, "Updated At", t.UpdatedAt.Format("2006-01-02 15:04:05 MST"))
+	writeField(&out, "Created At", t.CreatedAt.Format(detailTimeLayout))
+	writeField(&out, "Updated At", t.UpdatedAt.Format(detailTimeLayout))
 
 	// Only `get --asset-count` populates the count.
 	if t.AssetCount != nil {

@@ -71,6 +71,16 @@ type BulkCreateTagAssignmentsRequest struct {
 	MaxAssets mo.Option[int64]
 }
 
+// BulkDeleteTagAssignmentsRequest bundles the fields for
+// BulkDeleteTagAssignments. TagID is the resolved tag UUID; with neither
+// timestamp present the endpoint removes every assignment of the tag.
+type BulkDeleteTagAssignmentsRequest struct {
+	OrgID         mo.Option[string]
+	TagID         string
+	CreatedBefore mo.Option[time.Time]
+	CreatedAfter  mo.Option[time.Time]
+}
+
 // ListTagOperationsRequest bundles the query parameters for ListTagOperations.
 // TagID is a resolved tag UUID, or "-" to list operations across every tag in
 // the organization; only present options are sent.
@@ -109,6 +119,11 @@ type TagsClient interface {
 	// BulkCreateTagAssignments starts an asynchronous job and returns the
 	// operation tracking it, not the assignments themselves.
 	BulkCreateTagAssignments(ctx context.Context, req BulkCreateTagAssignmentsRequest) (Result[components.TagOperation], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#bulkdeletetagassignments
+	//
+	// BulkDeleteTagAssignments starts an asynchronous job and returns the
+	// operation tracking it, not the removed assignments.
+	BulkDeleteTagAssignments(ctx context.Context, req BulkDeleteTagAssignmentsRequest) (Result[components.TagOperation], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#listtagassignments
 	ListTagAssignments(ctx context.Context, req ListTagAssignmentsRequest) (Result[components.TagAssignmentsList], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/tagsandcomments#deletetagassignment
@@ -404,6 +419,41 @@ func (t *tagsSDK) BulkCreateTagAssignments(
 			},
 		}
 		res, err = t.censysSDK.client.TagsAndComments.BulkCreateTagAssignments(ctx, sdkReq)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TagOperation]{}
+		return zero, err
+	}
+	operation := res.GetResponseEnvelopeTagOperation().GetResult()
+	return Result[components.TagOperation]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     operation,
+	}, nil
+}
+
+func (t *tagsSDK) BulkDeleteTagAssignments(
+	ctx context.Context,
+	req BulkDeleteTagAssignmentsRequest,
+) (Result[components.TagOperation], ClientError) {
+	start := time.Now()
+	var res *operations.V3TagsBulkDeleteAssignmentsResponse
+	err, attempts := t.executeWithRetry(ctx, func() ClientError {
+		var err error
+		sdkReq := operations.V3TagsBulkDeleteAssignmentsRequest{
+			OrganizationID: req.OrgID.ToPointer(),
+			TagID:          req.TagID,
+			// Both timestamps are optional; an empty body means every assignment.
+			BulkDeleteTagAssignmentsInputBody: components.BulkDeleteTagAssignmentsInputBody{
+				CreatedBefore: req.CreatedBefore.ToPointer(),
+				CreatedAfter:  req.CreatedAfter.ToPointer(),
+			},
+		}
+		res, err = t.censysSDK.client.TagsAndComments.BulkDeleteTagAssignments(ctx, sdkReq)
 		if err != nil {
 			return NewClientError(err)
 		}
