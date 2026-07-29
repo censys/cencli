@@ -87,6 +87,21 @@ func (mr *MockTagsServiceMockRecorder) BulkUnassign(ctx, params any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUnassign", reflect.TypeOf((*MockTagsService)(nil).BulkUnassign), ctx, params)
 }
 
+// CancelOperation mocks base method.
+func (m *MockTagsService) CancelOperation(ctx context.Context, params tags.CancelOperationParams) (tags.CancelOperationResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelOperation", ctx, params)
+	ret0, _ := ret[0].(tags.CancelOperationResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// CancelOperation indicates an expected call of CancelOperation.
+func (mr *MockTagsServiceMockRecorder) CancelOperation(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelOperation", reflect.TypeOf((*MockTagsService)(nil).CancelOperation), ctx, params)
+}
+
 // CreateTag mocks base method.
 func (m *MockTagsService) CreateTag(ctx context.Context, params tags.CreateParams) (tags.CreateResult, cenclierrors.CencliError) {
 	m.ctrl.T.Helper()

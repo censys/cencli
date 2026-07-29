@@ -142,6 +142,22 @@ type GetOperationParams struct {
 	OperationID string
 }
 
+// CancelOperationParams bundles inputs for cancelling one bulk tag operation.
+// Both path parameters are UUID-only, so a tag name is resolved first.
+type CancelOperationParams struct {
+	OrgID       mo.Option[identifiers.OrganizationID]
+	TagID       identifiers.TagID
+	OperationID string
+}
+
+// CancelOperationResult is the outcome of requesting a cancellation. The
+// operation comes back as it stood when the request was accepted, which may
+// still be a non-terminal status while the job winds down.
+type CancelOperationResult struct {
+	Meta      *responsemeta.ResponseMeta
+	Operation TagOperation
+}
+
 // WaitParams bundles inputs for polling an operation until it finishes. An
 // absent Timeout polls until a terminal status or context cancellation.
 type WaitParams struct {
