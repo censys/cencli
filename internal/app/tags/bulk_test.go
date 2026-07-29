@@ -3,6 +3,7 @@ package tags
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/samber/mo"
@@ -19,6 +20,28 @@ import (
 
 // bulkOrgUUID stands in for an --org-id override on a bulk submit.
 var bulkOrgUUID = uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+
+// Fixed timestamps for the bulk-delete time filters, ordered so before > after
+// (the only combination the service accepts).
+var (
+	bulkAfterTime  = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	bulkBeforeTime = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+)
+
+// deleteOperationResult is operationResult's bulk_delete twin: TotalCount stays
+// zero because the API only sets it once a bulk delete completes.
+func deleteOperationResult(status components.TagOperationStatus) client.Result[components.TagOperation] {
+	return client.Result[components.TagOperation]{
+		Metadata: okMeta(),
+		Data: &components.TagOperation{
+			ID:      testOpUUID,
+			TagID:   testTagUUID,
+			TagName: "my-tag",
+			Type:    components.TagOperationTypeBulkDelete,
+			Status:  status,
+		},
+	}
+}
 
 // bulkNameLookup expects the one ListTags call that resolves a tag name.
 func bulkNameLookup(m *mocks.MockClient, name string) {
@@ -224,6 +247,191 @@ func TestTagsService_BulkAssign(t *testing.T) {
 
 			svc := &tagsService{client: tc.client(ctrl)}
 			res, err := svc.BulkAssign(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
+
+func TestTagsService_BulkUnassign(t *testing.T) {
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params BulkUnassignParams
+		assert func(t *testing.T, res BulkUnassignResult, err cenclierrors.CencliError)
+	}{
+		{
+			// No filters means every assignment: the request must carry neither
+			// timestamp, since a stray one would silently narrow the wipe.
+			name: "no filters submits an unfiltered removal without a lookup",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), client.BulkDeleteTagAssignmentsRequest{
+					TagID: testTagUUID,
+				}).Return(deleteOperationResult(components.TagOperationStatusPending), nil)
+				return m
+			},
+			params: BulkUnassignParams{TagID: identifiers.NewTagID(testTagUUID)},
+			assert: func(t *testing.T, res BulkUnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, testOpUUID, res.Operation.ID)
+				require.Equal(t, "pending", res.Operation.Status)
+				require.Equal(t, "bulk_delete", res.Operation.Type)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			name: "name is resolved to a UUID before submitting",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				bulkNameLookup(m, "my-tag")
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), client.BulkDeleteTagAssignmentsRequest{
+					TagID: testTagUUID,
+				}).Return(deleteOperationResult(components.TagOperationStatusRunning), nil)
+				return m
+			},
+			params: BulkUnassignParams{TagID: identifiers.NewTagID("my-tag")},
+			assert: func(t *testing.T, res BulkUnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, testOpUUID, res.Operation.ID)
+			},
+		},
+		{
+			name: "created-before alone is sent alone",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), client.BulkDeleteTagAssignmentsRequest{
+					TagID:         testTagUUID,
+					CreatedBefore: mo.Some(bulkBeforeTime),
+				}).Return(deleteOperationResult(components.TagOperationStatusPending), nil)
+				return m
+			},
+			params: BulkUnassignParams{
+				TagID:         identifiers.NewTagID(testTagUUID),
+				CreatedBefore: mo.Some(bulkBeforeTime),
+			},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "created-after alone is sent alone",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), client.BulkDeleteTagAssignmentsRequest{
+					TagID:        testTagUUID,
+					CreatedAfter: mo.Some(bulkAfterTime),
+				}).Return(deleteOperationResult(components.TagOperationStatusPending), nil)
+				return m
+			},
+			params: BulkUnassignParams{
+				TagID:        identifiers.NewTagID(testTagUUID),
+				CreatedAfter: mo.Some(bulkAfterTime),
+			},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "both filters bound the window",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), client.BulkDeleteTagAssignmentsRequest{
+					TagID:         testTagUUID,
+					CreatedBefore: mo.Some(bulkBeforeTime),
+					CreatedAfter:  mo.Some(bulkAfterTime),
+				}).Return(deleteOperationResult(components.TagOperationStatusPending), nil)
+				return m
+			},
+			params: BulkUnassignParams{
+				TagID:         identifiers.NewTagID(testTagUUID),
+				CreatedBefore: mo.Some(bulkBeforeTime),
+				CreatedAfter:  mo.Some(bulkAfterTime),
+			},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "org id is threaded through to the request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), client.BulkDeleteTagAssignmentsRequest{
+					OrgID: mo.Some(bulkOrgUUID.String()),
+					TagID: testTagUUID,
+				}).Return(deleteOperationResult(components.TagOperationStatusPending), nil)
+				return m
+			},
+			params: BulkUnassignParams{
+				OrgID: mo.Some(identifiers.NewOrganizationID(bulkOrgUUID)),
+				TagID: identifiers.NewTagID(testTagUUID),
+			},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			// An inverted window matches nothing, which would look like a wipe that
+			// found no assignments rather than a mistake.
+			name: "impossible window is rejected without touching the API",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: BulkUnassignParams{
+				TagID:         identifiers.NewTagID(testTagUUID),
+				CreatedBefore: mo.Some(bulkAfterTime),
+				CreatedAfter:  mo.Some(bulkBeforeTime),
+			},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "created-before must be after created-after")
+			},
+		},
+		{
+			name: "unknown tag name fails before submitting",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Return(client.Result[components.TagsList]{
+					Metadata: okMeta(),
+					Data:     &components.TagsList{Tags: []components.Tag{}, TotalSize: 0},
+				}, nil)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: BulkUnassignParams{TagID: identifiers.NewTagID("ghost")},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "ghost")
+			},
+		},
+		{
+			name: "client error is returned as-is",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().BulkDeleteTagAssignments(gomock.Any(), gomock.Any()).Return(
+					client.Result[components.TagOperation]{},
+					clientStructuredError("Permission denied", 403),
+				)
+				return m
+			},
+			params: BulkUnassignParams{TagID: identifiers.NewTagID(testTagUUID)},
+			assert: func(t *testing.T, _ BulkUnassignResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "Permission denied")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := &tagsService{client: tc.client(ctrl)}
+			res, err := svc.BulkUnassign(context.Background(), tc.params)
 			tc.assert(t, res, err)
 		})
 	}
