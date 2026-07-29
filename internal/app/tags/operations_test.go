@@ -335,6 +335,139 @@ func TestTagsService_GetOperation(t *testing.T) {
 	}
 }
 
+func TestTagsService_CancelOperation(t *testing.T) {
+	testCases := []struct {
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		params CancelOperationParams
+		assert func(t *testing.T, res CancelOperationResult, err cenclierrors.CencliError)
+	}{
+		{
+			name: "UUID tag skips resolution and maps the cancelled operation",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().CancelTagOperation(gomock.Any(), mo.None[string](), testTagUUID, testOpUUID).
+					Return(operationResult(components.TagOperationStatusCancelled, 40), nil)
+				return m
+			},
+			params: CancelOperationParams{TagID: identifiers.NewTagID(testTagUUID), OperationID: testOpUUID},
+			assert: func(t *testing.T, res CancelOperationResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, testOpUUID, res.Operation.ID)
+				require.Equal(t, "cancelled", res.Operation.Status)
+				require.Equal(t, int64(40), res.Operation.ProcessedCount)
+				require.NotNil(t, res.Meta)
+			},
+		},
+		{
+			// The API answers with the operation as it stood when cancellation was
+			// accepted, which can still be running while the job winds down.
+			name: "a still-running operation comes back as a result, not an error",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().CancelTagOperation(gomock.Any(), mo.None[string](), testTagUUID, testOpUUID).
+					Return(operationResult(components.TagOperationStatusRunning, 12), nil)
+				return m
+			},
+			params: CancelOperationParams{TagID: identifiers.NewTagID(testTagUUID), OperationID: testOpUUID},
+			assert: func(t *testing.T, res CancelOperationResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "running", res.Operation.Status)
+			},
+		},
+		{
+			name: "name is resolved before the cancel",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				bulkNameLookup(m, "my-tag")
+				m.EXPECT().CancelTagOperation(gomock.Any(), mo.None[string](), testTagUUID, testOpUUID).
+					Return(operationResult(components.TagOperationStatusCancelled, 40), nil)
+				return m
+			},
+			params: CancelOperationParams{TagID: identifiers.NewTagID("my-tag"), OperationID: testOpUUID},
+			assert: func(t *testing.T, res CancelOperationResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+				require.Equal(t, "cancelled", res.Operation.Status)
+			},
+		},
+		{
+			name: "org id is threaded through to the request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().CancelTagOperation(
+					gomock.Any(), mo.Some(bulkOrgUUID.String()), testTagUUID, testOpUUID,
+				).Return(operationResult(components.TagOperationStatusCancelled, 40), nil)
+				return m
+			},
+			params: CancelOperationParams{
+				OrgID:       mo.Some(identifiers.NewOrganizationID(bulkOrgUUID)),
+				TagID:       identifiers.NewTagID(testTagUUID),
+				OperationID: testOpUUID,
+			},
+			assert: func(t *testing.T, res CancelOperationResult, err cenclierrors.CencliError) {
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "non-UUID operation ID is rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().CancelTagOperation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: CancelOperationParams{TagID: identifiers.NewTagID(testTagUUID), OperationID: "not-a-uuid"},
+			assert: func(t *testing.T, _ CancelOperationResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.True(t, err.ShouldPrintUsage())
+				require.Contains(t, err.Error(), "not-a-uuid")
+			},
+		},
+		{
+			name: "empty tag is rejected before any request",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).Times(0)
+				m.EXPECT().CancelTagOperation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				return m
+			},
+			params: CancelOperationParams{TagID: identifiers.NewTagID(""), OperationID: testOpUUID},
+			assert: func(t *testing.T, _ CancelOperationResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+			},
+		},
+		{
+			// A finished job cannot be cancelled; the API says so with a 409.
+			name: "client error is returned as-is",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().CancelTagOperation(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					client.Result[components.TagOperation]{},
+					clientStructuredError("Operation already finished", 409),
+				)
+				return m
+			},
+			params: CancelOperationParams{TagID: identifiers.NewTagID(testTagUUID), OperationID: testOpUUID},
+			assert: func(t *testing.T, _ CancelOperationResult, err cenclierrors.CencliError) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "Operation already finished")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			svc := New(tc.client(ctrl))
+			res, err := svc.CancelOperation(context.Background(), tc.params)
+			tc.assert(t, res, err)
+		})
+	}
+}
+
 // newWaitService builds a service whose poll loop records the delays it was
 // asked to sleep for instead of actually waiting.
 func newWaitService(c client.Client, delays *[]time.Duration) Service {
