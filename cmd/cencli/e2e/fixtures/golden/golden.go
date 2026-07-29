@@ -53,4 +53,6 @@ var (
 	TagsOperationsListHelpStdout []byte
 	//go:embed tags_operations_get_help.out
 	TagsOperationsGetHelpStdout []byte
+	//go:embed tags_operations_cancel_help.out
+	TagsOperationsCancelHelpStdout []byte
 )
