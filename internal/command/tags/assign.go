@@ -346,27 +346,20 @@ func (c *AssignCommand) runBulk(cmd *cobra.Command, logger *slog.Logger) cenclie
 }
 
 // waitForSubmitted polls the job just submitted, replacing the operation being
-// rendered with the finished one. A wait that ends early still points the user
-// at the job, which keeps running regardless.
+// rendered with the finished one.
 func (c *AssignCommand) waitForSubmitted(ctx context.Context, logger *slog.Logger) cenclierrors.CencliError {
-	result, err := waitForOperation(ctx, c.BaseCommand, logger, c.tagsSvc, tags.WaitParams{
+	operation, err := followSubmittedOperation(ctx, c.BaseCommand, logger, c.tagsSvc, tags.WaitParams{
 		OrgID:       c.orgID,
 		TagID:       c.tagID,
 		OperationID: c.operation.ID,
 		Timeout:     c.timeout,
 	})
 	if err != nil {
-		quiet := c.Config().Quiet
-		if cenclierrors.IsInterrupted(err) {
-			printOperationStillRunningNote(quiet, c.tagID.String(), c.operation.ID)
-		} else {
-			printOperationTrackHint(quiet, c.tagID.String(), c.operation.ID)
-		}
 		logger.Debug("wait for bulk assignment failed", "error", err)
 		return err
 	}
 
-	c.operation = result.Operation
+	c.operation = operation
 	return nil
 }
 

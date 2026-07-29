@@ -63,23 +63,65 @@ func (e *assignModeConflictError) Title() string { return "Conflicting Input Mod
 
 func (e *assignModeConflictError) ShouldPrintUsage() bool { return true }
 
-// flagRequiresQueryError signals that a bulk-only flag was set without --query,
-// where it would have no effect.
-type flagRequiresQueryError struct {
-	flag string
+// unassignModeConflictError signals that explicit assets and the bulk filters
+// were given together. As with assign, bulk is never inferred, so the two input
+// modes cannot be mixed.
+type unassignModeConflictError struct{}
+
+func NewUnassignModeConflictError() cenclierrors.CencliError { return &unassignModeConflictError{} }
+
+func (e *unassignModeConflictError) Error() string {
+	return "--all and the time filters unassign by filter, so they cannot be combined with explicit assets or --input-file"
 }
 
+func (e *unassignModeConflictError) Title() string { return "Conflicting Input Modes" }
+
+func (e *unassignModeConflictError) ShouldPrintUsage() bool { return true }
+
+// allWithTimeFilterError signals that --all was narrowed by a time filter. --all
+// means every assignment, so the combination contradicts itself rather than
+// meaning either one.
+type allWithTimeFilterError struct{}
+
+func NewAllWithTimeFilterError() cenclierrors.CencliError { return &allWithTimeFilterError{} }
+
+func (e *allWithTimeFilterError) Error() string {
+	return "--all unassigns every assignment, so it cannot be combined with --created-before or --created-after"
+}
+
+func (e *allWithTimeFilterError) Title() string { return "Conflicting Flags" }
+
+func (e *allWithTimeFilterError) ShouldPrintUsage() bool { return true }
+
+// flagRequiresBulkError signals that a bulk-only flag was set without the flag
+// that selects bulk mode, where it would have no effect. verb and trigger name
+// the operation and its mode flag, since assign and unassign enter bulk mode
+// differently.
+type flagRequiresBulkError struct {
+	flag    string
+	verb    string
+	trigger string
+}
+
+// NewFlagRequiresQueryError reports a bulk-only assign flag used without --query.
 func NewFlagRequiresQueryError(flag string) cenclierrors.CencliError {
-	return &flagRequiresQueryError{flag: flag}
+	return &flagRequiresBulkError{flag: flag, verb: "assignment", trigger: "query"}
 }
 
-func (e *flagRequiresQueryError) Error() string {
-	return fmt.Sprintf("--%s only applies to a bulk assignment; add --query or drop --%s", e.flag, e.flag)
+// NewFlagRequiresAllError reports a bulk-only unassign flag used without --all
+// or a time filter. It names --all as the fix, being the unfiltered form.
+func NewFlagRequiresAllError(flag string) cenclierrors.CencliError {
+	return &flagRequiresBulkError{flag: flag, verb: "unassignment", trigger: "all"}
 }
 
-func (e *flagRequiresQueryError) Title() string { return "Conflicting Flags" }
+func (e *flagRequiresBulkError) Error() string {
+	return fmt.Sprintf("--%s only applies to a bulk %s; add --%s or drop --%s",
+		e.flag, e.verb, e.trigger, e.flag)
+}
 
-func (e *flagRequiresQueryError) ShouldPrintUsage() bool { return true }
+func (e *flagRequiresBulkError) Title() string { return "Conflicting Flags" }
+
+func (e *flagRequiresBulkError) ShouldPrintUsage() bool { return true }
 
 // operationFailedError signals that a waited-on operation finished as failed.
 // The operation itself was still rendered; this only drives the exit code.

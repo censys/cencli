@@ -30,6 +30,7 @@ type Service interface {
 	Assign(ctx context.Context, params AssignParams) (AssignResult, cenclierrors.CencliError)
 	BulkAssign(ctx context.Context, params BulkAssignParams) (BulkAssignResult, cenclierrors.CencliError)
 	Unassign(ctx context.Context, params UnassignParams) (UnassignResult, cenclierrors.CencliError)
+	BulkUnassign(ctx context.Context, params BulkUnassignParams) (BulkUnassignResult, cenclierrors.CencliError)
 	ListAssignments(ctx context.Context, params AssignmentsParams) (AssignmentsResult, cenclierrors.CencliError)
 	ListOperations(ctx context.Context, params OperationsParams) (OperationsResult, cenclierrors.CencliError)
 	GetOperation(ctx context.Context, params GetOperationParams) (GetOperationResult, cenclierrors.CencliError)
@@ -120,7 +121,7 @@ func (s *tagsService) ListAssignments(
 	if err := validateAssetType(params.AssetType); err != nil {
 		return AssignmentsResult{}, err
 	}
-	if err := validateTimeWindow(params.CreatedBefore, params.CreatedAfter); err != nil {
+	if err := ValidateTimeWindow(params.CreatedBefore, params.CreatedAfter); err != nil {
 		return AssignmentsResult{}, err
 	}
 

@@ -80,6 +80,30 @@ func waitForOperation(
 	return result, err
 }
 
+// followSubmittedOperation polls a job that was just submitted and returns the
+// finished operation. A wait that ends early still points the user at the job,
+// which keeps running server-side regardless. Shared by bulk assign and bulk
+// unassign, which differ only in what they submitted.
+func followSubmittedOperation(
+	ctx context.Context,
+	base *command.BaseCommand,
+	logger *slog.Logger,
+	svc tags.Service,
+	params tags.WaitParams,
+) (tags.TagOperation, cenclierrors.CencliError) {
+	result, err := waitForOperation(ctx, base, logger, svc, params)
+	if err != nil {
+		quiet := base.Config().Quiet
+		if cenclierrors.IsInterrupted(err) {
+			printOperationStillRunningNote(quiet, params.TagID.String(), params.OperationID)
+		} else {
+			printOperationTrackHint(quiet, params.TagID.String(), params.OperationID)
+		}
+		return tags.TagOperation{}, err
+	}
+	return result.Operation, nil
+}
+
 // reportOperationTerminalStatus maps a finished operation onto the exit code. A
 // capped run still succeeded, so it warns rather than failing. Only a wait calls
 // this: reading a failed operation is itself a successful read.
