@@ -1,13 +1,14 @@
 Track the asynchronous jobs created by bulk tag operations.                              
                                                                                          
 Bulk assign and unassign submit a job rather than acting immediately; these commands list
-those jobs and inspect a single one.                                                     
+those jobs, inspect a single one, and cancel one that is still running.                  
 
 Usage:
   censys tags operations [flags]
   censys tags operations [command]
 
 Available Commands:
+  cancel      Cancel a running bulk tag operation
   get         Retrieve a single bulk tag operation
   list        List bulk tag operations
 
