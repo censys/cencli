@@ -89,6 +89,24 @@ type BulkAssignResult struct {
 	Operation TagOperation
 }
 
+// BulkUnassignParams bundles inputs for removing a tag (by name or UUID) from
+// assignments selected by filter rather than by asset. With neither timestamp
+// present every assignment of the tag is removed.
+type BulkUnassignParams struct {
+	OrgID         mo.Option[identifiers.OrganizationID]
+	TagID         identifiers.TagID
+	CreatedBefore mo.Option[time.Time]
+	CreatedAfter  mo.Option[time.Time]
+}
+
+// BulkUnassignResult is the outcome of submitting a bulk unassignment. Like its
+// create counterpart the endpoint answers 202 with the operation tracking the
+// job, so the caller polls the operation to learn how it ended.
+type BulkUnassignResult struct {
+	Meta      *responsemeta.ResponseMeta
+	Operation TagOperation
+}
+
 // AssignmentsParams bundles inputs for listing a tag's assignments. Filters left
 // empty are omitted from the request.
 type AssignmentsParams struct {

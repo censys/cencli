@@ -42,3 +42,38 @@ func (s *tagsService) BulkAssign(
 	meta, operation := mapOperationResult(result)
 	return BulkAssignResult{Meta: meta, Operation: operation}, nil
 }
+
+// BulkUnassign removes a tag (by name or UUID) from the assignments matching the
+// given time filters, or from every assignment when no filter is given. Like
+// BulkAssign it returns as soon as the job is accepted.
+func (s *tagsService) BulkUnassign(
+	ctx context.Context,
+	params BulkUnassignParams,
+) (BulkUnassignResult, cenclierrors.CencliError) {
+	// An impossible window would remove nothing while still spending an
+	// operation, which reads like a successful wipe.
+	if err := ValidateTimeWindow(params.CreatedBefore, params.CreatedAfter); err != nil {
+		return BulkUnassignResult{}, err
+	}
+
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	// The endpoint keys off the tag UUID, so a name costs one lookup first.
+	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
+	if resolveErr != nil {
+		return BulkUnassignResult{}, resolveErr
+	}
+
+	result, err := s.client.BulkDeleteTagAssignments(ctx, client.BulkDeleteTagAssignmentsRequest{
+		OrgID:         orgIDStr,
+		TagID:         tagID,
+		CreatedBefore: params.CreatedBefore,
+		CreatedAfter:  params.CreatedAfter,
+	})
+	if err != nil {
+		return BulkUnassignResult{}, err
+	}
+
+	meta, operation := mapOperationResult(result)
+	return BulkUnassignResult{Meta: meta, Operation: operation}, nil
+}

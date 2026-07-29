@@ -105,9 +105,11 @@ func validateAssetType(assetType mo.Option[string]) cenclierrors.CencliError {
 	return validateEnumFilter("asset-type", assetType, validAssetType)
 }
 
-// validateTimeWindow rejects an impossible created-before/created-after pair,
-// which the API answers with an empty page — easily mistaken for "nothing matched".
-func validateTimeWindow(before, after mo.Option[time.Time]) cenclierrors.CencliError {
+// ValidateTimeWindow rejects an impossible created-before/created-after pair,
+// which the API answers with an empty page — easily mistaken for "nothing
+// matched". Exported so a command can reject the pair before it resolves a
+// service (and so needs credentials), without restating the rule.
+func ValidateTimeWindow(before, after mo.Option[time.Time]) cenclierrors.CencliError {
 	if !before.IsPresent() || !after.IsPresent() {
 		return nil
 	}
