@@ -34,6 +34,7 @@ type Service interface {
 	ListAssignments(ctx context.Context, params AssignmentsParams) (AssignmentsResult, cenclierrors.CencliError)
 	ListOperations(ctx context.Context, params OperationsParams) (OperationsResult, cenclierrors.CencliError)
 	GetOperation(ctx context.Context, params GetOperationParams) (GetOperationResult, cenclierrors.CencliError)
+	CancelOperation(ctx context.Context, params CancelOperationParams) (CancelOperationResult, cenclierrors.CencliError)
 	WaitForOperation(ctx context.Context, params WaitParams) (GetOperationResult, cenclierrors.CencliError)
 }
 

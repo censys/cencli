@@ -111,6 +111,29 @@ func (s *tagsService) GetOperation(
 	return newGetOperationResult(result), nil
 }
 
+// CancelOperation asks the API to stop a running bulk job. Work already
+// committed before the cancellation is kept, so this narrows a job rather than
+// undoing it. Both path parameters are UUID-only, so a tag name is resolved first.
+func (s *tagsService) CancelOperation(
+	ctx context.Context,
+	params CancelOperationParams,
+) (CancelOperationResult, cenclierrors.CencliError) {
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+
+	tagID, operationID, err := s.resolveOperationTarget(ctx, orgIDStr, params.TagID, params.OperationID)
+	if err != nil {
+		return CancelOperationResult{}, err
+	}
+
+	result, err := s.client.CancelTagOperation(ctx, orgIDStr, tagID, operationID)
+	if err != nil {
+		return CancelOperationResult{}, err
+	}
+
+	meta, operation := mapOperationResult(result)
+	return CancelOperationResult{Meta: meta, Operation: operation}, nil
+}
+
 // WaitForOperation polls an operation until it reaches a terminal status, the
 // optional timeout expires, or the context is cancelled. A terminal status is
 // not an error: every outcome comes back as a result, and the caller decides

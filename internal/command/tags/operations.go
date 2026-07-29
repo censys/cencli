@@ -33,7 +33,7 @@ func (c *OperationsCommand) Short() string {
 func (c *OperationsCommand) Long() string {
 	return `Track the asynchronous jobs created by bulk tag operations.
 
-Bulk assign and unassign submit a job rather than acting immediately; these commands list those jobs and inspect a single one.`
+Bulk assign and unassign submit a job rather than acting immediately; these commands list those jobs, inspect a single one, and cancel one that is still running.`
 }
 
 func (c *OperationsCommand) Args() command.PositionalArgs {
@@ -52,6 +52,7 @@ func (c *OperationsCommand) Init() error {
 	return c.AddSubCommands(
 		NewOperationsListCommand(c.Context),
 		NewOperationsGetCommand(c.Context),
+		NewOperationsCancelCommand(c.Context),
 	)
 }
 
