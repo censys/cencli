@@ -427,6 +427,111 @@ var tagsFixtures = []Fixture{
 			assert.Contains(t, string(stderr), "confirmation required")
 		},
 	},
+	// No live bulk-unassign fixture either: a bulk job mutates at scale and cannot
+	// be undone deterministically. These cover what the command rejects before any
+	// request is sent.
+	{
+		// Bulk is never inferred, so the two input modes cannot be mixed.
+		Name:      "unassign all with explicit assets",
+		Args:      []string{"unassign", "my-tag", "8.8.8.8", "--all"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "cannot be combined with explicit assets")
+		},
+	},
+	{
+		Name:      "unassign all with input file",
+		Args:      []string{"unassign", "my-tag", "--input-file", "-", "--all"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "cannot be combined with explicit assets")
+		},
+	},
+	{
+		// A time filter alone selects bulk mode, so it conflicts the same way.
+		Name:      "unassign time filter with explicit assets",
+		Args:      []string{"unassign", "my-tag", "8.8.8.8", "--created-before", "2026-01-01T00:00:00Z"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "cannot be combined with explicit assets")
+		},
+	},
+	{
+		// --all already means every assignment, so narrowing it contradicts itself.
+		Name:      "unassign all with created-before",
+		Args:      []string{"unassign", "my-tag", "--all", "--created-before", "2026-01-01T00:00:00Z"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--all unassigns every assignment")
+		},
+	},
+	{
+		Name:      "unassign all with created-after",
+		Args:      []string{"unassign", "my-tag", "--all", "--created-after", "2026-01-01T00:00:00Z"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--all unassigns every assignment")
+		},
+	},
+	{
+		Name:      "unassign wait without bulk mode",
+		Args:      []string{"unassign", "my-tag", "8.8.8.8", "--wait"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--wait only applies to a bulk unassignment")
+		},
+	},
+	{
+		Name:      "unassign timeout without wait",
+		Args:      []string{"unassign", "my-tag", "--all", "--timeout", "5m"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--timeout only applies while polling")
+		},
+	},
+	{
+		// An inverted window matches nothing, which would look like a wipe that
+		// found nothing rather than a mistake.
+		Name: "unassign inverted time window",
+		Args: []string{
+			"unassign", "my-tag",
+			"--created-before", "2020-01-01T00:00:00Z",
+			"--created-after", "2026-01-01T00:00:00Z",
+			"--yes",
+		},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "created-before must be after created-after")
+		},
+	},
+	{
+		// e2e runs without a TTY, so a bulk removal cannot prompt and must refuse
+		// rather than wipe a tag's assignments silently.
+		Name:      "unassign all non-interactive without yes",
+		Args:      []string{"unassign", "my-tag", "--all"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "confirmation required")
+		},
+	},
 	// ========== assignments subcommand ==========
 	// No live assignments fixture: the org has no tag with a deterministic set of
 	// assignments to assert against. Covered by unit tests (internal/app/tags,
@@ -568,6 +673,16 @@ var tagsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "operations cancel help",
+		Args:      []string{"operations", "cancel", "--help"},
+		ExitCode:  0,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertGoldenFile(t, golden.TagsOperationsCancelHelpStdout, stdout, 0)
+		},
+	},
+	{
 		// The parent lists nothing itself; subcommands do the work.
 		Name:      "operations rejects a positional argument",
 		Args:      []string{"operations", "my-tag"},
@@ -633,6 +748,50 @@ var tagsFixtures = []Fixture{
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			assert.Contains(t, string(stderr), "--timeout only applies while polling")
+		},
+	},
+	// No live cancel fixture: cancelling needs a real in-flight bulk job, and this
+	// suite never starts one. Covered by unit tests (internal/app/tags,
+	// internal/command/tags).
+	{
+		Name:      "operations cancel non-uuid operation id",
+		Args:      []string{"operations", "cancel", "my-tag", "not-a-uuid", "--yes"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "not-a-uuid")
+		},
+	},
+	{
+		Name:      "operations cancel missing operation id",
+		Args:      []string{"operations", "cancel", "my-tag", "--yes"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "accepts 2 arg")
+		},
+	},
+	{
+		Name:      "operations cancel empty tag",
+		Args:      []string{"operations", "cancel", "   ", "d421a231-eb5e-4927-a0be-8aa749eb731c", "--yes"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "tag name or ID is required")
+		},
+	},
+	{
+		// e2e runs without a TTY, so cancelling cannot prompt and must refuse.
+		Name:      "operations cancel non-interactive without yes",
+		Args:      []string{"operations", "cancel", "my-tag", "d421a231-eb5e-4927-a0be-8aa749eb731c"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "confirmation required")
 		},
 	},
 	{

@@ -6,9 +6,15 @@ Assets can be passed as positional arguments or read from a file (or STDIN) with
 unassigned independently: if one fails the rest still proceed, and the per-asset outcomes
 are reported.                                                                            
                                                                                          
-Unassigning more than one asset (or reading assets from --input-file) prompts for        
-confirmation. Use --yes to skip the prompt; in a non-interactive terminal --yes is       
-required for those cases.                                                                
+Use --all instead to remove every one of the tag's assignments, or                       
+--created-before/--created-after to remove only those created in a time window. Either   
+form starts an asynchronous bulk job and reports the operation tracking it; it cannot be 
+combined with explicit assets, and --all cannot be narrowed by a time filter. Bulk       
+unassignment always asks for confirmation unless --yes is set.                           
+                                                                                         
+Unassigning more than one explicit asset (or reading assets from --input-file) also      
+prompts for confirmation. Use --yes to skip the prompt; in a non-interactive terminal    
+--yes is required for those cases.                                                       
 
 Usage:
   censys tags unassign <tag> [asset...] [flags]
@@ -21,12 +27,20 @@ Examples:
   censys tags unassign <tag> <ip-address> <hostname:port> # asset types can be mixed
   censys tags unassign <tag> --input-file <file>
   censys tags unassign <tag> --input-file - # read assets from STDIN
+  censys tags unassign <tag> --all # remove every one of the tag's assignments
+  censys tags unassign <tag> --created-before 2026-01-01T00:00:00Z # only assignments made before then
+  censys tags unassign <tag> --all --wait # poll until the job finishes
 
 Flags:
-  -h, --help                help for unassign
-  -i, --input-file string   file to read the assets from (or - for STDIN). Overrides positional asset arguments.
-  -o, --org-id string       organization ID to target (personal access tokens only)
-  -y, --yes                 skip the confirmation prompt
+      --all                     remove every one of the tag's assignments. Starts a bulk job instead of unassigning explicit assets.
+      --created-after string    only unassign assignments created after this time. Starts a bulk job.
+      --created-before string   only unassign assignments created before this time. Starts a bulk job.
+  -h, --help                    help for unassign
+  -i, --input-file string       file to read the assets from (or - for STDIN). Overrides positional asset arguments.
+  -o, --org-id string           organization ID to target (personal access tokens only)
+      --timeout string          how long to wait before giving up (requires --wait) - use 0 for no limit (default "30m0s")
+  -w, --wait                    poll the bulk job until it reaches a final status (requires --all or a time filter)
+  -y, --yes                     skip the confirmation prompt
 
 Global Flags:
       --debug                   enable debug logging
