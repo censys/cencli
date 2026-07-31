@@ -1,0 +1,9 @@
+name: PR - Require Bot Approvals
+
+on:
+  pull_request_review:
+    types: [ submitted, dismissed ]
+
+jobs:
+  require-review:
+    uses: censys/shared-actions/.github/workflows/reusable-require-bot-pr-approvals.yaml@main
