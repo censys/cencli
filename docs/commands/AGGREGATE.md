@@ -2,6 +2,9 @@
 
 The `aggregate` command allows you to aggregate results for a Platform search query.  This functionality is equivalent to the [Report Builder](https://docs.censys.com/docs/platform-report-builder#/) in the Censys Platform web UI.
 
+> [!TIP]
+> Use `aggregate` when you want counts **broken down by a field**. If you only need the **single total** number of results for a query, use [`search --count`](SEARCH.md#--count) instead.
+
 ![aggregate](../../examples/aggregate/aggregate.gif)
 
 ## Usage

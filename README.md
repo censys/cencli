@@ -104,7 +104,7 @@ The `enrich` command looks up host IPs through the Censys Host Enrichment API â€
 
 ### Search
 
-The `search` command allows you to perform Censys Platform searches, either globally or within a collection. See the [search command docs](./docs/commands/SEARCH.md) for more details.
+The `search` command allows you to perform Censys Platform searches, either globally or within a collection. You can also pass `--count` to print just the total number of matching results without paginating through them. See the [search command docs](./docs/commands/SEARCH.md) for more details.
 
 ![search](examples/search/search.gif)
 

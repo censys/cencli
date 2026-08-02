@@ -87,6 +87,32 @@ $ censys search "host.services.protocol: HTTP" --max-pages -1  # fetch all resul
 
 **Note:** Using `--max-pages -1` will fetch all available results, which may result in many API calls and take considerable time depending on the query.
 
+### `--count`
+
+Print only the total number of results that match the query, instead of the results themselves. The total is read from the first page of results, so only a single, minimal API call is made — you do not need to fetch every page and count. This is useful for quickly gauging the size of a result set or for scripting.
+
+**Type:** `boolean`  
+**Default:** `false`
+
+```bash
+$ censys search "host.services.protocol=SSH" --count
+30388029
+```
+
+The output honors `--output-format`. Structured formats use the `total_hits` field, matching the search API response payload; `short` and `template` print the bare number:
+
+```bash
+$ censys search "host.services.protocol=SSH" --count --output-format json
+{
+  "total_hits": 30388029
+}
+
+$ censys search "host.services.protocol=SSH" --count --output-format short
+30388029
+```
+
+Because a single minimal page is fetched and no per-asset data is rendered, `--count` ignores `--page-size`, `--max-pages`, `--fields`, and `--streaming`. If any of these are set explicitly alongside `--count`, a warning is printed to stderr (suppressed by `--quiet`).
+
 ## Output Formats
 
 The `search` command defaults to **`json`** output format (or the global config value). You can override this with the `--output-format` flag (or `-O`).
@@ -139,9 +165,12 @@ $ censys search "host.services.port: 22" --max-pages -1 --streaming > ssh_hosts.
 # Process results as they arrive using jq
 $ censys search "host.services.port: 443" --max-pages 10 -S | jq -r '.host.ip'
 
-# Count results without storing them all in memory
+# Count matched hits after streaming them all (e.g. when you also need the records)
 $ censys search "host.services.protocol: HTTP" --max-pages -1 -S | wc -l
 ```
+
+> [!TIP]
+> If you only need the total number of matches — not the records themselves — use [`--count`](#--count) instead. It reads the total from the first page in a single API call rather than streaming and counting every result.
 
 ### When to Use Streaming
 

@@ -290,6 +290,22 @@ func (c *Context) PrintData(cmd Command, data any) cenclierrors.CencliError {
 	}
 }
 
+// PrintValueByFormat renders a single structured value according to the
+// configured output format. For formats that rely on per-asset rendering
+// (short, template) or that require streaming (ndjson), it falls back to the
+// provided plain-text representation. Unlike PrintData, it does not short-circuit
+// on the streaming flag, so it is safe on paths that never set up a streaming
+// emitter (e.g. the search --count path).
+func (c *Context) PrintValueByFormat(data any, plain string) cenclierrors.CencliError {
+	switch c.config.OutputFormat {
+	case formatter.OutputFormatShort, formatter.OutputFormatTemplate, formatter.OutputFormatNDJSON:
+		formatter.Println(formatter.Stdout, plain)
+		return nil
+	default:
+		return formatter.PrintByFormat(data, c.config.OutputFormat, !c.colorDisabledStdout)
+	}
+}
+
 // PrintYAML renders data as YAML.
 func (c *Context) PrintYAML(data any) cenclierrors.CencliError {
 	return cenclierrors.NewCencliError(formatter.PrintYAML(data, !c.colorDisabledStdout))

@@ -3,6 +3,8 @@ package search
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/samber/mo"
@@ -44,6 +46,7 @@ type Command struct {
 	orgID        mo.Option[identifiers.OrganizationID]
 	pageSize     mo.Option[uint64]
 	maxPages     mo.Option[uint64]
+	count        bool
 	// result stores the search result for rendering
 	result search.Result
 }
@@ -55,6 +58,7 @@ type searchCommandFlags struct {
 	fields       flags.StringSliceFlag
 	pageSize     flags.IntegerFlag
 	maxPages     flags.IntegerFlag
+	count        flags.BoolFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -101,6 +105,7 @@ func (c *Command) Examples() []string {
 		`--collection-id <your-collection-id> "host.services.protocol=SSH"`,
 		`--page-size 50 --max-pages 5 "cert.names=censys.com"`,
 		`--max-pages -1 "host.services.port: 443 and host.location.country: Germany"`,
+		`--count "host.services.protocol=SSH"`,
 	}
 }
 
@@ -152,6 +157,13 @@ func (c *Command) Init() error {
 		mo.None[int64](), // allow custom validation in PreRun (to support -1)
 		mo.None[int64](), // no maximum
 	)
+	c.flags.count = flags.NewBoolFlag(
+		c.Flags(),
+		"count",
+		"",
+		false,
+		"print only the total number of matching results (from the first page) instead of the results themselves",
+	)
 	return nil
 }
 
@@ -172,6 +184,9 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err := c.parseFieldsFlag(); err != nil {
 		return err
 	}
+	if err := c.parseCountFlag(); err != nil {
+		return err
+	}
 	return c.resolveSearchService()
 }
 
@@ -183,8 +198,14 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"fields_set", len(c.fields) > 0,
 		"pageSize_set", c.pageSize.IsPresent(),
 		"maxPages_set", c.maxPages.IsPresent(),
+		"count", c.count,
 		"query", c.query,
 	)
+
+	if c.count {
+		return c.runCount(cmd, logger)
+	}
+
 	if !c.Config().Quiet && !c.maxPages.IsPresent() {
 		msg := styles.GlobalStyles.Warning.Render("Warning: fetching all pages (--max-pages=-1). This may take a while and increase API usage.")
 		formatter.Println(formatter.Stderr, msg)
@@ -225,6 +246,60 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	}
 
 	return nil
+}
+
+// runCount fetches a single minimal page and prints only the total number of
+// matching results. It intentionally skips streaming and per-asset rendering.
+func (c *Command) runCount(cmd *cobra.Command, logger *slog.Logger) cenclierrors.CencliError {
+	c.warnIgnoredCountFlags(cmd, logger)
+
+	err := c.WithProgress(
+		cmd.Context(),
+		logger,
+		"Counting search results...",
+		func(pctx context.Context) cenclierrors.CencliError {
+			var fetchErr cenclierrors.CencliError
+			c.result, fetchErr = c.fetchSearchResult(pctx)
+			return fetchErr
+		},
+	)
+	if err != nil {
+		logger.Debug("count fetch failed", "error", err)
+		return err
+	}
+
+	c.PrintAppResponseMeta(c.result.Meta)
+
+	// The field name mirrors "total_hits" in the search API response so that
+	// structured output is consistent with the full result payload.
+	data := map[string]any{"total_hits": c.result.TotalHits}
+	plain := fmt.Sprintf("%d", c.result.TotalHits)
+	return c.PrintValueByFormat(data, plain)
+}
+
+// warnIgnoredCountFlags emits a warning when flags that have no effect in
+// --count mode are explicitly set. Pagination is forced to a single minimal
+// page and no per-asset data is rendered, so these flags are silently ignored.
+func (c *Command) warnIgnoredCountFlags(cmd *cobra.Command, logger *slog.Logger) {
+	if c.Config().Quiet {
+		return
+	}
+
+	var ignored []string
+	for _, name := range []string{"page-size", "max-pages", "fields", config.StreamingFlagName} {
+		if f := cmd.Flag(name); f != nil && f.Changed {
+			ignored = append(ignored, "--"+name)
+		}
+	}
+	if len(ignored) == 0 {
+		return
+	}
+
+	msg := styles.GlobalStyles.Warning.Render(
+		fmt.Sprintf("Warning: --count ignores %s.", strings.Join(ignored, ", ")),
+	)
+	formatter.Println(formatter.Stderr, msg)
+	logger.Debug("count mode ignoring flags", "flags", ignored)
 }
 
 func (c *Command) fetchSearchResult(ctx context.Context) (search.Result, cenclierrors.CencliError) {
@@ -328,6 +403,24 @@ func (c *Command) parsePaginationFlags() cenclierrors.CencliError {
 			// this wont wrap around since we guard negatives and zero
 			c.maxPages = mo.Some(uint64(v))
 		}
+	}
+	return nil
+}
+
+// parseCountFlag parses the --count flag. When set, only the total number of
+// matching results is needed, so pagination is forced to a single, minimal page.
+// The API returns the total count on every page regardless of page size, so a
+// page size of 1 minimizes the payload. Explicit --page-size/--max-pages values
+// are overridden because they are meaningless in count mode.
+func (c *Command) parseCountFlag() cenclierrors.CencliError {
+	var err cenclierrors.CencliError
+	c.count, err = c.flags.count.Value()
+	if err != nil {
+		return err
+	}
+	if c.count {
+		c.pageSize = mo.Some[uint64](1)
+		c.maxPages = mo.Some[uint64](1)
 	}
 	return nil
 }
