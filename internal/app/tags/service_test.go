@@ -349,6 +349,10 @@ func TestTagsService_GetTag(t *testing.T) {
 				}
 				m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").
 					Return(client.Result[components.Tag]{Metadata: okMeta(), Data: sdkTag}, nil)
+				// Every successful get also counts assignments; this case is about
+				// the mapping, so the count itself is left unasserted.
+				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+					Return(assignmentsPage(nil, 0, ""), nil)
 				return m
 			},
 			params: GetParams{TagID: identifiers.NewTagID("my-tag")},
@@ -369,6 +373,12 @@ func TestTagsService_GetTag(t *testing.T) {
 				m := mocks.NewMockClient(ctrl)
 				m.EXPECT().GetTag(gomock.Any(), mo.Some(orgUUID.String()), orgUUID.String()).
 					Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: "id", Name: "n", Privacy: components.TagPrivacyShared}}, nil)
+				// The org ID must reach the count request too, not just the get.
+				m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
+					OrgID:    mo.Some(orgUUID.String()),
+					TagID:    "id",
+					PageSize: mo.Some(int64(1)),
+				}).Return(assignmentsPage(nil, 0, ""), nil)
 				return m
 			},
 			params: GetParams{
@@ -1721,39 +1731,45 @@ func TestTagsService_GetTag_AssetCount(t *testing.T) {
 		Data:     &components.Tag{ID: tagUUID.String(), Name: "my-tag", Privacy: components.TagPrivacyPrivate},
 	}
 
-	t.Run("not requested - no count request is made", func(t *testing.T) {
+	t.Run("counts assignments off the tag's own UUID", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
 		m := mocks.NewMockClient(ctrl)
 		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").Return(tagResult, nil)
-		m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).Times(0)
-
-		res, err := New(m).GetTag(context.Background(), GetParams{TagID: identifiers.NewTagID("my-tag")})
-		require.NoError(t, err)
-		require.Nil(t, res.Tag.AssetCount)
-		require.NoError(t, res.PartialError)
-	})
-
-	t.Run("requested - counts assignments off the tag's own UUID", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		m := mocks.NewMockClient(ctrl)
-		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").Return(tagResult, nil)
+		// The count uses the UUID from the tag just fetched, so a get by name
+		// still needs no separate resolve.
 		m.EXPECT().ListTagAssignments(gomock.Any(), client.ListTagAssignmentsRequest{
 			TagID:    tagUUID.String(),
 			PageSize: mo.Some(int64(1)),
 		}).Return(assignmentsPage([]string{"8.8.8.8"}, 7, ""), nil)
 
 		res, err := New(m).GetTag(context.Background(), GetParams{
-			TagID:          identifiers.NewTagID("my-tag"),
-			WithAssetCount: true,
+			TagID: identifiers.NewTagID("my-tag"),
 		})
 		require.NoError(t, err)
 		require.NotNil(t, res.Tag.AssetCount)
 		require.Equal(t, int64(7), *res.Tag.AssetCount)
 		require.NoError(t, res.PartialError)
+	})
+
+	t.Run("a zero count is reported, not omitted", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").Return(tagResult, nil)
+		m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+			Return(assignmentsPage(nil, 0, ""), nil)
+
+		res, err := New(m).GetTag(context.Background(), GetParams{
+			TagID: identifiers.NewTagID("my-tag"),
+		})
+		require.NoError(t, err)
+		// Non-nil, so an untagged tag renders "Assets: 0" rather than dropping
+		// the row and reading like the count was never taken.
+		require.NotNil(t, res.Tag.AssetCount)
+		require.Equal(t, int64(0), *res.Tag.AssetCount)
 	})
 
 	t.Run("count failure keeps the tag and reports a partial error", func(t *testing.T) {
@@ -1766,13 +1782,31 @@ func TestTagsService_GetTag_AssetCount(t *testing.T) {
 			Return(client.Result[components.TagAssignmentsList]{}, clientStructuredError("Permission denied", 403))
 
 		res, err := New(m).GetTag(context.Background(), GetParams{
-			TagID:          identifiers.NewTagID("my-tag"),
-			WithAssetCount: true,
+			TagID: identifiers.NewTagID("my-tag"),
 		})
 		require.NoError(t, err)
 		require.Equal(t, "my-tag", res.Tag.Name)
 		require.Nil(t, res.Tag.AssetCount)
 		require.Error(t, res.PartialError)
 		require.Contains(t, res.PartialError.Error(), "Permission denied")
+	})
+
+	t.Run("a tag-less response is not counted", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), "my-tag").
+			Return(client.Result[components.Tag]{Metadata: okMeta()}, nil)
+		// With no tag ID there is nothing to count against, so the assignments
+		// endpoint must not be asked.
+		m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).Times(0)
+
+		res, err := New(m).GetTag(context.Background(), GetParams{
+			TagID: identifiers.NewTagID("my-tag"),
+		})
+		require.NoError(t, err)
+		require.Nil(t, res.Tag.AssetCount)
+		require.NoError(t, res.PartialError)
 	})
 }

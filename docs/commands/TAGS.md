@@ -100,18 +100,14 @@ Retrieve a single tag by its name or UUID.
 ```bash
 $ censys tags get my-tag                       # get a tag by name
 $ censys tags get <tag-id>                     # get a tag by UUID
-$ censys tags get my-tag --asset-count         # also report how many assets are tagged
 $ censys tags get my-tag --output-format json  # output as JSON
 ```
 
+The output includes `asset_count` — how many assets the tag is assigned to. The tag record itself carries no count, so `get` always makes a **second request** for it, using the UUID from the tag it just fetched. If only that second request fails, the tag is still printed and the count error is reported afterwards: a failed count never fails the command, and `asset_count` is then absent rather than `0`.
+
 #### Flags
 
-**`--asset-count`**: Also report how many assets the tag is assigned to.
-
-The tag record itself carries no assignment count, so this costs an **additional request**, which is why it is opt-in rather than automatic. If that second request fails, the tag is still printed and the count error is reported afterwards — a failed count never fails the command.
-
-**Type:** `boolean`  
-**Default:** `false`
+Only the global flags and `--org-id`.
 
 ### `tags create`
 
@@ -473,7 +469,7 @@ Use [`tags operations`](#tags-operations-list) to list, inspect, and cancel thes
 
 Tag assignments are not reflected in search immediately. After a successful `assign` or `unassign`, it may take a few minutes for the change to appear in — or disappear from — `tags:` search results. The commands print a note to that effect on success (suppressed by `--quiet`).
 
-This affects search only. `tags assignments` and `tags get --asset-count` read the assignments directly and reflect changes right away.
+This affects search only. `tags assignments` and the asset count on `tags get` read the assignments directly and reflect changes right away.
 
 ## Output Formats
 

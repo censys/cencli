@@ -25,16 +25,14 @@ type GetCommand struct {
 	// flags the command uses
 	flags getCommandFlags
 	// state - populated by PreRun
-	orgID      mo.Option[identifiers.OrganizationID]
-	tagID      identifiers.TagID
-	assetCount bool
+	orgID mo.Option[identifiers.OrganizationID]
+	tagID identifiers.TagID
 	// result stores the fetched tag for rendering
 	result tags.GetResult
 }
 
 type getCommandFlags struct {
-	orgID      flags.OrgIDFlag
-	assetCount flags.BoolFlag
+	orgID flags.OrgIDFlag
 }
 
 var _ command.Command = (*GetCommand)(nil)
@@ -58,14 +56,13 @@ func (c *GetCommand) Long() string {
 
 Tag names are unique within an organization, so a name and its ID can be used interchangeably.
 
-The tag itself carries no assignment count; pass --asset-count to fetch it with an additional request.`
+The tag payload carries no assignment count, so counting the assets it is assigned to costs a second request. That count is always reported; if only the count fails, the tag is still printed and the count error follows it.`
 }
 
 func (c *GetCommand) Examples() []string {
 	return []string{
 		"my-tag # Get a tag by name",
 		"<tag-id> # Get a tag by UUID",
-		"my-tag --asset-count # Also report how many assets are tagged",
 		"my-tag --output-format json # Output as JSON",
 	}
 }
@@ -84,7 +81,6 @@ func (c *GetCommand) SupportedOutputTypes() []command.OutputType {
 
 func (c *GetCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
-	c.flags.assetCount = flags.NewBoolFlag(c.Flags(), "asset-count", "", false, "also report how many assets the tag is assigned to (one extra request)")
 	return nil
 }
 
@@ -98,10 +94,6 @@ func (c *GetCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.Cenc
 	if err != nil {
 		return err
 	}
-	c.assetCount, err = c.flags.assetCount.Value()
-	if err != nil {
-		return err
-	}
 	return c.resolveTagsService()
 }
 
@@ -109,7 +101,6 @@ func (c *GetCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	logger := c.Logger(cmdName).With(
 		"orgID_set", c.orgID.IsPresent(),
 		"tagID_is_uuid", c.tagID.UID().IsPresent(),
-		"assetCount", c.assetCount,
 	)
 
 	err := c.WithProgress(
@@ -119,9 +110,8 @@ func (c *GetCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
 			c.result, fetchErr = c.tagsSvc.GetTag(pctx, tags.GetParams{
-				OrgID:          c.orgID,
-				TagID:          c.tagID,
-				WithAssetCount: c.assetCount,
+				OrgID: c.orgID,
+				TagID: c.tagID,
 			})
 			return fetchErr
 		},
@@ -137,7 +127,7 @@ func (c *GetCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return renderErr
 	}
 
-	// The tag was fetched; only the opted-in asset count failed.
+	// The tag was fetched; only the asset count failed.
 	if c.result.PartialError != nil {
 		formatter.PrintError(c.result.PartialError, cmd)
 	}
