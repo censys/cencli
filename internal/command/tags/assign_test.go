@@ -255,19 +255,16 @@ func TestTagsAssignCommand(t *testing.T) {
 			},
 		},
 		{
-			// Explicit assignment never prompts, but -y is a defensive scripting
-			// habit and rejecting it would buy nothing.
-			name: "--yes is accepted and does nothing in explicit mode",
+			// Explicit assignment never prompts, so --yes has nothing to skip.
+			// It is rejected rather than ignored, like every other bulk-only flag.
+			name: "--yes is rejected in explicit mode",
 			args: []string{"alpha", "8.8.8.8", "--yes"},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
-				m := tagsmocks.NewMockTagsService(ctrl)
-				m.EXPECT().Assign(gomock.Any(), gomock.Any()).Return(
-					assignResult("alpha", []string{"8.8.8.8"}, nil), nil)
-				return m
+				return assignNoCallService(ctrl)
 			},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.NoError(t, err)
-				require.Contains(t, stdout, "8.8.8.8")
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--yes only applies to a bulk assignment")
 			},
 		},
 		{

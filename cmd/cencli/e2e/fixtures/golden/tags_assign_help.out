@@ -33,7 +33,7 @@ Flags:
       --query string        CenQL query selecting the assets to tag. Starts a bulk job instead of assigning explicit assets.
       --timeout string      how long to wait before giving up (requires --wait) - use 0 for no limit (default "30m0s")
   -w, --wait                poll the bulk job until it reaches a final status (requires --query)
-  -y, --yes                 skip the confirmation prompt
+  -y, --yes                 skip the confirmation prompt (requires --query)
 
 Global Flags:
       --debug                   enable debug logging

@@ -235,7 +235,7 @@ Passing `--query` switches to bulk mode; see [Bulk Operations](#bulk-operations)
 **Type:** `string` (duration, e.g. `5m`, `1h`)  
 **Default:** `30m`
 
-**`--yes`, `-y`**: Skip the confirmation prompt. Bulk assignment always confirms unless this is set; it is accepted but has no effect when assigning explicit assets.
+**`--yes`, `-y`**: Skip the confirmation prompt. Requires `--query` — explicit assignment does not prompt, so `--yes` is rejected there rather than silently ignored.
 
 **Type:** `boolean`  
 **Default:** `false`
@@ -246,7 +246,7 @@ Unassign a tag from one or more assets.
 
 ```bash
 $ censys tags unassign my-tag 8.8.8.8                              # one asset
-$ censys tags unassign my-tag 8.8.8.8 1.1.1.1                      # several assets (prompts)
+$ censys tags unassign my-tag 8.8.8.8 1.1.1.1                      # several assets
 $ censys tags unassign my-tag --input-file assets.txt              # read assets from a file
 $ censys tags unassign my-tag --all                                # bulk: every assignment
 $ censys tags unassign my-tag --created-before 2026-01-01T00:00:00Z # bulk: a time window
@@ -256,7 +256,7 @@ Explicit unassignment mirrors `assign`: the same space- or comma-separated asset
 
 Unassigning an asset the tag is **not** assigned to is reported as a failure for that asset, not silently ignored. This is deliberate — it surfaces typos instead of reporting success for an asset you never touched.
 
-Unlike `assign`, unassignment **prompts for confirmation when more than one asset is given** (or when assets come from `--input-file`); a single positional asset does not prompt. In a non-interactive terminal `--yes` is required for those cases.
+Like `assign`, explicit unassignment never prompts — the assets were named on the command line. Only bulk mode confirms.
 
 Passing `--all` or a time filter switches to bulk mode; see [Bulk Operations](#bulk-operations).
 
@@ -292,7 +292,7 @@ Passing `--all` or a time filter switches to bulk mode; see [Bulk Operations](#b
 **Type:** `string` (duration, e.g. `5m`, `1h`)  
 **Default:** `30m`
 
-**`--yes`, `-y`**: Skip the confirmation prompt.
+**`--yes`, `-y`**: Skip the confirmation prompt. Requires `--all` or a time filter — explicit unassignment does not prompt, so `--yes` is rejected there rather than silently ignored.
 
 **Type:** `boolean`  
 **Default:** `false`
@@ -424,22 +424,18 @@ Interrupting a wait (Ctrl-C) stops the polling, not the job. The command tells y
 Cancel a running bulk tag operation.
 
 ```bash
-$ censys tags operations cancel my-tag <operation-id>        # prompts for confirmation
-$ censys tags operations cancel my-tag <operation-id> --yes  # cancel without confirming
+$ censys tags operations cancel my-tag <operation-id>   # stop a running bulk job
 ```
 
 Cancelling stops the job from processing any more assets. **It is not a rollback** — assignments the job has already made or removed stay as they are.
 
 An operation that has already finished cannot be cancelled; the API rejects it with a `Tag operation not cancellable` conflict. A successful cancellation exits 0.
 
-You are prompted to confirm first; in a non-interactive terminal `--yes` is required.
+This command does not prompt: it only stops further processing, and the destructive step was the job it is stopping. There is no `--yes` flag.
 
 #### Flags
 
-**`--yes`, `-y`**: Skip the confirmation prompt.
-
-**Type:** `boolean`  
-**Default:** `false`
+Only the global flags and `--org-id`.
 
 ## Bulk Operations
 

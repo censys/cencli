@@ -18,15 +18,9 @@ import (
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
 
-type cancelSeams struct {
-	confirm    func(ctx context.Context, message string) (bool, error)
-	stdinIsTTY func() bool
-}
-
 func runOperationsCancelCommand(
 	t *testing.T,
 	svc apptags.Service,
-	seams cancelSeams,
 	args []string,
 ) (stdout, stderr string, err error) {
 	t.Helper()
@@ -46,12 +40,6 @@ func runOperationsCancelCommand(
 	mockStore := storemocks.NewMockStore(ctrl)
 	cmdContext := command.NewCommandContext(cfg, mockStore, command.WithTagsService(svc))
 	cmd := NewOperationsCancelCommand(cmdContext)
-	if seams.confirm != nil {
-		cmd.confirm = seams.confirm
-	}
-	if seams.stdinIsTTY != nil {
-		cmd.stdinIsTTY = seams.stdinIsTTY
-	}
 	rootCmd, buildErr := command.RootCommandToCobra(cmd)
 	require.NoError(t, buildErr)
 
@@ -77,13 +65,12 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 	testCases := []struct {
 		name    string
 		args    []string
-		seams   cancelSeams
 		service func(t *testing.T, ctrl *gomock.Controller) apptags.Service
 		assert  func(t *testing.T, stdout, stderr string, err error)
 	}{
 		{
-			name: "--yes cancels and renders the operation",
-			args: []string{"my-tag", testOperationID, "--yes"},
+			name: "cancels and renders the operation",
+			args: []string{"my-tag", testOperationID},
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().CancelOperation(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -106,7 +93,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 			// The API answers with the operation as it stood when the request was
 			// accepted, so a job still winding down is a success, not a failure.
 			name: "a still-running operation after cancelling still exits zero",
-			args: []string{"my-tag", testOperationID, "--yes"},
+			args: []string{"my-tag", testOperationID},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().CancelOperation(gomock.Any(), gomock.Any()).Return(cancelled("running"), nil)
@@ -121,7 +108,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 			// Unlike a --wait, reading back a failed job here is not this command's
 			// verdict: the cancellation request itself succeeded.
 			name: "a failed operation after cancelling still exits zero",
-			args: []string{"my-tag", testOperationID, "--yes"},
+			args: []string{"my-tag", testOperationID},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().CancelOperation(gomock.Any(), gomock.Any()).Return(cancelled("failed"), nil)
@@ -133,12 +120,10 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "accepting the prompt cancels",
+			// Cancelling only stops further processing, so it runs unprompted -
+			// including with nothing on stdin, where a prompt could not be answered.
+			name: "cancels without prompting",
 			args: []string{"my-tag", testOperationID},
-			seams: cancelSeams{
-				stdinIsTTY: alwaysTTY(),
-				confirm:    func(context.Context, string) (bool, error) { return true, nil },
-			},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().CancelOperation(gomock.Any(), gomock.Any()).Return(cancelled("cancelled"), nil)
@@ -150,35 +135,21 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "declining the prompt aborts without cancelling",
-			args: []string{"my-tag", testOperationID},
-			seams: cancelSeams{
-				stdinIsTTY: alwaysTTY(),
-				confirm:    func(context.Context, string) (bool, error) { return false, nil },
-			},
-			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
-				return cancelNoCallService(ctrl)
-			},
-			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.NoError(t, err)
-				require.Contains(t, stderr, "Cancellation aborted.")
-			},
-		},
-		{
-			name:  "non-interactive without --yes refuses to cancel",
-			args:  []string{"my-tag", testOperationID},
-			seams: cancelSeams{stdinIsTTY: func() bool { return false }},
+			// --yes belongs to the flows that still confirm; keeping a dead flag
+			// here would imply this one prompts.
+			name: "--yes is not a flag on cancel",
+			args: []string{"my-tag", testOperationID, "--yes"},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				return cancelNoCallService(ctrl)
 			},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "confirmation required")
+				require.Contains(t, err.Error(), "unknown flag")
 			},
 		},
 		{
 			name: "non-UUID operation ID is rejected before the service",
-			args: []string{"my-tag", "not-a-uuid", "--yes"},
+			args: []string{"my-tag", "not-a-uuid"},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				return cancelNoCallService(ctrl)
 			},
@@ -189,7 +160,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 		},
 		{
 			name: "empty tag is rejected before the service",
-			args: []string{"  ", testOperationID, "--yes"},
+			args: []string{"  ", testOperationID},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				return cancelNoCallService(ctrl)
 			},
@@ -200,7 +171,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 		},
 		{
 			name: "missing the operation argument is rejected",
-			args: []string{"my-tag", "--yes"},
+			args: []string{"my-tag"},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				return cancelNoCallService(ctrl)
 			},
@@ -211,7 +182,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 		{
 			name: "org id is threaded to the service",
 			args: []string{
-				"my-tag", testOperationID, "--yes",
+				"my-tag", testOperationID,
 				"--org-id", "11111111-1111-1111-1111-111111111111",
 			},
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
@@ -229,7 +200,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 		},
 		{
 			name: "json output renders the operation payload",
-			args: []string{"my-tag", testOperationID, "--yes", "--output-format", "json"},
+			args: []string{"my-tag", testOperationID, "--output-format", "json"},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().CancelOperation(gomock.Any(), gomock.Any()).Return(cancelled("cancelled"), nil)
@@ -244,7 +215,7 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 		{
 			// A finished job cannot be cancelled; that error must surface.
 			name: "service error is returned",
-			args: []string{"my-tag", testOperationID, "--yes"},
+			args: []string{"my-tag", testOperationID},
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().CancelOperation(gomock.Any(), gomock.Any()).Return(
@@ -262,42 +233,8 @@ func TestTagsOperationsCancelCommand(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			// Cancelling always confirms, so default to --yes-free runs being on a
-			// TTY with an accepted prompt.
-			seams := tc.seams
-			if seams.stdinIsTTY == nil {
-				seams.stdinIsTTY = alwaysTTY()
-			}
-			if seams.confirm == nil {
-				seams.confirm = func(context.Context, string) (bool, error) { return true, nil }
-			}
-
-			stdout, stderr, err := runOperationsCancelCommand(t, tc.service(t, ctrl), seams, tc.args)
+			stdout, stderr, err := runOperationsCancelCommand(t, tc.service(t, ctrl), tc.args)
 			tc.assert(t, stdout, stderr, err)
 		})
 	}
-}
-
-// TestTagsOperationsCancelCommand_ConfirmationMessage pins what the prompt tells
-// the user before they stop a job. Cancelling is not a rollback, so the prompt
-// has to name the operation and say that processed assets keep their change.
-func TestTagsOperationsCancelCommand_ConfirmationMessage(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	var prompt string
-	seams := cancelSeams{
-		stdinIsTTY: alwaysTTY(),
-		confirm: func(_ context.Context, message string) (bool, error) {
-			prompt = message
-			// Declining keeps the test off the cancel path.
-			return false, nil
-		},
-	}
-
-	_, _, err := runOperationsCancelCommand(t, cancelNoCallService(ctrl), seams,
-		[]string{"my-tag", testOperationID})
-	require.NoError(t, err)
-	require.Contains(t, prompt, testOperationID)
-	require.Contains(t, prompt, "already processed")
 }

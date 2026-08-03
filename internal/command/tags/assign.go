@@ -153,7 +153,8 @@ func (c *AssignCommand) Init() error {
 		"poll the bulk job until it reaches a final status (requires --query)")
 	c.flags.timeout = flags.NewHumanDurationFlag(c.Flags(), false, "timeout", "",
 		mo.Some(defaultWaitTimeout), "how long to wait before giving up (requires --wait) - use 0 for no limit")
-	c.flags.yes = flags.NewBoolFlag(c.Flags(), "yes", "y", false, "skip the confirmation prompt")
+	c.flags.yes = flags.NewBoolFlag(c.Flags(), "yes", "y", false,
+		"skip the confirmation prompt (requires --query)")
 	return nil
 }
 
@@ -211,7 +212,8 @@ func (c *AssignCommand) parseModeFlags(cmd *cobra.Command, args []string) cencli
 	}
 
 	// Flags that only steer a bulk job would silently do nothing in explicit mode.
-	for _, name := range []string{"max-assets", "wait", "timeout"} {
+	// --yes is one of them: explicit assignment never prompts.
+	for _, name := range []string{"max-assets", "wait", "timeout", "yes"} {
 		if !c.bulk && cmd.Flags().Changed(name) {
 			return NewFlagRequiresQueryError(name)
 		}
