@@ -198,7 +198,7 @@ $ censys tags assign my-tag --query 'host.services.port: 22' # bulk: every match
 
 Positional assets may be separated by spaces or commas (`8.8.8.8,1.1.1.1`); a file supplies one asset per line. Assets are validated before anything is sent — if one identifier is unrecognized, the whole call is rejected and no assignment is made.
 
-Each asset is then assigned **independently, one request per asset**: if one fails the rest still proceed, and every per-asset outcome is reported. A run where some assets succeeded and some failed is a *partial success* — it prints a summary to stderr and still **exits 0**. Only a run where every asset failed exits non-zero.
+Each asset is then assigned **independently, one request per asset**: if one fails the rest still proceed, and every per-asset outcome is reported. A run where some assets succeeded and some failed is a *partial success* — it prints a summary to stderr and still **exits 0**. A run where none succeeded **exits 1**, but still prints the same per-asset results first, so you can see which assets failed and why.
 
 Assigning a tag to an asset that already has it fails for that asset with an `already exists` error from the API.
 
@@ -492,9 +492,25 @@ Templates (`-O template`) are not supported for `tags`.
 | Code | Meaning                                                                     |
 | ---- | --------------------------------------------------------------------------- |
 | 0    | Success, including a partial success where some assets failed                |
-| 1    | API error, missing credentials, or a waited-on operation that ended `failed`/`cancelled` |
+| 1    | API error, missing credentials, an explicit assign/unassign where no asset succeeded, or a waited-on operation that ended `failed`/`cancelled` |
 | 2    | Usage or input error — an invalid flag value, an unknown asset, a rejected flag combination |
 | 124  | Timed out                                                                    |
 | 130  | Interrupted                                                                  |
 
 Partial failures are reported on stderr and do not change the exit code; check the per-asset results in the output to see which assets failed.
+
+`assign` and `unassign` always print their per-asset results, even when **every** asset failed — that run exits 1, but the table (or the `-O json` array) still lists each asset and its error. A script can rely on getting parseable output from an explicit assign or unassign whatever the exit code, as long as the tag itself resolved.
+
+Each failed asset reports a one-line reason and the HTTP status behind it, so you can tell an asset that already carries the tag (`409`) from one you cannot touch (`403`):
+
+```console
+$ censys tags assign my-tag 8.8.8.8 9.9.9.9
+
+Assigned tag "my-tag" to 1 of 2 asset(s)
+
+Asset     Type   Status     Error
+9.9.9.9 | host | assigned | -
+8.8.8.8 | host | failed   | Tag assignment already exists (409)
+```
+
+In `-O json`/`yaml` those are the `error` and `error_status` fields, so a script can branch on the status code without matching on message text.

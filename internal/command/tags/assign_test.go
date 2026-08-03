@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samber/mo"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -96,10 +97,18 @@ func assignResult(tagID string, assigned []string, failures map[string]string) a
 	}
 	for asset, msg := range failures {
 		res.Failures = append(res.Failures, apptags.AssignmentFailure{
-			AssetID: asset, Err: cenclierrors.NewCencliError(errors.New(msg)),
+			AssetID: asset,
+			Err:     cenclierrors.NewCencliError(errors.New(msg)),
+			// The service reduces every failure to a one-line Detail; the views
+			// read that, not Err, so the fixture has to carry it too.
+			Detail: msg,
+			Status: mo.Some(int64(409)),
 		})
 	}
-	if len(res.Failures) > 0 {
+	// Mirrors the service: a partial error only when something also succeeded.
+	// A run where every asset failed is not partial, and the command turns it
+	// into a non-zero exit itself.
+	if len(res.Failures) > 0 && len(res.Assignments) > 0 {
 		res.PartialError = cenclierrors.ToPartialError(
 			cenclierrors.NewCencliError(errors.New("some assets failed")))
 	}
@@ -345,6 +354,77 @@ func bulkSubmitAndWait(ctrl *gomock.Controller, finalStatus string) apptags.Serv
 
 // alwaysTTY makes the command believe it can prompt.
 func alwaysTTY() func() bool { return func() bool { return true } }
+
+// TestTagsAssignCommand_AllAssetsFail pins the contract for a run where no asset
+// succeeded: the per-asset results still render in every output mode, and the
+// exit code is non-zero. Re-assigning already-tagged assets makes this the
+// common failure, not an edge case - the API returns 409 for every one.
+func TestTagsAssignCommand_AllAssetsFail(t *testing.T) {
+	allFailed := func(ctrl *gomock.Controller) apptags.Service {
+		m := tagsmocks.NewMockTagsService(ctrl)
+		m.EXPECT().Assign(gomock.Any(), gomock.Any()).Return(
+			assignResult("alpha", nil, map[string]string{
+				"8.8.8.8": "assignment already exists",
+				"1.1.1.1": "assignment already exists",
+			}), nil)
+		return m
+	}
+
+	t.Run("short output lists every failed asset and exits non-zero", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		stdout, stderr, err := runAssignCommand(t, allFailed(ctrl),
+			[]string{"alpha", "8.8.8.8", "1.1.1.1"}, nil)
+
+		require.Error(t, err)
+		require.Equal(t, 1, formatter.ExitCode(err))
+		// Both assets named, not just whichever failed first.
+		require.Contains(t, stdout, "8.8.8.8")
+		require.Contains(t, stdout, "1.1.1.1")
+		require.Contains(t, stdout, "already exists")
+		require.Contains(t, err.Error(), "2 of 2 failed")
+		// Nothing was tagged, so the index-lag note would be nonsense.
+		require.NotContains(t, stderr, "few minutes")
+	})
+
+	t.Run("json output still emits the full array", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		stdout, _, err := runAssignCommand(t, allFailed(ctrl),
+			[]string{"alpha", "8.8.8.8", "1.1.1.1", "--output-format", "json"}, nil)
+
+		require.Error(t, err)
+		// The whole point: a script gets parseable results alongside the failure,
+		// where it previously got an empty stdout.
+		require.Contains(t, stdout, `"asset": "8.8.8.8"`)
+		require.Contains(t, stdout, `"asset": "1.1.1.1"`)
+		require.Contains(t, stdout, `"assigned": false`)
+		// A one-line reason plus the status as a number, not the API's whole
+		// problem document escaped into a string.
+		require.Contains(t, stdout, `"error": "assignment already exists"`)
+		require.Contains(t, stdout, `"error_status": 409`)
+		require.NotContains(t, stdout, `\"title\"`)
+	})
+
+	t.Run("a cut-short run does not claim every asset failed", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// One failure recorded out of three assets: the loop stopped early, so
+		// the message must count what was attempted, not what was asked for.
+		m := tagsmocks.NewMockTagsService(ctrl)
+		m.EXPECT().Assign(gomock.Any(), gomock.Any()).Return(
+			assignResult("alpha", nil, map[string]string{"8.8.8.8": "boom"}), nil)
+
+		_, _, err := runAssignCommand(t, m,
+			[]string{"alpha", "8.8.8.8", "1.1.1.1", "9.9.9.9"}, nil)
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "1 of 3 failed")
+	})
+}
 
 func TestTagsAssignCommand_Bulk(t *testing.T) {
 	const query = "host.services.port: 22"

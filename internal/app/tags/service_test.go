@@ -860,7 +860,10 @@ func TestTagsService_Assign(t *testing.T) {
 			},
 		},
 		{
-			name: "all assets fail: first error returned, no partial result",
+			// Every asset failing must still report every asset. Collapsing the
+			// run to one error would hide which assets failed and why, and would
+			// leave -O json with nothing to emit at all.
+			name: "all assets fail: every failure is kept",
 			client: func(ctrl *gomock.Controller) client.Client {
 				m := mocks.NewMockClient(ctrl)
 				m.EXPECT().CreateTagAssignment(gomock.Any(), gomock.Any()).
@@ -873,9 +876,21 @@ func TestTagsService_Assign(t *testing.T) {
 				AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
 			},
 			assert: func(t *testing.T, res AssignResult, err cenclierrors.CencliError) {
-				require.Error(t, err)
+				// Not a hard error: the command renders the outcomes and owns the
+				// exit code, the way it does for a terminal operation status.
+				require.NoError(t, err)
 				require.Empty(t, res.Assignments)
-				require.Contains(t, err.Error(), "Permission denied")
+				require.Len(t, res.Failures, 2)
+				require.Equal(t, "8.8.8.8", res.Failures[0].AssetID)
+				require.Equal(t, "1.1.1.1", res.Failures[1].AssetID)
+				require.Contains(t, res.Failures[0].Err.Error(), "Permission denied")
+				// Detail is the API's one-line summary, not the whole problem
+				// document Err renders - a report of many assets cannot spend a
+				// dozen lines on each one.
+				require.Equal(t, "Permission denied", res.Failures[0].Detail)
+				require.Equal(t, mo.Some(int64(403)), res.Failures[0].Status)
+				// Nothing partially succeeded, so a partial error would be a lie.
+				require.NoError(t, res.PartialError)
 			},
 		},
 		{
@@ -1102,7 +1117,9 @@ func TestTagsService_Unassign(t *testing.T) {
 			},
 		},
 		{
-			name: "all assets fail: first error returned, no partial result",
+			// The common shape of this: a typo'd list where nothing is assigned.
+			// Naming only the first asset would leave the rest unaccounted for.
+			name: "all assets fail: every failure is kept",
 			client: func(ctrl *gomock.Controller) client.Client {
 				m := mocks.NewMockClient(ctrl)
 				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
@@ -1115,9 +1132,17 @@ func TestTagsService_Unassign(t *testing.T) {
 				AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
 			},
 			assert: func(t *testing.T, res UnassignResult, err cenclierrors.CencliError) {
-				require.Error(t, err)
+				require.NoError(t, err)
 				require.Empty(t, res.Unassigned)
-				require.Contains(t, err.Error(), "not assigned")
+				require.Len(t, res.Failures, 2)
+				require.Equal(t, "8.8.8.8", res.Failures[0].AssetID)
+				require.Equal(t, "1.1.1.1", res.Failures[1].AssetID)
+				require.Contains(t, res.Failures[1].Err.Error(), "not assigned")
+				// Our own typed errors carry no API detail or status, so Detail
+				// falls back to the message and Status stays absent.
+				require.Contains(t, res.Failures[1].Detail, "not assigned")
+				require.True(t, res.Failures[1].Status.IsAbsent())
+				require.NoError(t, res.PartialError)
 			},
 		},
 		{

@@ -441,7 +441,7 @@ func (s *tagsService) Assign(
 			if firstErr == nil {
 				firstErr = err
 			}
-			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: err})
+			failures = append(failures, newAssignmentFailure(assetID, err))
 			continue
 		}
 
@@ -458,19 +458,10 @@ func (s *tagsService) Assign(
 		}
 	}
 
-	if len(assignments) == 0 {
-		return AssignResult{}, firstErr
-	}
-
-	// Some assets succeeded. Report per-asset failures via a summary error, or
-	// surface a cancellation (which sets firstErr but records no failure entry)
-	// so an interrupted run is never reported as a clean success.
-	var partial cenclierrors.CencliError
-	switch {
-	case len(failures) > 0:
-		partial = newAssignPartialError(len(failures), total)
-	case firstErr != nil:
-		partial = firstErr
+	partial, fatal := perAssetOutcome(len(assignments), len(failures), firstErr,
+		func() cenclierrors.CencliError { return newAssignPartialError(len(failures), total) })
+	if fatal != nil {
+		return AssignResult{}, fatal
 	}
 
 	return AssignResult{
@@ -478,7 +469,7 @@ func (s *tagsService) Assign(
 		TagID:        params.TagID.String(),
 		Assignments:  assignments,
 		Failures:     failures,
-		PartialError: cenclierrors.ToPartialError(partial),
+		PartialError: partial,
 	}, nil
 }
 
@@ -527,7 +518,7 @@ func (s *tagsService) Unassign(
 			if firstErr == nil {
 				firstErr = err
 			}
-			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: err})
+			failures = append(failures, newAssignmentFailure(assetID, err))
 			continue
 		}
 		if listResult.Data == nil || len(listResult.Data.Assignments) == 0 {
@@ -535,7 +526,7 @@ func (s *tagsService) Unassign(
 			if firstErr == nil {
 				firstErr = notAssigned
 			}
-			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: notAssigned})
+			failures = append(failures, newAssignmentFailure(assetID, notAssigned))
 			continue
 		}
 
@@ -545,7 +536,7 @@ func (s *tagsService) Unassign(
 			if firstErr == nil {
 				firstErr = err
 			}
-			failures = append(failures, AssignmentFailure{AssetID: assetID, Err: err})
+			failures = append(failures, newAssignmentFailure(assetID, err))
 			continue
 		}
 
@@ -560,18 +551,10 @@ func (s *tagsService) Unassign(
 		unassigned = append(unassigned, mapTagAssignment(assignment))
 	}
 
-	if len(unassigned) == 0 {
-		return UnassignResult{}, firstErr
-	}
-
-	// Summarize per-asset failures, or surface a cancellation (firstErr with no
-	// failure entry) so an interrupted run is never reported as a clean success.
-	var partial cenclierrors.CencliError
-	switch {
-	case len(failures) > 0:
-		partial = newUnassignPartialError(len(failures), total)
-	case firstErr != nil:
-		partial = firstErr
+	partial, fatal := perAssetOutcome(len(unassigned), len(failures), firstErr,
+		func() cenclierrors.CencliError { return newUnassignPartialError(len(failures), total) })
+	if fatal != nil {
+		return UnassignResult{}, fatal
 	}
 
 	return UnassignResult{
@@ -579,7 +562,7 @@ func (s *tagsService) Unassign(
 		TagID:        params.TagID.String(),
 		Unassigned:   unassigned,
 		Failures:     failures,
-		PartialError: cenclierrors.ToPartialError(partial),
+		PartialError: partial,
 	}, nil
 }
 

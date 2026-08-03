@@ -222,3 +222,29 @@ func (e *confirmationRequiredError) Error() string {
 func (e *confirmationRequiredError) Title() string { return "Confirmation Required" }
 
 func (e *confirmationRequiredError) ShouldPrintUsage() bool { return true }
+
+// allAssetsFailedError signals that no asset in an explicit assign or unassign
+// succeeded. The per-asset outcomes were still rendered; this only drives the
+// exit code, the way operationFailedError does after a wait. It counts failures
+// against assets requested rather than saying "all", since an interrupted run
+// records fewer failures than it was given assets.
+type allAssetsFailedError struct {
+	failed    int
+	requested int
+	// verb is the past participle: "assigned" or "unassigned".
+	verb string
+}
+
+// NewAllAssetsFailedError reports that no asset in the run succeeded.
+func NewAllAssetsFailedError(failed, requested int, verb string) cenclierrors.CencliError {
+	return &allAssetsFailedError{failed: failed, requested: requested, verb: verb}
+}
+
+func (e *allAssetsFailedError) Error() string {
+	return fmt.Sprintf("no asset was %s; %d of %d failed - see the per-asset results above",
+		e.verb, e.failed, e.requested)
+}
+
+func (e *allAssetsFailedError) Title() string { return "All Assets Failed" }
+
+func (e *allAssetsFailedError) ShouldPrintUsage() bool { return false }
