@@ -208,8 +208,8 @@ func optionalInt64(v mo.Option[uint64]) mo.Option[int64] {
 
 // GetTag retrieves a single tag by name or UUID. The endpoint accepts either
 // interchangeably, so the raw identifier is passed straight through (no resolve
-// roundtrip). When params.WithAssetCount is set, a second request counts the
-// tag's assignments.
+// roundtrip). A second request counts the tag's assignments, which the tag
+// payload itself does not carry.
 func (s *tagsService) GetTag(
 	ctx context.Context,
 	params GetParams,
@@ -236,8 +236,10 @@ func (s *tagsService) GetTag(
 		tag = mapTag(*result.Data)
 	}
 
+	// An empty ID means the response carried no tag to count against, so there is
+	// nothing to ask the assignments endpoint about.
 	var countErr cenclierrors.CencliError
-	if params.WithAssetCount && tag.ID != "" {
+	if tag.ID != "" {
 		tag.AssetCount, countErr = s.assetCount(ctx, orgIDStr, tag.ID)
 	}
 

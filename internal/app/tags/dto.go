@@ -23,12 +23,10 @@ type ListParams struct {
 	MaxPages  mo.Option[uint64]
 }
 
-// GetParams bundles inputs for retrieving a single tag by name or UUID. The tag
-// payload carries no assignment count, so WithAssetCount opts into a second request.
+// GetParams bundles inputs for retrieving a single tag by name or UUID.
 type GetParams struct {
-	OrgID          mo.Option[identifiers.OrganizationID]
-	TagID          identifiers.TagID
-	WithAssetCount bool
+	OrgID mo.Option[identifiers.OrganizationID]
+	TagID identifiers.TagID
 }
 
 // CreateParams bundles inputs for creating a tag.
@@ -219,8 +217,10 @@ type Tag struct {
 	CreatedBy   string    `json:"created_by" yaml:"created_by"`
 	CreatedAt   time.Time `json:"created_at" yaml:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" yaml:"updated_at"`
-	// AssetCount is only populated where it was asked for (`get --asset-count`);
-	// the API does not return it with the tag.
+	// AssetCount is only populated by `get`, which counts the assignments in a
+	// second request; the API does not return it with the tag. It stays nil on
+	// the commands that do not count (list, create, update), and on a get whose
+	// count failed.
 	AssetCount *int64 `json:"asset_count,omitempty" yaml:"asset_count,omitempty"`
 }
 
