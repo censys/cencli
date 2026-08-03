@@ -35,6 +35,8 @@ To see global flags and how they affect these commands, see the [global configur
 
 **Tags** are identified by **name or UUID**, interchangeably — tag names are unique within an organization. `tags get` hands the identifier straight to the API, which resolves names itself. Every other command needs the tag's UUID, so passing a name costs one extra lookup to resolve it; passing a UUID never does.
 
+An identifier that looks like a UUID is treated as an **ID first**. If no tag has that ID, it is then tried as a **name** — so a tag whose name happens to be UUID-shaped still works everywhere, at the cost of one extra lookup once the ID reading has failed. Where both readings exist, the ID wins.
+
 **Assets** are identified by type:
 
 | Asset type   | Identifier                                | Example           |

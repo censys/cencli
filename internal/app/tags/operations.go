@@ -53,31 +53,31 @@ func (s *tagsService) ListOperations(
 
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	// An absent tag lists org-wide; a name is resolved since the filter is by UUID.
-	tagID := allTagsSelector
-	if params.TagID.IsPresent() {
-		resolved, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID.MustGet())
-		if resolveErr != nil {
-			return OperationsResult{}, resolveErr
-		}
-		tagID = resolved
-	}
-
 	pageSize := optionalInt64(params.PageSize)
 
-	listFn := func(pageToken mo.Option[string]) (client.Result[components.TagOperationsList], client.ClientError) {
-		return s.client.ListTagOperations(ctx, client.ListTagOperationsRequest{
-			OrgID:     orgIDStr,
-			TagID:     tagID,
-			Type:      params.Type,
-			Status:    params.Status,
-			OrderBy:   params.OrderBy,
-			PageSize:  pageSize,
-			PageToken: pageToken,
-		})
+	listPage := func(tagID string) (paginated[TagOperation], cenclierrors.CencliError) {
+		listFn := func(pageToken mo.Option[string]) (client.Result[components.TagOperationsList], client.ClientError) {
+			return s.client.ListTagOperations(ctx, client.ListTagOperationsRequest{
+				OrgID:     orgIDStr,
+				TagID:     tagID,
+				Type:      params.Type,
+				Status:    params.Status,
+				OrderBy:   params.OrderBy,
+				PageSize:  pageSize,
+				PageToken: pageToken,
+			})
+		}
+		return paginate(ctx, params.MaxPages, "operations", listFn, extractOperationsPage)
 	}
 
-	page, err := paginate(ctx, params.MaxPages, "operations", listFn, extractOperationsPage)
+	// An absent tag lists org-wide, which needs no resolution at all.
+	var page paginated[TagOperation]
+	var err cenclierrors.CencliError
+	if params.TagID.IsPresent() {
+		page, err = callWithTag(ctx, s, orgIDStr, params.TagID.MustGet(), listPage)
+	} else {
+		page, err = listPage(allTagsSelector)
+	}
 	if err != nil {
 		return OperationsResult{}, err
 	}
@@ -98,12 +98,15 @@ func (s *tagsService) GetOperation(
 ) (GetOperationResult, cenclierrors.CencliError) {
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	tagID, operationID, err := s.resolveOperationTarget(ctx, orgIDStr, params.TagID, params.OperationID)
+	operationID, err := requireOperationUUID(params.OperationID)
 	if err != nil {
 		return GetOperationResult{}, err
 	}
 
-	result, err := s.client.GetTagOperation(ctx, orgIDStr, tagID, operationID)
+	result, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (client.Result[components.TagOperation], cenclierrors.CencliError) {
+			return s.client.GetTagOperation(ctx, orgIDStr, tagID, operationID)
+		})
 	if err != nil {
 		return GetOperationResult{}, err
 	}
@@ -120,12 +123,15 @@ func (s *tagsService) CancelOperation(
 ) (CancelOperationResult, cenclierrors.CencliError) {
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	tagID, operationID, err := s.resolveOperationTarget(ctx, orgIDStr, params.TagID, params.OperationID)
+	operationID, err := requireOperationUUID(params.OperationID)
 	if err != nil {
 		return CancelOperationResult{}, err
 	}
 
-	result, err := s.client.CancelTagOperation(ctx, orgIDStr, tagID, operationID)
+	result, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (client.Result[components.TagOperation], cenclierrors.CencliError) {
+			return s.client.CancelTagOperation(ctx, orgIDStr, tagID, operationID)
+		})
 	if err != nil {
 		return CancelOperationResult{}, err
 	}
@@ -160,6 +166,7 @@ func (s *tagsService) WaitForOperation(
 
 	interval := initialPollInterval
 	lastStatus := ""
+	retriedByName := false
 
 	for {
 		result, getErr := s.client.GetTagOperation(pollCtx, orgIDStr, tagID, operationID)
@@ -168,6 +175,16 @@ func (s *tagsService) WaitForOperation(
 			// stopped us rather than whichever context observed it first.
 			if waitErr := s.waitContextError(ctx, pollCtx, operationID, lastStatus, params.Timeout); waitErr != nil {
 				return GetOperationResult{}, waitErr
+			}
+			// The tag may be one whose name is UUID-shaped. Retry against the tag
+			// of that name and carry on polling the corrected ID - but only once,
+			// since the lookup would keep returning the same answer and spin.
+			if !retriedByName {
+				if retry := s.resolveNameCollision(pollCtx, orgIDStr, params.TagID, getErr); retry.IsPresent() {
+					tagID = retry.MustGet()
+					retriedByName = true
+					continue
+				}
 			}
 			return GetOperationResult{}, getErr
 		}
@@ -213,23 +230,35 @@ func (s *tagsService) waitContextError(
 	return nil
 }
 
+// requireOperationUUID rejects an operation ID the endpoints could not accept,
+// before any request is spent on it.
+func requireOperationUUID(operationID string) (string, cenclierrors.CencliError) {
+	if _, err := uuid.Parse(operationID); err != nil {
+		return "", NewInvalidOperationIDError(operationID)
+	}
+	return operationID, nil
+}
+
 // resolveOperationTarget turns a caller-supplied tag identifier and operation ID
-// into the UUID pair the operation endpoints require.
+// into the UUID pair the operation endpoints require. Used by the wait loop,
+// which resolves once and then polls; the single-request verbs go through
+// callWithTag instead so they also get the tag-name fallback.
 func (s *tagsService) resolveOperationTarget(
 	ctx context.Context,
 	orgID mo.Option[string],
 	tagID identifiers.TagID,
 	operationID string,
 ) (string, string, cenclierrors.CencliError) {
-	if _, err := uuid.Parse(operationID); err != nil {
-		return "", "", NewInvalidOperationIDError(operationID)
+	id, err := requireOperationUUID(operationID)
+	if err != nil {
+		return "", "", err
 	}
 
 	resolved, err := s.resolveTagID(ctx, orgID, tagID)
 	if err != nil {
 		return "", "", err
 	}
-	return resolved, operationID, nil
+	return resolved, id, nil
 }
 
 // isTerminalStatus reports whether an operation has finished, for any outcome.

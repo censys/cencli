@@ -227,6 +227,7 @@ func TestTagsService_BulkAssign(t *testing.T) {
 					client.Result[components.TagOperation]{},
 					clientStructuredError("Permission denied", 403),
 				)
+				expectNoTagOfThatName(m)
 				return m
 			},
 			params: BulkAssignParams{
@@ -415,6 +416,7 @@ func TestTagsService_BulkUnassign(t *testing.T) {
 					client.Result[components.TagOperation]{},
 					clientStructuredError("Permission denied", 403),
 				)
+				expectNoTagOfThatName(m)
 				return m
 			},
 			params: BulkUnassignParams{TagID: identifiers.NewTagID(testTagUUID)},

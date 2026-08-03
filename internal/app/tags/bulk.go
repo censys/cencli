@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/censys/censys-sdk-go/models/components"
+
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
@@ -24,17 +26,15 @@ func (s *tagsService) BulkAssign(
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
 	// The endpoint keys off the tag UUID, so a name costs one lookup first.
-	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
-	if resolveErr != nil {
-		return BulkAssignResult{}, resolveErr
-	}
-
-	result, err := s.client.BulkCreateTagAssignments(ctx, client.BulkCreateTagAssignmentsRequest{
-		OrgID:     orgIDStr,
-		TagID:     tagID,
-		Query:     query,
-		MaxAssets: params.MaxAssets,
-	})
+	result, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (client.Result[components.TagOperation], cenclierrors.CencliError) {
+			return s.client.BulkCreateTagAssignments(ctx, client.BulkCreateTagAssignmentsRequest{
+				OrgID:     orgIDStr,
+				TagID:     tagID,
+				Query:     query,
+				MaxAssets: params.MaxAssets,
+			})
+		})
 	if err != nil {
 		return BulkAssignResult{}, err
 	}
@@ -59,17 +59,15 @@ func (s *tagsService) BulkUnassign(
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
 	// The endpoint keys off the tag UUID, so a name costs one lookup first.
-	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
-	if resolveErr != nil {
-		return BulkUnassignResult{}, resolveErr
-	}
-
-	result, err := s.client.BulkDeleteTagAssignments(ctx, client.BulkDeleteTagAssignmentsRequest{
-		OrgID:         orgIDStr,
-		TagID:         tagID,
-		CreatedBefore: params.CreatedBefore,
-		CreatedAfter:  params.CreatedAfter,
-	})
+	result, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (client.Result[components.TagOperation], cenclierrors.CencliError) {
+			return s.client.BulkDeleteTagAssignments(ctx, client.BulkDeleteTagAssignmentsRequest{
+				OrgID:         orgIDStr,
+				TagID:         tagID,
+				CreatedBefore: params.CreatedBefore,
+				CreatedAfter:  params.CreatedAfter,
+			})
+		})
 	if err != nil {
 		return BulkUnassignResult{}, err
 	}
