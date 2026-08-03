@@ -707,6 +707,11 @@ func TestTagsService_UpdateTag(t *testing.T) {
 				structuredErr := client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
 				m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{TagID: tagUUID.String(), Name: mo.Some("x")}).
 					Return(client.Result[components.Tag]{}, structuredErr)
+				// A missing tag ID is also how a UUID-shaped *name* looks, so one
+				// lookup asks whether any tag carries that name. Nothing does here,
+				// so the API's original error is what the caller sees.
+				m.EXPECT().ListTags(gomock.Any(), gomock.Any()).
+					Return(client.Result[components.TagsList]{Data: &components.TagsList{}}, nil)
 				return m
 			},
 			params: UpdateParams{TagID: identifiers.NewTagID(tagUUID.String()), Name: mo.Some("x")},
@@ -741,6 +746,14 @@ func assignmentResult(id, assetID string) client.Result[components.TagAssignment
 			PlatformRef: "https://platform.censys.io/hosts/" + assetID,
 		},
 	}
+}
+
+// expectNoTagOfThatName satisfies the name fallback with an empty lookup. Any
+// test whose UUID-shaped tag gets a missing-tag response needs it, since the
+// service then asks whether a tag is *named* that UUID before giving up.
+func expectNoTagOfThatName(m *mocks.MockClient) {
+	m.EXPECT().ListTags(gomock.Any(), gomock.Any()).
+		Return(client.Result[components.TagsList]{Data: &components.TagsList{}}, nil)
 }
 
 func clientStructuredError(detail string, status int64) client.ClientError {
@@ -869,6 +882,7 @@ func TestTagsService_Assign(t *testing.T) {
 				m.EXPECT().CreateTagAssignment(gomock.Any(), gomock.Any()).
 					Return(client.Result[components.TagAssignment]{}, clientStructuredError("Permission denied", 403)).
 					Times(2)
+				expectNoTagOfThatName(m)
 				return m
 			},
 			params: AssignParams{
@@ -1356,6 +1370,7 @@ func TestTagsService_DeleteTag(t *testing.T) {
 				structuredErr := client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
 				m.EXPECT().DeleteTag(gomock.Any(), mo.None[string](), tagUUID.String()).
 					Return(client.Metadata{}, structuredErr)
+				expectNoTagOfThatName(m)
 				return m
 			},
 			params: DeleteParams{TagID: identifiers.NewTagID(tagUUID.String())},
@@ -1558,6 +1573,7 @@ func TestTagsService_ListAssignments(t *testing.T) {
 				m := mocks.NewMockClient(ctrl)
 				m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
 					Return(client.Result[components.TagAssignmentsList]{}, clientStructuredError("Permission denied", 403))
+				expectNoTagOfThatName(m)
 				return m
 			},
 			params: AssignmentsParams{TagID: identifiers.NewTagID(tagUUID.String())},
@@ -1747,6 +1763,122 @@ func TestTagsService_ListAssignments_Streaming(t *testing.T) {
 		streamed = append(streamed, assignment.AssetID)
 	}
 	require.Equal(t, []string{"8.8.8.8", "1.1.1.1", "9.9.9.9"}, streamed)
+}
+
+// TestTagsService_UUIDShapedName covers a tag whose *name* is a UUID. A UUID is
+// read as an ID first, so the API finds nothing; the verbs then retry against
+// the tag carrying that name. Without this, such a tag is reachable only by its
+// real ID and cannot be managed by the name its owner gave it.
+func TestTagsService_UUIDShapedName(t *testing.T) {
+	// The name the user typed, which happens to be UUID-shaped.
+	const name = "11111111-1111-1111-1111-111111111111"
+	// The tag's actual ID, which is what the endpoints need.
+	realID := uuid.New().String()
+
+	// notFound is how the API answers an ID nothing carries.
+	notFound := func() client.ClientError { return clientStructuredError("Tag not found", 404) }
+	// namedTag is the lookup that finds the tag by that name.
+	namedTag := func(m *mocks.MockClient) {
+		m.EXPECT().ListTags(gomock.Any(), client.ListTagsRequest{
+			Name: mo.Some(name), PageSize: mo.Some(int64(1)),
+		}).Return(client.Result[components.TagsList]{
+			Metadata: okMeta(),
+			Data:     &components.TagsList{Tags: []components.Tag{{ID: realID, Name: name}}, TotalSize: 1},
+		}, nil)
+	}
+
+	t.Run("get retries against the tag of that name", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), name).
+			Return(client.Result[components.Tag]{}, notFound())
+		namedTag(m)
+		m.EXPECT().GetTag(gomock.Any(), mo.None[string](), realID).
+			Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: realID, Name: name}}, nil)
+		m.EXPECT().ListTagAssignments(gomock.Any(), gomock.Any()).
+			Return(assignmentsPage(nil, 0, ""), nil)
+
+		res, err := New(m).GetTag(context.Background(), GetParams{TagID: identifiers.NewTagID(name)})
+		require.NoError(t, err)
+		require.Equal(t, realID, res.Tag.ID)
+	})
+
+	t.Run("delete retries against the tag of that name", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().DeleteTag(gomock.Any(), mo.None[string](), name).
+			Return(client.Metadata{}, notFound())
+		namedTag(m)
+		m.EXPECT().DeleteTag(gomock.Any(), mo.None[string](), realID).Return(okMeta(), nil)
+
+		res, err := New(m).DeleteTag(context.Background(), DeleteParams{TagID: identifiers.NewTagID(name)})
+		require.NoError(t, err)
+		// The result echoes what the user typed, not the ID we resolved to.
+		require.Equal(t, name, res.TagID)
+	})
+
+	t.Run("update retries against the tag of that name", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{TagID: name, Privacy: mo.Some("shared")}).
+			Return(client.Result[components.Tag]{}, notFound())
+		namedTag(m)
+		m.EXPECT().UpdateTag(gomock.Any(), client.UpdateTagRequest{TagID: realID, Privacy: mo.Some("shared")}).
+			Return(client.Result[components.Tag]{Metadata: okMeta(), Data: &components.Tag{ID: realID, Name: name}}, nil)
+
+		res, err := New(m).UpdateTag(context.Background(), UpdateParams{
+			TagID: identifiers.NewTagID(name), Privacy: mo.Some("shared"),
+		})
+		require.NoError(t, err)
+		require.Equal(t, realID, res.Tag.ID)
+	})
+
+	t.Run("assign retries the whole run, without double-assigning", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		// Both assets fail against the ID reading, so nothing was assigned.
+		m.EXPECT().CreateTagAssignment(gomock.Any(), client.CreateTagAssignmentRequest{TagID: name, AssetID: "8.8.8.8"}).
+			Return(client.Result[components.TagAssignment]{}, notFound())
+		m.EXPECT().CreateTagAssignment(gomock.Any(), client.CreateTagAssignmentRequest{TagID: name, AssetID: "1.1.1.1"}).
+			Return(client.Result[components.TagAssignment]{}, notFound())
+		namedTag(m)
+		// Exactly one retry per asset against the real ID - no more.
+		m.EXPECT().CreateTagAssignment(gomock.Any(), client.CreateTagAssignmentRequest{TagID: realID, AssetID: "8.8.8.8"}).
+			Return(assignmentResult("a1", "8.8.8.8"), nil)
+		m.EXPECT().CreateTagAssignment(gomock.Any(), client.CreateTagAssignmentRequest{TagID: realID, AssetID: "1.1.1.1"}).
+			Return(assignmentResult("a2", "1.1.1.1"), nil)
+
+		res, err := New(m).Assign(context.Background(), AssignParams{
+			TagID: identifiers.NewTagID(name), AssetIDs: []string{"8.8.8.8", "1.1.1.1"},
+		})
+		require.NoError(t, err)
+		require.Len(t, res.Assignments, 2)
+		require.Empty(t, res.Failures)
+	})
+
+	t.Run("a UUID that is neither an ID nor a name keeps the API error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().DeleteTag(gomock.Any(), mo.None[string](), name).
+			Return(client.Metadata{}, notFound())
+		// The name lookup comes back empty, so there is nothing to retry against.
+		m.EXPECT().ListTags(gomock.Any(), gomock.Any()).
+			Return(client.Result[components.TagsList]{Data: &components.TagsList{}}, nil)
+
+		_, err := New(m).DeleteTag(context.Background(), DeleteParams{TagID: identifiers.NewTagID(name)})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Tag not found")
+	})
 }
 
 func TestTagsService_GetTag_AssetCount(t *testing.T) {

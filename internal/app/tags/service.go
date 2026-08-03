@@ -2,6 +2,7 @@ package tags
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -133,29 +134,28 @@ func (s *tagsService) ListAssignments(
 
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
-	if resolveErr != nil {
-		return AssignmentsResult{}, resolveErr
-	}
-
 	pageSize := optionalInt64(params.PageSize)
 
-	listFn := func(pageToken mo.Option[string]) (client.Result[components.TagAssignmentsList], client.ClientError) {
-		return s.client.ListTagAssignments(ctx, client.ListTagAssignmentsRequest{
-			OrgID:         orgIDStr,
-			TagID:         tagID,
-			AssetID:       params.AssetID,
-			AssetType:     params.AssetType,
-			CreatedBy:     params.CreatedBy,
-			CreatedBefore: params.CreatedBefore,
-			CreatedAfter:  params.CreatedAfter,
-			OrderBy:       params.OrderBy,
-			PageSize:      pageSize,
-			PageToken:     pageToken,
+	// paginate only returns a hard error when the *first* page failed, so a retry
+	// here cannot re-emit anything already streamed.
+	page, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (paginated[Assignment], cenclierrors.CencliError) {
+			listFn := func(pageToken mo.Option[string]) (client.Result[components.TagAssignmentsList], client.ClientError) {
+				return s.client.ListTagAssignments(ctx, client.ListTagAssignmentsRequest{
+					OrgID:         orgIDStr,
+					TagID:         tagID,
+					AssetID:       params.AssetID,
+					AssetType:     params.AssetType,
+					CreatedBy:     params.CreatedBy,
+					CreatedBefore: params.CreatedBefore,
+					CreatedAfter:  params.CreatedAfter,
+					OrderBy:       params.OrderBy,
+					PageSize:      pageSize,
+					PageToken:     pageToken,
+				})
+			}
+			return paginate(ctx, params.MaxPages, "assignments", listFn, extractAssignmentsPage)
 		})
-	}
-
-	page, err := paginate(ctx, params.MaxPages, "assignments", listFn, extractAssignmentsPage)
 	if err != nil {
 		return AssignmentsResult{}, err
 	}
@@ -216,9 +216,19 @@ func (s *tagsService) GetTag(
 ) (GetResult, cenclierrors.CencliError) {
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
+	// The endpoint resolves names itself, so this does not go through
+	// resolveTagID - but it reads a UUID-shaped value as an ID exactly like the
+	// rest of the API does, so the same name fallback applies.
 	result, err := s.client.GetTag(ctx, orgIDStr, params.TagID.String())
 	if err != nil {
-		return GetResult{}, err
+		retry := s.resolveNameCollision(ctx, orgIDStr, params.TagID, err)
+		if retry.IsAbsent() {
+			return GetResult{}, err
+		}
+		result, err = s.client.GetTag(ctx, orgIDStr, retry.MustGet())
+		if err != nil {
+			return GetResult{}, err
+		}
 	}
 
 	var meta *responsemeta.ResponseMeta
@@ -332,18 +342,16 @@ func (s *tagsService) UpdateTag(
 
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
-	if resolveErr != nil {
-		return UpdateResult{}, resolveErr
-	}
-
-	result, err := s.client.UpdateTag(ctx, client.UpdateTagRequest{
-		OrgID:       orgIDStr,
-		TagID:       tagID,
-		Name:        params.Name,
-		Description: params.Description,
-		Privacy:     params.Privacy,
-	})
+	result, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (client.Result[components.Tag], cenclierrors.CencliError) {
+			return s.client.UpdateTag(ctx, client.UpdateTagRequest{
+				OrgID:       orgIDStr,
+				TagID:       tagID,
+				Name:        params.Name,
+				Description: params.Description,
+				Privacy:     params.Privacy,
+			})
+		})
 	if err != nil {
 		return UpdateResult{}, err
 	}
@@ -374,12 +382,10 @@ func (s *tagsService) DeleteTag(
 ) (DeleteResult, cenclierrors.CencliError) {
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	tagID, resolveErr := s.resolveTagID(ctx, orgIDStr, params.TagID)
-	if resolveErr != nil {
-		return DeleteResult{}, resolveErr
-	}
-
-	metadata, err := s.client.DeleteTag(ctx, orgIDStr, tagID)
+	metadata, err := callWithTag(ctx, s, orgIDStr, params.TagID,
+		func(tagID string) (client.Metadata, cenclierrors.CencliError) {
+			return s.client.DeleteTag(ctx, orgIDStr, tagID)
+		})
 	if err != nil {
 		return DeleteResult{}, err
 	}
@@ -416,6 +422,20 @@ func (s *tagsService) Assign(
 		return AssignResult{}, resolveErr
 	}
 
+	result, err := s.assignEach(ctx, orgIDStr, params, tagID)
+	if retry := s.retryTagForRun(ctx, orgIDStr, params.TagID, len(result.Assignments), result.Failures, err); retry.IsPresent() {
+		return s.assignEach(ctx, orgIDStr, params, retry.MustGet())
+	}
+	return result, err
+}
+
+// assignEach runs the per-asset loop against one resolved tag ID.
+func (s *tagsService) assignEach(
+	ctx context.Context,
+	orgIDStr mo.Option[string],
+	params AssignParams,
+	tagID string,
+) (AssignResult, cenclierrors.CencliError) {
 	total := len(params.AssetIDs)
 	assignments := make([]Assignment, 0, total)
 	var failures []AssignmentFailure
@@ -491,6 +511,20 @@ func (s *tagsService) Unassign(
 		return UnassignResult{}, resolveErr
 	}
 
+	result, err := s.unassignEach(ctx, orgIDStr, params, tagID)
+	if retry := s.retryTagForRun(ctx, orgIDStr, params.TagID, len(result.Unassigned), result.Failures, err); retry.IsPresent() {
+		return s.unassignEach(ctx, orgIDStr, params, retry.MustGet())
+	}
+	return result, err
+}
+
+// unassignEach runs the per-asset lookup+delete loop against one resolved tag ID.
+func (s *tagsService) unassignEach(
+	ctx context.Context,
+	orgIDStr mo.Option[string],
+	params UnassignParams,
+	tagID string,
+) (UnassignResult, cenclierrors.CencliError) {
 	total := len(params.AssetIDs)
 	unassigned := make([]Assignment, 0, total)
 	var failures []AssignmentFailure
@@ -581,23 +615,118 @@ func (s *tagsService) resolveTagID(
 		return "", NewEmptyTagIDError()
 	}
 
-	// A UUID needs no resolution — pass it straight through, no lookup.
+	// A UUID needs no resolution — pass it straight through, no lookup. If no tag
+	// actually has that ID, resolveNameCollision retries it as a name afterwards.
 	if tagID.UID().IsPresent() {
 		return tagID.String(), nil
 	}
 
-	result, err := s.client.ListTags(ctx, client.ListTagsRequest{
-		OrgID:    orgID,
-		Name:     mo.Some(tagID.String()),
-		PageSize: mo.Some(int64(1)),
-	})
+	id, err := s.lookupTagIDByName(ctx, orgID, tagID.String())
 	if err != nil {
 		return "", err
 	}
-	if result.Data == nil || len(result.Data.Tags) == 0 {
+	if id.IsAbsent() {
 		return "", NewTagNotFoundError(tagID.String())
 	}
-	return result.Data.Tags[0].ID, nil
+	return id.MustGet(), nil
+}
+
+// lookupTagIDByName finds a tag's UUID by its exact name. An absent result means
+// no tag carries that name, which is not on its own an error.
+func (s *tagsService) lookupTagIDByName(
+	ctx context.Context,
+	orgID mo.Option[string],
+	name string,
+) (mo.Option[string], cenclierrors.CencliError) {
+	result, err := s.client.ListTags(ctx, client.ListTagsRequest{
+		OrgID:    orgID,
+		Name:     mo.Some(name),
+		PageSize: mo.Some(int64(1)),
+	})
+	if err != nil {
+		return mo.None[string](), err
+	}
+	if result.Data == nil || len(result.Data.Tags) == 0 {
+		return mo.None[string](), nil
+	}
+	return mo.Some(result.Data.Tags[0].ID), nil
+}
+
+// resolveNameCollision settles the case resolveTagID cannot: an identifier that
+// parses as a UUID but is actually a tag's name. IDs win, so it runs only once
+// the API has said nothing carries that ID, keeping the common path at zero
+// extra requests. Absent means "keep the original error".
+func (s *tagsService) resolveNameCollision(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID identifiers.TagID,
+	cause cenclierrors.CencliError,
+) mo.Option[string] {
+	if !tagID.UID().IsPresent() || !isMissingTagError(cause) {
+		return mo.None[string]()
+	}
+
+	// A failure here is not worth surfacing - the caller already has a real error.
+	id, err := s.lookupTagIDByName(ctx, orgID, tagID.String())
+	if err != nil || id.IsAbsent() || id.MustGet() == tagID.String() {
+		return mo.None[string]()
+	}
+	return id
+}
+
+// callWithTag resolves the identifier, runs fn against it, and retries once as a
+// tag name if the API says nothing carries that ID. Every single-request tag verb
+// uses it, so the two readings are tried in the same order everywhere.
+func callWithTag[T any](
+	ctx context.Context,
+	s *tagsService,
+	orgID mo.Option[string],
+	tagID identifiers.TagID,
+	fn func(resolved string) (T, cenclierrors.CencliError),
+) (T, cenclierrors.CencliError) {
+	var zero T
+
+	resolved, err := s.resolveTagID(ctx, orgID, tagID)
+	if err != nil {
+		return zero, err
+	}
+
+	result, err := fn(resolved)
+	if err == nil {
+		return result, nil
+	}
+	if retry := s.resolveNameCollision(ctx, orgID, tagID, err); retry.IsPresent() {
+		return fn(retry.MustGet())
+	}
+	return zero, err
+}
+
+// retryTagForRun reports the tag to re-run a per-asset loop against: set only
+// when the run placed nothing and every asset failed the way a missing tag does,
+// so re-running cannot duplicate work. Shared by Assign and Unassign.
+func (s *tagsService) retryTagForRun(
+	ctx context.Context,
+	orgID mo.Option[string],
+	tagID identifiers.TagID,
+	succeeded int,
+	failures []AssignmentFailure,
+	err cenclierrors.CencliError,
+) mo.Option[string] {
+	if err != nil || succeeded > 0 || len(failures) == 0 {
+		return mo.None[string]()
+	}
+	return s.resolveNameCollision(ctx, orgID, tagID, failures[0].Err)
+}
+
+// isMissingTagError reports whether the API said no such tag exists. A 403 counts:
+// the API masks existence, so forbidden and missing are indistinguishable.
+func isMissingTagError(err cenclierrors.CencliError) bool {
+	var coded interface{ StatusCode() mo.Option[int64] }
+	if !errors.As(err, &coded) {
+		return false
+	}
+	status := coded.StatusCode()
+	return status.IsPresent() && (status.MustGet() == 404 || status.MustGet() == 403)
 }
 
 // mapTag converts an SDK tag into the domain DTO.
