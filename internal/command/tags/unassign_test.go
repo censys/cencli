@@ -83,10 +83,17 @@ func unassignResult(tagID string, unassigned []string, failures map[string]strin
 	}
 	for asset, msg := range failures {
 		res.Failures = append(res.Failures, apptags.AssignmentFailure{
-			AssetID: asset, Err: cenclierrors.NewCencliError(errors.New(msg)),
+			AssetID: asset,
+			Err:     cenclierrors.NewCencliError(errors.New(msg)),
+			// The service reduces every failure to a one-line Detail; the views
+			// read that, not Err, so the fixture has to carry it too.
+			Detail: msg,
 		})
 	}
-	if len(res.Failures) > 0 {
+	// Mirrors the service: a partial error only when something also succeeded.
+	// A run where every asset failed is not partial, and the command turns it
+	// into a non-zero exit itself.
+	if len(res.Failures) > 0 && len(res.Unassigned) > 0 {
 		res.PartialError = cenclierrors.ToPartialError(
 			cenclierrors.NewCencliError(errors.New("some assets failed to unassign")))
 	}
@@ -365,6 +372,51 @@ func bulkUnassignSubmitAndWait(ctrl *gomock.Controller, finalStatus string) appt
 	m.EXPECT().WaitForOperation(gomock.Any(), gomock.Any()).Return(
 		apptags.GetOperationResult{Meta: okMeta(), Operation: finishedDeleteOperation(finalStatus)}, nil)
 	return m
+}
+
+// TestTagsUnassignCommand_AllAssetsFail mirrors the assign contract: when no
+// asset succeeded the per-asset results still render and the exit is non-zero.
+// Unassign reaches this easily, since an asset the tag was never on is a
+// failure by design rather than a silent no-op.
+func TestTagsUnassignCommand_AllAssetsFail(t *testing.T) {
+	allFailed := func(ctrl *gomock.Controller) apptags.Service {
+		m := tagsmocks.NewMockTagsService(ctrl)
+		m.EXPECT().Unassign(gomock.Any(), gomock.Any()).Return(
+			unassignResult("alpha", nil, map[string]string{
+				"8.8.8.8": "asset is not assigned to this tag",
+				"1.1.1.1": "asset is not assigned to this tag",
+			}), nil)
+		return m
+	}
+
+	t.Run("short output lists every failed asset and exits non-zero", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		stdout, stderr, err := runUnassignCommand(t, allFailed(ctrl), noPromptSeams(t),
+			[]string{"alpha", "8.8.8.8", "1.1.1.1"}, nil)
+
+		require.Error(t, err)
+		require.Equal(t, 1, formatter.ExitCode(err))
+		require.Contains(t, stdout, "8.8.8.8")
+		require.Contains(t, stdout, "1.1.1.1")
+		require.Contains(t, stdout, "not assigned")
+		require.Contains(t, err.Error(), "2 of 2 failed")
+		require.NotContains(t, stderr, "few minutes")
+	})
+
+	t.Run("json output still emits the full array", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		stdout, _, err := runUnassignCommand(t, allFailed(ctrl), noPromptSeams(t),
+			[]string{"alpha", "8.8.8.8", "1.1.1.1", "--output-format", "json"}, nil)
+
+		require.Error(t, err)
+		require.Contains(t, stdout, `"asset": "8.8.8.8"`)
+		require.Contains(t, stdout, `"asset": "1.1.1.1"`)
+		require.Contains(t, stdout, `"unassigned": false`)
+	})
 }
 
 func TestTagsUnassignCommand_Bulk(t *testing.T) {

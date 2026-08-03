@@ -146,6 +146,23 @@ func (e *censysClientError) Title() string {
 	return "Error Returned from Censys API"
 }
 
+// Detail returns the API's one-line summary of the failure. Error() renders the
+// whole problem document, which is right for a standalone error but too much for
+// a per-item result, so callers reporting many failures should prefer this.
+func (e *censysClientError) Detail() mo.Option[string] {
+	if e.detail.IsPresent() {
+		return e.detail
+	}
+	// Some responses carry only per-field errors; the first still beats the
+	// full document.
+	for _, ed := range e.errors {
+		if ed.message.IsPresent() {
+			return ed.message
+		}
+	}
+	return e.title
+}
+
 func (e *censysClientError) ShouldPrintUsage() bool {
 	return false
 }

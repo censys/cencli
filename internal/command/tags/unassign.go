@@ -72,12 +72,15 @@ type unassignCommandFlags struct {
 }
 
 // unassignedAsset is the data-mode payload for a single unassignment outcome.
+// Error is the one-line reason, and ErrorStatus the HTTP status behind it, so a
+// script can branch on the code without parsing a message.
 type unassignedAsset struct {
 	Asset       string `json:"asset" yaml:"asset"`
 	AssetType   string `json:"asset_type,omitempty" yaml:"asset_type,omitempty"`
 	PlatformRef string `json:"platform_ref,omitempty" yaml:"platform_ref,omitempty"`
 	Unassigned  bool   `json:"unassigned" yaml:"unassigned"`
 	Error       string `json:"error,omitempty" yaml:"error,omitempty"`
+	ErrorStatus *int64 `json:"error_status,omitempty" yaml:"error_status,omitempty"`
 }
 
 var _ command.Command = (*UnassignCommand)(nil)
@@ -181,9 +184,8 @@ func (c *UnassignCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors
 			return err
 		}
 	} else if !c.yes && !c.stdinIsTTY() {
-		// Only a bulk removal confirms, and the gate sits before the service is
-		// resolved so a non-interactive run without --yes fails cleanly rather
-		// than submitting the job (and before any auth is required).
+		// Only a bulk removal confirms. Gated before the service resolves, so a
+		// non-interactive run without --yes fails before auth or submission.
 		return NewConfirmationRequiredError()
 	}
 
@@ -253,9 +255,8 @@ func (c *UnassignCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Ce
 	return c.runExplicit(cmd, logger.With("count", len(c.assetIDs)))
 }
 
-// runExplicit removes the tag from each given asset, one lookup+delete per asset.
-// It does not confirm: the assets were named on the command line, so there is
-// nothing the caller could learn from a prompt that they did not already type.
+// runExplicit removes the tag from each given asset, one lookup+delete per
+// asset. It does not confirm: the assets were named on the command line.
 func (c *UnassignCommand) runExplicit(cmd *cobra.Command, logger *slog.Logger) cenclierrors.CencliError {
 	err := c.WithProgress(
 		cmd.Context(),
@@ -288,6 +289,11 @@ func (c *UnassignCommand) runExplicit(cmd *cobra.Command, logger *slog.Logger) c
 
 	if c.result.PartialError != nil {
 		formatter.PrintError(c.result.PartialError, cmd)
+	}
+
+	// The results are already rendered; this only drives the exit code.
+	if len(c.result.Unassigned) == 0 && len(c.result.Failures) > 0 {
+		return NewAllAssetsFailedError(len(c.result.Failures), len(c.assetIDs), "unassigned")
 	}
 
 	return nil
@@ -414,11 +420,14 @@ func (c *UnassignCommand) unassignmentViews() []unassignedAsset {
 			Unassigned:  true,
 		})
 	}
+	types := assetTypesByID(c.assetIDs)
 	for _, f := range c.result.Failures {
 		views = append(views, unassignedAsset{
-			Asset:      f.AssetID,
-			Unassigned: false,
-			Error:      f.Err.Error(),
+			Asset:       f.AssetID,
+			AssetType:   types[f.AssetID],
+			Unassigned:  false,
+			Error:       f.Detail,
+			ErrorStatus: f.Status.ToPointer(),
 		})
 	}
 	return views

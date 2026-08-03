@@ -1,6 +1,7 @@
 package tags
 
 import (
+	"errors"
 	"time"
 
 	"github.com/samber/mo"
@@ -218,9 +219,7 @@ type Tag struct {
 	CreatedAt   time.Time `json:"created_at" yaml:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" yaml:"updated_at"`
 	// AssetCount is only populated by `get`, which counts the assignments in a
-	// second request; the API does not return it with the tag. It stays nil on
-	// the commands that do not count (list, create, update), and on a get whose
-	// count failed.
+	// second request; it stays nil elsewhere, and on a get whose count failed.
 	AssetCount *int64 `json:"asset_count,omitempty" yaml:"asset_count,omitempty"`
 }
 
@@ -263,10 +262,59 @@ type Assignment struct {
 	CreatedAt   time.Time `json:"created_at" yaml:"created_at"`
 }
 
-// AssignmentFailure records an asset that could not be assigned.
+// AssignmentFailure records an asset that could not be assigned. Err keeps the
+// full error; Detail and Status are the one-line summary a per-asset report
+// shows, since a run of many assets cannot spend a problem document on each.
 type AssignmentFailure struct {
 	AssetID string
 	Err     cenclierrors.CencliError
+	Detail  string
+	Status  mo.Option[int64]
+}
+
+// summarizedError is the part of an API error worth quoting per asset. The
+// client's structured error implements it; our own typed per-asset errors do
+// not, and fall back to their (already one-line) message.
+type summarizedError interface {
+	Detail() mo.Option[string]
+	StatusCode() mo.Option[int64]
+}
+
+// newAssignmentFailure records a failed asset, reducing its error to the
+// one-line form a per-asset report can display.
+func newAssignmentFailure(assetID string, err cenclierrors.CencliError) AssignmentFailure {
+	failure := AssignmentFailure{AssetID: assetID, Err: err, Detail: err.Error()}
+
+	var summarized summarizedError
+	if errors.As(err, &summarized) {
+		if detail := summarized.Detail(); detail.IsPresent() {
+			failure.Detail = detail.MustGet()
+		}
+		failure.Status = summarized.StatusCode()
+	}
+	return failure
+}
+
+// perAssetOutcome decides what a continue-on-error run reports alongside its
+// per-asset results; Assign and Unassign share it so the two cannot drift. A run
+// that got nowhere has nothing to render, so its error is fatal. Otherwise the
+// results speak for themselves, and only a mixed run or an interrupt adds a
+// partial error - an all-failed run is left for the command to exit non-zero on.
+func perAssetOutcome(
+	succeeded, failed int,
+	firstErr cenclierrors.CencliError,
+	summarize func() cenclierrors.CencliError,
+) (partial, fatal cenclierrors.CencliError) {
+	switch {
+	case succeeded == 0 && failed == 0:
+		return nil, firstErr
+	case succeeded > 0 && failed > 0:
+		return cenclierrors.ToPartialError(summarize()), nil
+	case failed == 0 && firstErr != nil:
+		return cenclierrors.ToPartialError(firstErr), nil
+	default:
+		return nil, nil
+	}
 }
 
 // AssignResult is the outcome of assigning a tag to explicit assets. TagID

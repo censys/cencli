@@ -157,6 +157,27 @@ func gatherAssetIDs(cmd *cobra.Command, inputFile flags.FileFlag, args []string)
 	return classifyAssetIDs(raw)
 }
 
+// assetTypesByID maps each already-validated asset ID to its type, so a failed
+// asset can still report one - the API only echoes a type back for assets it
+// accepted. The values use the API's vocabulary, since successful rows in the
+// same table are labeled by it: the domain says "webproperty", the API
+// "web_property".
+func assetTypesByID(ids []string) map[string]string {
+	classifier := assets.NewAssetClassifier(ids...)
+	types := make(map[string]string, len(ids))
+
+	for _, h := range classifier.HostIDs() {
+		types[h.String()] = "host"
+	}
+	for _, c := range classifier.CertificateIDs() {
+		types[c.String()] = "certificate"
+	}
+	for _, w := range classifier.WebPropertyIDs() {
+		types[w.String()] = "web_property"
+	}
+	return types
+}
+
 // classifyAssetIDs validates raw asset inputs and returns their normalized IDs.
 // Mixed asset types are allowed — every caller acts on one asset per request, so
 // AssetType() is never consulted and only unparseable inputs are rejected.

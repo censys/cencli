@@ -71,6 +71,8 @@ type assignCommandFlags struct {
 }
 
 // assignedAsset is the data-mode payload for a single assignment outcome.
+// Error is the one-line reason, and ErrorStatus the HTTP status behind it, so a
+// script can branch on the code without parsing a message.
 type assignedAsset struct {
 	Asset        string `json:"asset" yaml:"asset"`
 	AssignmentID string `json:"assignment_id,omitempty" yaml:"assignment_id,omitempty"`
@@ -78,6 +80,7 @@ type assignedAsset struct {
 	PlatformRef  string `json:"platform_ref,omitempty" yaml:"platform_ref,omitempty"`
 	Assigned     bool   `json:"assigned" yaml:"assigned"`
 	Error        string `json:"error,omitempty" yaml:"error,omitempty"`
+	ErrorStatus  *int64 `json:"error_status,omitempty" yaml:"error_status,omitempty"`
 }
 
 var _ command.Command = (*AssignCommand)(nil)
@@ -280,6 +283,11 @@ func (c *AssignCommand) runExplicit(cmd *cobra.Command, logger *slog.Logger) cen
 		formatter.PrintError(c.result.PartialError, cmd)
 	}
 
+	// The results are already rendered; this only drives the exit code.
+	if len(c.result.Assignments) == 0 && len(c.result.Failures) > 0 {
+		return NewAllAssetsFailedError(len(c.result.Failures), len(c.assetIDs), "assigned")
+	}
+
 	return nil
 }
 
@@ -397,11 +405,14 @@ func (c *AssignCommand) assignmentViews() []assignedAsset {
 			Assigned:     true,
 		})
 	}
+	types := assetTypesByID(c.assetIDs)
 	for _, f := range c.result.Failures {
 		views = append(views, assignedAsset{
-			Asset:    f.AssetID,
-			Assigned: false,
-			Error:    f.Err.Error(),
+			Asset:       f.AssetID,
+			AssetType:   types[f.AssetID],
+			Assigned:    false,
+			Error:       f.Detail,
+			ErrorStatus: f.Status.ToPointer(),
 		})
 	}
 	return views

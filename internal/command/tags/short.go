@@ -145,6 +145,19 @@ func (c *AssignmentsCommand) RenderShort() cenclierrors.CencliError {
 	return nil
 }
 
+// failureReason renders a per-asset error for a table cell, or "-" for a row
+// that succeeded. The status is worth the characters: it distinguishes an asset
+// that already carries the tag (409) from one the caller cannot touch (403).
+func failureReason(detail string, status *int64) string {
+	if detail == "" {
+		return "-"
+	}
+	if status == nil {
+		return detail
+	}
+	return fmt.Sprintf("%s (%d)", detail, *status)
+}
+
 // RenderShort renders the per-asset assignment outcomes as a styled table
 // (TTY-aware), or the tracking operation when the assignment was a bulk job.
 func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
@@ -184,9 +197,6 @@ func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
 				if a.Assigned {
 					return "assigned"
 				}
-				if a.Error != "" {
-					return "failed: " + a.Error
-				}
 				return "failed"
 			},
 			Style: func(s string, a assignedAsset) string {
@@ -194,6 +204,14 @@ func (c *AssignCommand) RenderShort() cenclierrors.CencliError {
 					return styles.NewStyle(styles.ColorSage).Render(s)
 				}
 				return styles.NewStyle(styles.ColorRed).Render(s)
+			},
+		},
+		{
+			// Its own column so a long message cannot stretch Status.
+			Title:  "Error",
+			String: func(a assignedAsset) string { return failureReason(a.Error, a.ErrorStatus) },
+			Style: func(s string, _ assignedAsset) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
 			},
 		},
 	}
@@ -253,9 +271,6 @@ func (c *UnassignCommand) RenderShort() cenclierrors.CencliError {
 				if a.Unassigned {
 					return "unassigned"
 				}
-				if a.Error != "" {
-					return "failed: " + a.Error
-				}
 				return "failed"
 			},
 			Style: func(s string, a unassignedAsset) string {
@@ -263,6 +278,14 @@ func (c *UnassignCommand) RenderShort() cenclierrors.CencliError {
 					return styles.NewStyle(styles.ColorSage).Render(s)
 				}
 				return styles.NewStyle(styles.ColorRed).Render(s)
+			},
+		},
+		{
+			// Its own column so a long message cannot stretch Status.
+			Title:  "Error",
+			String: func(a unassignedAsset) string { return failureReason(a.Error, a.ErrorStatus) },
+			Style: func(s string, _ unassignedAsset) string {
+				return styles.NewStyle(styles.ColorGray).Render(s)
 			},
 		},
 	}
