@@ -220,7 +220,7 @@ Passing `--query` switches to bulk mode; see [Bulk Operations](#bulk-operations)
 **Type:** `string`  
 **Default:** none
 
-**`--max-assets`**: Cap the number of assets a bulk job tags. The effective cap is the smaller of this and your plan's tag asset limit. Requires `--query`.
+**`--max-assets`**: Cap the number of assets a bulk job tags. Requires `--query`. A single bulk job tags at most **100,000 assets**, so the effective cap is the smallest of this flag, that ceiling, and your plan's tag asset limit — see [Bulk Operations](#bulk-operations).
 
 **Type:** `integer` (≥ 0; `0` means no explicit cap)  
 **Default:** none
@@ -452,6 +452,8 @@ $ censys tags unassign my-tag --created-before 2026-01-01T00:00:00Z
 ```
 
 **Entering bulk mode.** `assign` enters it only via `--query`; it is never inferred from a missing asset list. `unassign` enters it via `--all` **or** a time filter. `--all` means *every* assignment, so narrowing it with `--created-before`/`--created-after` contradicts itself and is rejected. In both commands, bulk mode cannot be combined with explicit assets or `--input-file`, and the bulk-only flags (`--max-assets`, `--wait`, `--timeout`) are rejected outside it rather than silently ignored.
+
+**How many assets a job tags.** A single bulk job tags at most **100,000 assets**, however many the query matches. Three separate limits apply and the smallest wins: this fixed per-job ceiling, your plan's overall tag asset limit, and `--max-assets` if you set one. A job that stops at a limit finishes as `limit_reached` rather than `failed`, and reports how many assets it processed. To cover a query matching more than the ceiling, split it into narrower queries and submit each as its own job.
 
 **Confirmation.** Bulk operations always prompt before submitting, unless `--yes` is set. In a non-interactive terminal `--yes` is required — the prompt is gated before the job is submitted, so a script without it fails instead of launching a large job silently.
 
