@@ -4,21 +4,16 @@ UUID, and the operation's UUID.
 Cancelling stops the job from processing any more assets; it does not undo the assignments
 it has already made or removed. An operation that has already finished cannot be          
 cancelled.                                                                                
-                                                                                          
-You are prompted to confirm before the cancellation is requested. Use --yes to skip the   
-prompt; in a non-interactive terminal --yes is required.                                  
 
 Usage:
   censys tags operations cancel <tag> <operation-id> [flags]
 
 Examples:
-  censys tags operations cancel my-tag <operation-id> # Cancel an operation (prompts for confirmation)
-  censys tags operations cancel my-tag <operation-id> --yes # Cancel without confirming
+  censys tags operations cancel my-tag <operation-id> # Stop a running bulk job
 
 Flags:
   -h, --help            help for cancel
   -o, --org-id string   organization ID to target (personal access tokens only)
-  -y, --yes             skip the confirmation prompt
 
 Global Flags:
       --debug                   enable debug logging

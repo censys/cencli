@@ -416,15 +416,15 @@ var tagsFixtures = []Fixture{
 		},
 	},
 	{
-		// Removing more than one asset prompts for confirmation; a non-interactive
-		// run (e2e is non-TTY) without --yes must refuse rather than proceed.
-		Name:      "unassign multi-asset requires confirmation",
-		Args:      []string{"unassign", "my-tag", "8.8.8.8", "1.1.1.1"},
+		// Explicit unassignment never prompts, so --yes has nothing to skip and is
+		// rejected outside bulk mode rather than silently ignored.
+		Name:      "unassign yes without bulk mode",
+		Args:      []string{"unassign", "my-tag", "8.8.8.8", "1.1.1.1", "--yes"},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assert.Contains(t, string(stderr), "confirmation required")
+			assert.Contains(t, string(stderr), "--yes only applies to a bulk unassignment")
 		},
 	},
 	// No live bulk-unassign fixture either: a bulk job mutates at scale and cannot
@@ -755,7 +755,7 @@ var tagsFixtures = []Fixture{
 	// internal/command/tags).
 	{
 		Name:      "operations cancel non-uuid operation id",
-		Args:      []string{"operations", "cancel", "my-tag", "not-a-uuid", "--yes"},
+		Args:      []string{"operations", "cancel", "my-tag", "not-a-uuid"},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
@@ -765,7 +765,7 @@ var tagsFixtures = []Fixture{
 	},
 	{
 		Name:      "operations cancel missing operation id",
-		Args:      []string{"operations", "cancel", "my-tag", "--yes"},
+		Args:      []string{"operations", "cancel", "my-tag"},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
@@ -775,7 +775,7 @@ var tagsFixtures = []Fixture{
 	},
 	{
 		Name:      "operations cancel empty tag",
-		Args:      []string{"operations", "cancel", "   ", "d421a231-eb5e-4927-a0be-8aa749eb731c", "--yes"},
+		Args:      []string{"operations", "cancel", "   ", "d421a231-eb5e-4927-a0be-8aa749eb731c"},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
@@ -784,14 +784,14 @@ var tagsFixtures = []Fixture{
 		},
 	},
 	{
-		// e2e runs without a TTY, so cancelling cannot prompt and must refuse.
-		Name:      "operations cancel non-interactive without yes",
-		Args:      []string{"operations", "cancel", "my-tag", "d421a231-eb5e-4927-a0be-8aa749eb731c"},
+		// Cancelling does not confirm, so --yes is not a flag here at all.
+		Name:      "operations cancel rejects yes",
+		Args:      []string{"operations", "cancel", "my-tag", "d421a231-eb5e-4927-a0be-8aa749eb731c", "--yes"},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assert.Contains(t, string(stderr), "confirmation required")
+			assert.Contains(t, string(stderr), "unknown flag: --yes")
 		},
 	},
 	{

@@ -99,20 +99,6 @@ func unassignNoCallService(ctrl *gomock.Controller) apptags.Service {
 	return tagsmocks.NewMockTagsService(ctrl)
 }
 
-// ttySeams simulates an interactive terminal with a confirm that returns the
-// given answer, recording whether it was invoked.
-func ttySeams(answer bool, called *bool) unassignSeams {
-	return unassignSeams{
-		confirm: func(_ context.Context, _ string) (bool, error) {
-			if called != nil {
-				*called = true
-			}
-			return answer, nil
-		},
-		stdinIsTTY: func() bool { return true },
-	}
-}
-
 // noPromptSeams fails the test if the confirm prompt is ever shown.
 func noPromptSeams(t *testing.T) unassignSeams {
 	t.Helper()
@@ -154,9 +140,11 @@ func TestTagsUnassignCommand(t *testing.T) {
 			},
 		},
 		{
-			name:  "multiple assets prompt and proceed when accepted",
+			// Explicit unassignment does not prompt, however many assets are named:
+			// they were all typed by the caller. Only a bulk removal confirms.
+			name:  "multiple assets do not prompt and are threaded in order",
 			args:  []string{"alpha", "8.8.8.8", "1.1.1.1"},
-			seams: func(t *testing.T) unassignSeams { called := false; return ttySeams(true, &called) },
+			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
 				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -172,47 +160,35 @@ func TestTagsUnassignCommand(t *testing.T) {
 			},
 		},
 		{
-			name:  "multiple assets aborted when declined - service not called",
+			// Nothing on stdin used to be fatal here; with no prompt to answer it
+			// is now just a normal run.
+			name:  "multiple assets run without a terminal",
 			args:  []string{"alpha", "8.8.8.8", "1.1.1.1"},
-			seams: func(t *testing.T) unassignSeams { called := false; return ttySeams(false, &called) },
+			seams: func(_ *testing.T) unassignSeams { return unassignSeams{stdinIsTTY: func() bool { return false }} },
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
-				return unassignNoCallService(ctrl)
-			},
-			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.NoError(t, err)
-				require.Contains(t, stderr, "Unassign aborted.")
-			},
-		},
-		{
-			name:    "multiple assets non-TTY without --yes requires confirmation",
-			args:    []string{"alpha", "8.8.8.8", "1.1.1.1"},
-			seams:   func(_ *testing.T) unassignSeams { return unassignSeams{stdinIsTTY: func() bool { return false }} },
-			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service { return unassignNoCallService(ctrl) },
-			assert: func(t *testing.T, stdout, stderr string, err error) {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "confirmation required")
-			},
-		},
-		{
-			name:  "--yes skips the prompt for multiple assets",
-			args:  []string{"alpha", "8.8.8.8", "1.1.1.1", "--yes"},
-			seams: noPromptSeams,
-			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
-				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, p apptags.UnassignParams) (apptags.UnassignResult, cenclierrors.CencliError) {
-						require.Equal(t, []string{"8.8.8.8", "1.1.1.1"}, p.AssetIDs)
-						return unassignResult("alpha", p.AssetIDs, nil), nil
-					})
+				m.EXPECT().Unassign(gomock.Any(), gomock.Any()).Return(
+					unassignResult("alpha", []string{"8.8.8.8", "1.1.1.1"}, nil), nil)
 				return m
 			},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
+			},
+		},
+		{
+			// --yes has nothing to skip outside bulk mode, so it is rejected
+			// rather than ignored, like --wait and --timeout.
+			name:    "--yes is rejected in explicit mode",
+			args:    []string{"alpha", "8.8.8.8", "1.1.1.1", "--yes"},
+			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service { return unassignNoCallService(ctrl) },
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--yes only applies to a bulk unassignment")
 			},
 		},
 		{
 			name:  "comma-separated positional assets are split",
-			args:  []string{"alpha", "8.8.8.8,1.1.1.1", "--yes"},
+			args:  []string{"alpha", "8.8.8.8,1.1.1.1"},
 			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
@@ -228,8 +204,8 @@ func TestTagsUnassignCommand(t *testing.T) {
 			},
 		},
 		{
-			name:  "stdin input via --input-file - (prompts, skipped with --yes)",
-			args:  []string{"alpha", "--input-file", "-", "--yes"},
+			name:  "stdin input via --input-file -",
+			args:  []string{"alpha", "--input-file", "-"},
 			stdin: bytes.NewBufferString("8.8.8.8\n1.1.1.1\n"),
 			seams: noPromptSeams,
 			service: func(t *testing.T, ctrl *gomock.Controller) apptags.Service {
@@ -273,7 +249,7 @@ func TestTagsUnassignCommand(t *testing.T) {
 		},
 		{
 			name:  "partial failure is surfaced to stderr but data still renders",
-			args:  []string{"alpha", "8.8.8.8", "1.1.1.1", "--yes"},
+			args:  []string{"alpha", "8.8.8.8", "1.1.1.1"},
 			seams: noPromptSeams,
 			service: func(_ *testing.T, ctrl *gomock.Controller) apptags.Service {
 				m := tagsmocks.NewMockTagsService(ctrl)
@@ -875,6 +851,6 @@ func TestTagsUnassignCommand_InputFile(t *testing.T) {
 			return unassignResult("alpha", p.AssetIDs, nil), nil
 		})
 
-	_, _, err := runUnassignCommand(t, m, noPromptSeams(t), []string{"alpha", "--input-file", file, "--yes"}, nil)
+	_, _, err := runUnassignCommand(t, m, noPromptSeams(t), []string{"alpha", "--input-file", file}, nil)
 	require.NoError(t, err)
 }

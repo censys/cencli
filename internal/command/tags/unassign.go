@@ -39,11 +39,10 @@ type UnassignCommand struct {
 	// flags the command uses
 	flags unassignCommandFlags
 	// state - populated by PreRun
-	orgID         mo.Option[identifiers.OrganizationID]
-	tagID         identifiers.TagID
-	assetIDs      []string
-	yes           bool
-	confirmNeeded bool
+	orgID    mo.Option[identifiers.OrganizationID]
+	tagID    identifiers.TagID
+	assetIDs []string
+	yes      bool
 	// bulk state - only meaningful when bulk is true
 	bulk          bool
 	all           bool
@@ -104,9 +103,7 @@ func (c *UnassignCommand) Long() string {
 
 Assets can be passed as positional arguments or read from a file (or STDIN) with --input-file. Assets of different types can be mixed in a single call. Each asset is unassigned independently: if one fails the rest still proceed, and the per-asset outcomes are reported.
 
-Use --all instead to remove every one of the tag's assignments, or --created-before/--created-after to remove only those created in a time window. Either form starts an asynchronous bulk job and reports the operation tracking it; it cannot be combined with explicit assets, and --all cannot be narrowed by a time filter. Bulk unassignment always asks for confirmation unless --yes is set.
-
-Unassigning more than one explicit asset (or reading assets from --input-file) also prompts for confirmation. Use --yes to skip the prompt; in a non-interactive terminal --yes is required for those cases.`
+Use --all instead to remove every one of the tag's assignments, or --created-before/--created-after to remove only those created in a time window. Either form starts an asynchronous bulk job and reports the operation tracking it; it cannot be combined with explicit assets, and --all cannot be narrowed by a time filter. Bulk unassignment always asks for confirmation unless --yes is set.`
 }
 
 func (c *UnassignCommand) Examples() []string {
@@ -151,7 +148,8 @@ func (c *UnassignCommand) Init() error {
 		"poll the bulk job until it reaches a final status (requires --all or a time filter)")
 	c.flags.timeout = flags.NewHumanDurationFlag(c.Flags(), false, "timeout", "",
 		mo.Some(defaultWaitTimeout), "how long to wait before giving up (requires --wait) - use 0 for no limit")
-	c.flags.yes = flags.NewBoolFlag(c.Flags(), "yes", "y", false, "skip the confirmation prompt")
+	c.flags.yes = flags.NewBoolFlag(c.Flags(), "yes", "y", false,
+		"skip the confirmation prompt (requires --all or a time filter)")
 	return nil
 }
 
@@ -182,16 +180,10 @@ func (c *UnassignCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors
 		if err != nil {
 			return err
 		}
-		// A single positional asset does not prompt.
-		c.confirmNeeded = c.flags.inputFile.IsSet() || len(c.assetIDs) > 1
-	} else {
-		// A bulk removal is never silent, however few assignments it touches.
-		c.confirmNeeded = true
-	}
-
-	// Gate before resolving the service so a non-interactive run that needs a
-	// prompt fails cleanly rather than proceeding (and before auth is required).
-	if c.confirmNeeded && !c.yes && !c.stdinIsTTY() {
+	} else if !c.yes && !c.stdinIsTTY() {
+		// Only a bulk removal confirms, and the gate sits before the service is
+		// resolved so a non-interactive run without --yes fails cleanly rather
+		// than submitting the job (and before any auth is required).
 		return NewConfirmationRequiredError()
 	}
 
@@ -236,7 +228,8 @@ func (c *UnassignCommand) parseModeFlags(cmd *cobra.Command, args []string) cenc
 	}
 
 	// Flags that only steer a bulk job would silently do nothing in explicit mode.
-	for _, name := range []string{"wait", "timeout"} {
+	// --yes is one of them: explicit unassignment never prompts.
+	for _, name := range []string{"wait", "timeout", "yes"} {
 		if !c.bulk && cmd.Flags().Changed(name) {
 			return NewFlagRequiresAllError(name)
 		}
@@ -261,19 +254,9 @@ func (c *UnassignCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Ce
 }
 
 // runExplicit removes the tag from each given asset, one lookup+delete per asset.
+// It does not confirm: the assets were named on the command line, so there is
+// nothing the caller could learn from a prompt that they did not already type.
 func (c *UnassignCommand) runExplicit(cmd *cobra.Command, logger *slog.Logger) cenclierrors.CencliError {
-	if c.confirmNeeded && !c.yes {
-		message := fmt.Sprintf("Unassign tag %q from %d asset(s)?", c.tagID.String(), len(c.assetIDs))
-		confirmed, err := confirmAction(cmd.Context(), c.confirm, message)
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			formatter.Println(formatter.Stderr, "Unassign aborted.")
-			return nil
-		}
-	}
-
 	err := c.WithProgress(
 		cmd.Context(),
 		logger,

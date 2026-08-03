@@ -3,7 +3,6 @@ package tags
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
@@ -13,16 +12,13 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/flags"
-	"github.com/censys/cencli/internal/pkg/formatter"
-	"github.com/censys/cencli/internal/pkg/term"
-	"github.com/censys/cencli/internal/pkg/ui/form"
 )
 
 const operationsCancelCmdName = "cancel"
 
 // OperationsCancelCommand implements `tags operations cancel <tag> <op-id>`,
-// stopping a running bulk job. It prompts for confirmation unless --yes is set,
-// since cancelling does not undo the work already committed.
+// stopping a running bulk job. It does not confirm: cancelling only stops
+// further processing, and the destructive step was the job it is stopping.
 type OperationsCancelCommand struct {
 	*command.BaseCommand
 	// services the command uses
@@ -33,17 +29,12 @@ type OperationsCancelCommand struct {
 	orgID       mo.Option[identifiers.OrganizationID]
 	tagID       identifiers.TagID
 	operationID string
-	yes         bool
 	// result stores the cancelled operation for rendering
 	result tags.CancelOperationResult
-	// seams - overridable in tests; defaulted in NewOperationsCancelCommand
-	confirm    func(ctx context.Context, message string) (bool, error)
-	stdinIsTTY func() bool
 }
 
 type operationsCancelCommandFlags struct {
 	orgID flags.OrgIDFlag
-	yes   flags.BoolFlag
 }
 
 var _ command.Command = (*OperationsCancelCommand)(nil)
@@ -51,8 +42,6 @@ var _ command.Command = (*OperationsCancelCommand)(nil)
 func NewOperationsCancelCommand(cmdContext *command.Context) *OperationsCancelCommand {
 	return &OperationsCancelCommand{
 		BaseCommand: command.NewBaseCommand(cmdContext),
-		confirm:     form.Confirm,
-		stdinIsTTY:  func() bool { return term.IsTTY(os.Stdin) },
 	}
 }
 
@@ -67,15 +56,12 @@ func (c *OperationsCancelCommand) Short() string {
 func (c *OperationsCancelCommand) Long() string {
 	return `Cancel a running bulk tag operation, identified by the tag it belongs to, given by name or UUID, and the operation's UUID.
 
-Cancelling stops the job from processing any more assets; it does not undo the assignments it has already made or removed. An operation that has already finished cannot be cancelled.
-
-You are prompted to confirm before the cancellation is requested. Use --yes to skip the prompt; in a non-interactive terminal --yes is required.`
+Cancelling stops the job from processing any more assets; it does not undo the assignments it has already made or removed. An operation that has already finished cannot be cancelled.`
 }
 
 func (c *OperationsCancelCommand) Examples() []string {
 	return []string{
-		"my-tag <operation-id> # Cancel an operation (prompts for confirmation)",
-		"my-tag <operation-id> --yes # Cancel without confirming",
+		"my-tag <operation-id> # Stop a running bulk job",
 	}
 }
 
@@ -93,17 +79,12 @@ func (c *OperationsCancelCommand) SupportedOutputTypes() []command.OutputType {
 
 func (c *OperationsCancelCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
-	c.flags.yes = flags.NewBoolFlag(c.Flags(), "yes", "y", false, "skip the confirmation prompt")
 	return nil
 }
 
 func (c *OperationsCancelCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	var err cenclierrors.CencliError
 	c.orgID, err = c.flags.orgID.Value()
-	if err != nil {
-		return err
-	}
-	c.yes, err = c.flags.yes.Value()
 	if err != nil {
 		return err
 	}
@@ -117,13 +98,6 @@ func (c *OperationsCancelCommand) PreRun(cmd *cobra.Command, args []string) cenc
 		return err
 	}
 
-	// Gate the confirmation before resolving the service so a non-interactive
-	// invocation without --yes fails with a clear confirmation error rather than
-	// cancelling silently (and before any auth is required).
-	if !c.yes && !c.stdinIsTTY() {
-		return NewConfirmationRequiredError()
-	}
-
 	return c.resolveTagsService()
 }
 
@@ -131,21 +105,7 @@ func (c *OperationsCancelCommand) Run(cmd *cobra.Command, args []string) cenclie
 	logger := c.Logger(cmdName).With(
 		"orgID_set", c.orgID.IsPresent(),
 		"tagID_is_uuid", c.tagID.UID().IsPresent(),
-		"yes", c.yes,
 	)
-
-	if !c.yes {
-		message := fmt.Sprintf(
-			"Cancel operation %s? Assets it has already processed keep their change.", c.operationID)
-		confirmed, err := confirmAction(cmd.Context(), c.confirm, message)
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			formatter.Println(formatter.Stderr, "Cancellation aborted.")
-			return nil
-		}
-	}
 
 	err := c.WithProgress(
 		cmd.Context(),

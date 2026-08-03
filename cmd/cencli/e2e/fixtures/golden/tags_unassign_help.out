@@ -11,10 +11,6 @@ Use --all instead to remove every one of the tag's assignments, or
 form starts an asynchronous bulk job and reports the operation tracking it; it cannot be 
 combined with explicit assets, and --all cannot be narrowed by a time filter. Bulk       
 unassignment always asks for confirmation unless --yes is set.                           
-                                                                                         
-Unassigning more than one explicit asset (or reading assets from --input-file) also      
-prompts for confirmation. Use --yes to skip the prompt; in a non-interactive terminal    
---yes is required for those cases.                                                       
 
 Usage:
   censys tags unassign <tag> [asset...] [flags]
@@ -40,7 +36,7 @@ Flags:
   -o, --org-id string           organization ID to target (personal access tokens only)
       --timeout string          how long to wait before giving up (requires --wait) - use 0 for no limit (default "30m0s")
   -w, --wait                    poll the bulk job until it reaches a final status (requires --all or a time filter)
-  -y, --yes                     skip the confirmation prompt
+  -y, --yes                     skip the confirmation prompt (requires --all or a time filter)
 
 Global Flags:
       --debug                   enable debug logging
