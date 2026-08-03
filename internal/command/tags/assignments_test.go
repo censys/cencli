@@ -252,6 +252,27 @@ func TestTagsAssignmentsCommand(t *testing.T) {
 			},
 		},
 		{
+			// The same mistake spelled as a repeated flag. This used to take the
+			// last value and exit 0, filtering on an asset the caller did not
+			// mean while silently dropping the one they did.
+			name:    "repeated --asset rejected the same way as the comma form",
+			service: assignmentsNoCallService,
+			args:    []string{"my-tag", "--asset", "8.8.8.8", "--asset", "1.1.1.1"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "2 assets provided, only 1")
+			},
+		},
+		{
+			name:    "the two spellings combine into one count",
+			service: assignmentsNoCallService,
+			args:    []string{"my-tag", "--asset", "8.8.8.8,1.1.1.1", "--asset", "9.9.9.9"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "3 assets provided, only 1")
+			},
+		},
+		{
 			name:    "page-size above the API maximum rejected before the service",
 			service: assignmentsNoCallService,
 			args:    []string{"my-tag", "--page-size", "1001"},

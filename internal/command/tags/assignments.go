@@ -47,7 +47,7 @@ type AssignmentsCommand struct {
 
 type assignmentsCommandFlags struct {
 	orgID         flags.OrgIDFlag
-	asset         flags.StringFlag
+	asset         flags.StringSliceFlag
 	assetType     flags.StringFlag
 	createdBy     flags.UUIDFlag
 	createdBefore flags.TimestampFlag
@@ -108,7 +108,11 @@ func (c *AssignmentsCommand) SupportsStreaming() bool {
 
 func (c *AssignmentsCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
-	c.flags.asset = flags.NewStringFlag(c.Flags(), false, "asset", "", "", "filter by a single asset (host IP, certificate SHA-256 fingerprint, or web property hostname:port)")
+	// A slice, though only one asset is accepted: repeating the flag then lands
+	// in the same slice as a comma-separated list, so both spellings of "more
+	// than one asset" hit the one rejection below instead of silently winning.
+	c.flags.asset = flags.NewStringSliceFlag(c.Flags(), false, "asset", "", nil,
+		"filter by one asset (host IP, certificate SHA-256 fingerprint, or web property hostname:port) - giving more than one is an error")
 	c.flags.assetType = flags.NewStringFlag(c.Flags(), false, "asset-type", "", "", "filter by asset type (host, web_property, certificate)")
 	c.flags.createdBy = flags.NewUUIDFlag(c.Flags(), false, "created-by", "", mo.None[uuid.UUID](),
 		"filter by the UUID of the assignment's creator")
@@ -262,14 +266,22 @@ func (c *AssignmentsCommand) parseFilterFlags() cenclierrors.CencliError {
 }
 
 // parseAssetFilter validates the --asset filter so a mistyped asset fails fast
-// instead of silently matching nothing. The endpoint filters on one asset, so a
-// comma-separated list is rejected rather than silently truncated.
-func (c *AssignmentsCommand) parseAssetFilter(raw string) (mo.Option[string], cenclierrors.CencliError) {
-	if strings.TrimSpace(raw) == "" {
+// instead of silently matching nothing. The endpoint filters on one asset, so
+// more than one is rejected rather than silently truncated - whether they were
+// comma-separated, given as a repeated flag, or both.
+func (c *AssignmentsCommand) parseAssetFilter(raw []string) (mo.Option[string], cenclierrors.CencliError) {
+	var split []string
+	for _, value := range raw {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		split = append(split, input.SplitString(value)...)
+	}
+	if len(split) == 0 {
 		return mo.None[string](), nil
 	}
 
-	ids, err := classifyAssetIDs(input.SplitString(raw))
+	ids, err := classifyAssetIDs(split)
 	if err != nil {
 		return mo.None[string](), err
 	}
