@@ -15,7 +15,7 @@ Examples:
   censys tags assignments my-tag --streaming # Emit NDJSON as assignments are fetched
 
 Flags:
-      --asset string            filter by a single asset (host IP, certificate SHA-256 fingerprint, or web property hostname:port)
+      --asset strings           filter by one asset (host IP, certificate SHA-256 fingerprint, or web property hostname:port) - giving more than one is an error
       --asset-type string       filter by asset type (host, web_property, certificate)
       --created-after string    only assignments created after this time
       --created-before string   only assignments created before this time

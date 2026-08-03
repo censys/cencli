@@ -589,6 +589,18 @@ var tagsFixtures = []Fixture{
 		},
 	},
 	{
+		// The same mistake spelled as a repeated flag, which used to take the
+		// last value and exit 0.
+		Name:      "assignments repeated asset filter",
+		Args:      []string{"assignments", "my-tag", "--asset", "8.8.8.8", "--asset", "1.1.1.1"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "2 assets provided, only 1")
+		},
+	},
+	{
 		// Page sizes above the documented maximum never reach the API.
 		Name:      "assignments page-size above maximum",
 		Args:      []string{"assignments", "my-tag", "--page-size", "1001"},
