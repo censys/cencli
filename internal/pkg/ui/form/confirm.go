@@ -2,6 +2,7 @@ package form
 
 import (
 	"context"
+	"os"
 
 	"github.com/charmbracelet/huh"
 )
@@ -24,7 +25,10 @@ func Confirm(ctx context.Context, message string) (bool, error) {
 					Negative("No").
 					Value(&confirmed),
 			),
-		),
+		).
+			// Pin the prompt to stderr: on stdout it would land inside the data a
+			// command redirects, and huh writes to stdout in accessible mode.
+			WithOutput(os.Stderr),
 	)
 	if err := f.RunWithContext(ctx); err != nil {
 		return false, err
