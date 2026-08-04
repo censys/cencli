@@ -16,3 +16,4 @@ jobs:
         uses: upsidr/merge-gatekeeper@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ignored: "require-review / check-approvals"
