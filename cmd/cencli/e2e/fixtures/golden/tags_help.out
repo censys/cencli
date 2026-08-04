@@ -1,0 +1,32 @@
+Manage tags and tag assignments for your organization.                                  
+                                                                                        
+Use --org-id on any subcommand to target a different organization; otherwise your stored
+organization ID is used.                                                                
+
+Usage:
+  censys tags [flags]
+  censys tags [command]
+
+Available Commands:
+  assign      Assign a tag to one or more assets
+  assignments List the assets a tag is assigned to
+  create      Create a new tag
+  delete      Delete a tag
+  get         Retrieve a single tag by name or ID
+  list        List all tags
+  operations  Track the asynchronous jobs created by bulk tag operations
+  unassign    Unassign a tag from one or more assets
+  update      Update an existing tag
+
+Flags:
+  -h, --help   help for tags
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

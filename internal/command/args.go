@@ -53,3 +53,12 @@ func RangeArgs(min, max int) PositionalArgs {
 		return nil
 	}
 }
+
+func MinimumNArgs(n int) PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := cobra.MinimumNArgs(n)(cmd, args); err != nil {
+			return NewArgCountError(err)
+		}
+		return nil
+	}
+}

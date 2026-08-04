@@ -29,4 +29,30 @@ var (
 	OrgCreditsHelpStdout []byte
 	//go:embed org_help.out
 	OrgHelpStdout []byte
+	//go:embed tags_help.out
+	TagsHelpStdout []byte
+	//go:embed tags_list_help.out
+	TagsListHelpStdout []byte
+	//go:embed tags_get_help.out
+	TagsGetHelpStdout []byte
+	//go:embed tags_create_help.out
+	TagsCreateHelpStdout []byte
+	//go:embed tags_update_help.out
+	TagsUpdateHelpStdout []byte
+	//go:embed tags_delete_help.out
+	TagsDeleteHelpStdout []byte
+	//go:embed tags_assign_help.out
+	TagsAssignHelpStdout []byte
+	//go:embed tags_unassign_help.out
+	TagsUnassignHelpStdout []byte
+	//go:embed tags_assignments_help.out
+	TagsAssignmentsHelpStdout []byte
+	//go:embed tags_operations_help.out
+	TagsOperationsHelpStdout []byte
+	//go:embed tags_operations_list_help.out
+	TagsOperationsListHelpStdout []byte
+	//go:embed tags_operations_get_help.out
+	TagsOperationsGetHelpStdout []byte
+	//go:embed tags_operations_cancel_help.out
+	TagsOperationsCancelHelpStdout []byte
 )

@@ -1,0 +1,33 @@
+List the asynchronous jobs created by bulk tag operations.                              
+                                                                                        
+Given a tag, by its name or UUID, only that tag's operations are listed; omit it to list
+operations across every tag in the organization.                                        
+
+Usage:
+  censys tags operations list [<tag>] [flags]
+
+Examples:
+  censys tags operations list  # List operations across every tag
+  censys tags operations list my-tag # List one tag's operations
+  censys tags operations list my-tag --status running # Only operations still in flight
+  censys tags operations list --type bulk_delete # Only bulk unassign jobs
+  censys tags operations list --max-pages -1 # Fetch every page
+
+Flags:
+  -h, --help              help for list
+  -p, --max-pages int     maximum number of pages to fetch (-1 for all pages) (default 1)
+      --order-by string   sort order (create_time_asc, create_time_desc)
+  -o, --org-id string     organization ID to target (personal access tokens only)
+  -n, --page-size int     number of operations to return per page (default 100)
+      --status string     filter by status (pending, running, succeeded, limit_reached, failed, cancelled)
+      --type string       filter by operation type (bulk_create, bulk_delete)
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

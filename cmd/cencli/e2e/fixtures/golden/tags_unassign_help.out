@@ -1,0 +1,49 @@
+Unassign a tag, by its name or UUID, from one or more assets (host IPs, certificate      
+SHA-256 fingerprints, or web property hostname:port).                                    
+                                                                                         
+Assets can be passed as positional arguments or read from a file (or STDIN) with         
+--input-file. Assets of different types can be mixed in a single call. Each asset is     
+unassigned independently: if one fails the rest still proceed, and the per-asset outcomes
+are reported.                                                                            
+                                                                                         
+Use --all instead to remove every one of the tag's assignments, or                       
+--created-before/--created-after to remove only those created in a time window. Either   
+form starts an asynchronous bulk job and reports the operation tracking it; it cannot be 
+combined with explicit assets, and --all cannot be narrowed by a time filter. Bulk       
+unassignment always asks for confirmation unless --yes is set.                           
+
+Usage:
+  censys tags unassign <tag> [asset...] [flags]
+
+Examples:
+  censys tags unassign <tag> <ip-address>
+  censys tags unassign <tag> <ip-address> <ip-address>
+  censys tags unassign <tag> <hostname:port>
+  censys tags unassign <tag> <sha256-fingerprint>
+  censys tags unassign <tag> <ip-address> <hostname:port> # asset types can be mixed
+  censys tags unassign <tag> --input-file <file>
+  censys tags unassign <tag> --input-file - # read assets from STDIN
+  censys tags unassign <tag> --all # remove every one of the tag's assignments
+  censys tags unassign <tag> --created-before 2026-01-01T00:00:00Z # only assignments made before then
+  censys tags unassign <tag> --all --wait # poll until the job finishes
+
+Flags:
+      --all                     remove every one of the tag's assignments. Starts a bulk job instead of unassigning explicit assets.
+      --created-after string    only unassign assignments created after this time. Starts a bulk job.
+      --created-before string   only unassign assignments created before this time. Starts a bulk job.
+  -h, --help                    help for unassign
+  -i, --input-file string       file to read the assets from (or - for STDIN). Overrides positional asset arguments.
+  -o, --org-id string           organization ID to target (personal access tokens only)
+      --timeout string          how long to wait before giving up (requires --wait) - use 0 for no limit (default "30m0s")
+  -w, --wait                    poll the bulk job until it reaches a final status (requires --all or a time filter)
+  -y, --yes                     skip the confirmation prompt (requires --all or a time filter)
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

@@ -1,0 +1,46 @@
+Assign a tag, by its name or UUID, to one or more assets (host IPs, certificate SHA-256   
+fingerprints, or web property hostname:port).                                             
+                                                                                          
+Assets can be passed as positional arguments or read from a file (or STDIN) with          
+--input-file. Assets of different types can be mixed in a single call. Each asset is      
+assigned independently: if one fails the rest still proceed, and the per-asset outcomes   
+are reported.                                                                             
+                                                                                          
+Use --query instead to assign the tag to every asset matching a CenQL query. That starts  
+an asynchronous bulk job and reports the operation tracking it; the two input modes cannot
+be combined. Bulk assignment always asks for confirmation unless --yes is set.            
+
+Usage:
+  censys tags assign <tag> [asset...] [flags]
+
+Examples:
+  censys tags assign <tag> <ip-address>
+  censys tags assign <tag> <ip-address> <ip-address>
+  censys tags assign <tag> <hostname:port>
+  censys tags assign <tag> <sha256-fingerprint>
+  censys tags assign <tag> <ip-address> <hostname:port> # asset types can be mixed
+  censys tags assign <tag> --input-file <file>
+  censys tags assign <tag> --input-file - # read assets from STDIN
+  censys tags assign <tag> --query 'host.services.port: 22' # assign every matching asset
+  censys tags assign <tag> --query 'host.services.port: 22' --max-assets 1000
+  censys tags assign <tag> --query 'host.services.port: 22' --wait # poll until the job finishes
+
+Flags:
+  -h, --help                help for assign
+  -i, --input-file string   file to read the assets from (or - for STDIN). Overrides positional asset arguments.
+      --max-assets int      cap the number of assets a bulk job tags (requires --query). The effective cap is the smaller of this and your plan's tag asset limit.
+  -o, --org-id string       organization ID to target (personal access tokens only)
+      --query string        CenQL query selecting the assets to tag. Starts a bulk job instead of assigning explicit assets.
+      --timeout string      how long to wait before giving up (requires --wait) - use 0 for no limit (default "30m0s")
+  -w, --wait                poll the bulk job until it reaches a final status (requires --query)
+  -y, --yes                 skip the confirmation prompt (requires --query)
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

@@ -75,6 +75,81 @@ func (mr *MockClientMockRecorder) AggregateCollection(ctx, collectionID, orgID, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AggregateCollection", reflect.TypeOf((*MockClient)(nil).AggregateCollection), ctx, collectionID, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// BulkCreateTagAssignments mocks base method.
+func (m *MockClient) BulkCreateTagAssignments(ctx context.Context, req censys.BulkCreateTagAssignmentsRequest) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkCreateTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// BulkCreateTagAssignments indicates an expected call of BulkCreateTagAssignments.
+func (mr *MockClientMockRecorder) BulkCreateTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkCreateTagAssignments", reflect.TypeOf((*MockClient)(nil).BulkCreateTagAssignments), ctx, req)
+}
+
+// BulkDeleteTagAssignments mocks base method.
+func (m *MockClient) BulkDeleteTagAssignments(ctx context.Context, req censys.BulkDeleteTagAssignmentsRequest) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkDeleteTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// BulkDeleteTagAssignments indicates an expected call of BulkDeleteTagAssignments.
+func (mr *MockClientMockRecorder) BulkDeleteTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkDeleteTagAssignments", reflect.TypeOf((*MockClient)(nil).BulkDeleteTagAssignments), ctx, req)
+}
+
+// CancelTagOperation mocks base method.
+func (m *MockClient) CancelTagOperation(ctx context.Context, orgID mo.Option[string], tagID, operationID string) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelTagOperation", ctx, orgID, tagID, operationID)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CancelTagOperation indicates an expected call of CancelTagOperation.
+func (mr *MockClientMockRecorder) CancelTagOperation(ctx, orgID, tagID, operationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelTagOperation", reflect.TypeOf((*MockClient)(nil).CancelTagOperation), ctx, orgID, tagID, operationID)
+}
+
+// CreateTag mocks base method.
+func (m *MockClient) CreateTag(ctx context.Context, req censys.CreateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTag", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTag indicates an expected call of CreateTag.
+func (mr *MockClientMockRecorder) CreateTag(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTag", reflect.TypeOf((*MockClient)(nil).CreateTag), ctx, req)
+}
+
+// CreateTagAssignment mocks base method.
+func (m *MockClient) CreateTagAssignment(ctx context.Context, req censys.CreateTagAssignmentRequest) (censys.Result[components.TagAssignment], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTagAssignment", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagAssignment])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTagAssignment indicates an expected call of CreateTagAssignment.
+func (mr *MockClientMockRecorder) CreateTagAssignment(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTagAssignment", reflect.TypeOf((*MockClient)(nil).CreateTagAssignment), ctx, req)
+}
+
 // CredentialInfo mocks base method.
 func (m *MockClient) CredentialInfo() credential.Info {
 	m.ctrl.T.Helper()
@@ -87,6 +162,36 @@ func (m *MockClient) CredentialInfo() credential.Info {
 func (mr *MockClientMockRecorder) CredentialInfo() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CredentialInfo", reflect.TypeOf((*MockClient)(nil).CredentialInfo))
+}
+
+// DeleteTag mocks base method.
+func (m *MockClient) DeleteTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTag", ctx, orgID, tagID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteTag indicates an expected call of DeleteTag.
+func (mr *MockClientMockRecorder) DeleteTag(ctx, orgID, tagID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTag", reflect.TypeOf((*MockClient)(nil).DeleteTag), ctx, orgID, tagID)
+}
+
+// DeleteTagAssignment mocks base method.
+func (m *MockClient) DeleteTagAssignment(ctx context.Context, orgID mo.Option[string], tagID, assignmentID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTagAssignment", ctx, orgID, tagID, assignmentID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteTagAssignment indicates an expected call of DeleteTagAssignment.
+func (mr *MockClientMockRecorder) DeleteTagAssignment(ctx, orgID, tagID, assignmentID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTagAssignment", reflect.TypeOf((*MockClient)(nil).DeleteTagAssignment), ctx, orgID, tagID, assignmentID)
 }
 
 // EnrichHost mocks base method.
@@ -179,6 +284,36 @@ func (mr *MockClientMockRecorder) GetOrganizationDetails(ctx, orgID, includeMemb
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizationDetails", reflect.TypeOf((*MockClient)(nil).GetOrganizationDetails), ctx, orgID, includeMemberCounts)
 }
 
+// GetTag mocks base method.
+func (m *MockClient) GetTag(ctx context.Context, orgID mo.Option[string], tagID string) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTag", ctx, orgID, tagID)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTag indicates an expected call of GetTag.
+func (mr *MockClientMockRecorder) GetTag(ctx, orgID, tagID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTag", reflect.TypeOf((*MockClient)(nil).GetTag), ctx, orgID, tagID)
+}
+
+// GetTagOperation mocks base method.
+func (m *MockClient) GetTagOperation(ctx context.Context, orgID mo.Option[string], tagID, operationID string) (censys.Result[components.TagOperation], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTagOperation", ctx, orgID, tagID, operationID)
+	ret0, _ := ret[0].(censys.Result[components.TagOperation])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTagOperation indicates an expected call of GetTagOperation.
+func (mr *MockClientMockRecorder) GetTagOperation(ctx, orgID, tagID, operationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTagOperation", reflect.TypeOf((*MockClient)(nil).GetTagOperation), ctx, orgID, tagID, operationID)
+}
+
 // GetUserCreditDetails mocks base method.
 func (m *MockClient) GetUserCreditDetails(ctx context.Context) (censys.Result[components.UserCredits], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -268,6 +403,51 @@ func (mr *MockClientMockRecorder) ListOrganizationMembers(ctx, orgID, pageSize, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationMembers", reflect.TypeOf((*MockClient)(nil).ListOrganizationMembers), ctx, orgID, pageSize, pageToken)
 }
 
+// ListTagAssignments mocks base method.
+func (m *MockClient) ListTagAssignments(ctx context.Context, req censys.ListTagAssignmentsRequest) (censys.Result[components.TagAssignmentsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagAssignments", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagAssignmentsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTagAssignments indicates an expected call of ListTagAssignments.
+func (mr *MockClientMockRecorder) ListTagAssignments(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagAssignments", reflect.TypeOf((*MockClient)(nil).ListTagAssignments), ctx, req)
+}
+
+// ListTagOperations mocks base method.
+func (m *MockClient) ListTagOperations(ctx context.Context, req censys.ListTagOperationsRequest) (censys.Result[components.TagOperationsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagOperations", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagOperationsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTagOperations indicates an expected call of ListTagOperations.
+func (mr *MockClientMockRecorder) ListTagOperations(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagOperations", reflect.TypeOf((*MockClient)(nil).ListTagOperations), ctx, req)
+}
+
+// ListTags mocks base method.
+func (m *MockClient) ListTags(ctx context.Context, req censys.ListTagsRequest) (censys.Result[components.TagsList], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTags", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.TagsList])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListTags indicates an expected call of ListTags.
+func (mr *MockClientMockRecorder) ListTags(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTags", reflect.TypeOf((*MockClient)(nil).ListTags), ctx, req)
+}
+
 // Search mocks base method.
 func (m *MockClient) Search(ctx context.Context, orgID mo.Option[string], query string, fields []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.SearchQueryResponse], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -296,4 +476,19 @@ func (m *MockClient) SearchCollection(ctx context.Context, collectionID string, 
 func (mr *MockClientMockRecorder) SearchCollection(ctx, collectionID, orgID, query, fields, pageSize, pageToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCollection", reflect.TypeOf((*MockClient)(nil).SearchCollection), ctx, collectionID, orgID, query, fields, pageSize, pageToken)
+}
+
+// UpdateTag mocks base method.
+func (m *MockClient) UpdateTag(ctx context.Context, req censys.UpdateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTag", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Tag])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// UpdateTag indicates an expected call of UpdateTag.
+func (mr *MockClientMockRecorder) UpdateTag(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTag", reflect.TypeOf((*MockClient)(nil).UpdateTag), ctx, req)
 }
