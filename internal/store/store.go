@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gofrs/flock"
 	_ "modernc.org/sqlite"
 
 	storedb "github.com/censys/cencli/internal/store/db"
@@ -38,16 +39,23 @@ func New(dataDir string) (Store, error) {
 	}
 
 	dbPath := filepath.Join(dataDir, dbName)
+	fileLock := flock.New(dbPath + ".lock")
+	if err := fileLock.Lock(); err != nil {
+		return nil, fmt.Errorf("failed to acquire database initialization lock: %w", err)
+	}
+	defer func() { _ = fileLock.Unlock() }()
+
 	ds.db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	// Apply pragmatic defaults for CLI UX
-	if _, err := ds.db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
-		return nil, fmt.Errorf("failed to set journal_mode WAL: %w", err)
-	}
+	// Apply the busy timeout before any pragma or schema statement that may
+	// contend with another cencli process initializing the same database.
 	if _, err := ds.db.Exec(`PRAGMA busy_timeout = 5000;`); err != nil {
 		return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
+	}
+	if _, err := ds.db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
+		return nil, fmt.Errorf("failed to set journal_mode WAL: %w", err)
 	}
 	if _, err := ds.db.Exec(`PRAGMA synchronous = NORMAL;`); err != nil {
 		return nil, fmt.Errorf("failed to set synchronous NORMAL: %w", err)
