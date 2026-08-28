@@ -29,6 +29,8 @@ type Config struct {
 	Templates     map[TemplateEntity]TemplateConfig `yaml:"templates" mapstructure:"templates"`
 	Search        SearchConfig                      `yaml:"search" mapstructure:"search"`
 	DefaultTZ     datetime.TimeZone                 `yaml:"default-tz" mapstructure:"default-tz" doc:"Default timezone for timestamps"`
+	Proxy         ProxyConfig                       `yaml:"proxy" mapstructure:"proxy"`
+	TLS           TLSConfig                         `yaml:"tls" mapstructure:"tls"`
 }
 
 var defaultConfig = &Config{
@@ -43,6 +45,8 @@ var defaultConfig = &Config{
 	DefaultTZ:     datetime.TimeZoneUTC,
 	Templates:     defaultTemplateConfig,
 	Search:        defaultSearchConfig,
+	Proxy:         defaultProxyConfig,
+	TLS:           defaultTLSConfig,
 }
 
 const (
