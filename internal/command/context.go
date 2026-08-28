@@ -17,6 +17,7 @@ import (
 	"github.com/censys/cencli/internal/app/enrich"
 	"github.com/censys/cencli/internal/app/history"
 	"github.com/censys/cencli/internal/app/organizations"
+	"github.com/censys/cencli/internal/app/rescan"
 	"github.com/censys/cencli/internal/app/search"
 	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/app/tags"
@@ -50,6 +51,7 @@ type Context struct {
 	creditsSvc   credits.Service
 	orgSvc       organizations.Service
 	tagsSvc      tags.Service
+	rescanSvc    rescan.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -570,4 +572,24 @@ func (c *Context) OrganizationsService() (organizations.Service, cenclierrors.Ce
 // the OrganizationsService will be instantiated on demand.
 func WithOrganizationsService(svc organizations.Service) ContextOpts {
 	return func(c *Context) { c.orgSvc = svc }
+}
+
+// RescanService attempts to provide a RescanService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) RescanService() (rescan.Service, cenclierrors.CencliError) {
+	if c.rescanSvc != nil {
+		return c.rescanSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	c.rescanSvc = rescan.New(c.censysClient)
+	return c.rescanSvc, nil
+}
+
+// WithRescanService injects an instantiated RescanService to the Context.
+// This should only be used in tests, as in the application,
+// the RescanService will be instantiated on demand.
+func WithRescanService(svc rescan.Service) ContextOpts {
+	return func(c *Context) { c.rescanSvc = svc }
 }

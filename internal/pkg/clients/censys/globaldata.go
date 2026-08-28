@@ -11,6 +11,18 @@ import (
 
 //go:generate mockgen -destination=../../../../gen/client/mocks/globaldata_mock.go -package=mocks github.com/censys/cencli/internal/pkg/clients/censys GlobalDataClient
 type GlobalDataClient interface {
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#scansrescan
+	CreateTrackedScan(
+		ctx context.Context,
+		orgID mo.Option[string],
+		target components.ScansRescanInputBodyTarget,
+	) (Result[components.TrackedScan], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#scansget
+	GetTrackedScan(
+		ctx context.Context,
+		orgID mo.Option[string],
+		scanID string,
+	) (Result[components.TrackedScan], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#gethosts
 	GetHosts(
 		ctx context.Context,
@@ -292,6 +304,68 @@ func (g *globalDataSDK) HostTimeline(
 	return Result[components.HostTimeline]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     timeline,
+	}, nil
+}
+
+func (g *globalDataSDK) CreateTrackedScan(
+	ctx context.Context,
+	orgID mo.Option[string],
+	target components.ScansRescanInputBodyTarget,
+) (Result[components.TrackedScan], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataScansRescanResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		var err error
+		res, err = g.censysSDK.client.GlobalData.CreateTrackedScan(ctx, operations.V3GlobaldataScansRescanRequest{
+			OrganizationID: orgID.ToPointer(),
+			ScansRescanInputBody: components.ScansRescanInputBody{
+				Target: target,
+			},
+		})
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TrackedScan]{}
+		return zero, err
+	}
+	scan := res.GetResponseEnvelopeTrackedScan().GetResult()
+	return Result[components.TrackedScan]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     scan,
+	}, nil
+}
+
+func (g *globalDataSDK) GetTrackedScan(
+	ctx context.Context,
+	orgID mo.Option[string],
+	scanID string,
+) (Result[components.TrackedScan], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataScansGetResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		var err error
+		res, err = g.censysSDK.client.GlobalData.GetTrackedScan(ctx, operations.V3GlobaldataScansGetRequest{
+			OrganizationID: orgID.ToPointer(),
+			ScanID:         scanID,
+		})
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TrackedScan]{}
+		return zero, err
+	}
+	scan := res.GetResponseEnvelopeTrackedScan().GetResult()
+	return Result[components.TrackedScan]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     scan,
 	}, nil
 }
 
