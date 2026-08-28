@@ -79,11 +79,11 @@ func NewCensysSDK(
 		UserAgent:          buildUserAgent(),
 		Logger:             logger,
 		ProxyURL:           cfg.Proxy.URL,
+		DisableHTTP2:       cfg.Proxy.DisableHTTP2,
 		CABundlePath:       cfg.TLS.CABundle,
 		InsecureSkipVerify: cfg.TLS.InsecureSkipVerify,
 		ClientCertPath:     cfg.TLS.ClientCert,
 		ClientKeyPath:      cfg.TLS.ClientKey,
-		DisableHTTP2:       cfg.TLS.DisableHTTP2,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)

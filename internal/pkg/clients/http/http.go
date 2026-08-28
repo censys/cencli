@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -25,17 +27,16 @@ type Options struct {
 	UserAgent      string
 	Logger         *slog.Logger
 
-	// Proxy settings — empty falls back to HTTP_PROXY/HTTPS_PROXY env vars.
-	ProxyURL string
+	// ProxyURL overrides HTTP_PROXY/HTTPS_PROXY env vars.
+	// Supported schemes: http, https, socks5, socks5h.
+	ProxyURL     string
+	DisableHTTP2 bool
 
-	// TLS settings
+	// TLS settings. File paths support ~ and $ENV_VAR expansion.
 	CABundlePath       string
 	InsecureSkipVerify bool
 	ClientCertPath     string
 	ClientKeyPath      string
-	// DisableHTTP2 forces HTTP/1.1. Useful when the proxy or network
-	// infrastructure doesn't support HTTP/2.
-	DisableHTTP2 bool
 }
 
 // New creates an HTTP client configured for CLI usage.
@@ -66,7 +67,16 @@ func New(opts Options) (*Client, error) {
 		base.TLSNextProto = make(map[string]func(authority string, c *tls.Conn) http.RoundTripper)
 	}
 
-	tlsCfg, err := buildTLSConfig(opts.CABundlePath, opts.ClientCertPath, opts.ClientKeyPath, opts.InsecureSkipVerify)
+	if opts.InsecureSkipVerify {
+		fmt.Fprintln(os.Stderr, "WARNING: TLS certificate verification is disabled (tls.insecure-skip-verify). Your connections may be intercepted.")
+	}
+
+	tlsCfg, err := buildTLSConfig(
+		expandPath(opts.CABundlePath),
+		expandPath(opts.ClientCertPath),
+		expandPath(opts.ClientKeyPath),
+		opts.InsecureSkipVerify,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +92,20 @@ func New(opts Options) (*Client, error) {
 			Timeout: opts.RequestTimeout,
 		},
 	}, nil
+}
+
+// expandPath expands ~ to the user home directory and resolves $ENV_VAR references.
+func expandPath(p string) string {
+	if p == "" {
+		return p
+	}
+	p = os.ExpandEnv(p)
+	if strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(home, p[2:])
+		}
+	}
+	return p
 }
 
 func applyProxy(base *http.Transport, netDialer *net.Dialer, proxyURL string) error {
@@ -127,6 +151,7 @@ func buildTLSConfig(caBundlePath, clientCertPath, clientKeyPath string, insecure
 	if caBundlePath != "" {
 		pool, err := x509.SystemCertPool()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: could not load system CA pool (%v); only the configured ca-bundle will be trusted.\n", err)
 			pool = x509.NewCertPool()
 		}
 		pem, err := os.ReadFile(caBundlePath)
