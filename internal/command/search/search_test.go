@@ -3,6 +3,7 @@ package search
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -273,6 +274,66 @@ func TestSearchCommand(t *testing.T) {
 				require.Contains(t, stdout, "127.0.0.1")
 			},
 		},
+		{
+			name:  "success - count flag prints total_hits, not individual hits",
+			store: newOrgLookupStore,
+			service: func(ctrl *gomock.Controller) search.Service {
+				mockSvc := searchmocks.NewMockSearchService(ctrl)
+				mockSvc.EXPECT().Search(
+					gomock.Any(),
+					gomock.AssignableToTypeOf(search.Params{}),
+				).Return(
+					search.Result{
+						Meta: &responsemeta.ResponseMeta{
+							Method:  "POST",
+							URL:     "https://api.censys.io/v1/search",
+							Status:  200,
+							Latency: 100 * time.Millisecond,
+						},
+						Hits: []assets.Asset{
+							&assets.Host{
+								Host: components.Host{
+									IP: strPtr("127.0.0.1"),
+								},
+							},
+						},
+						TotalHits: 4321,
+					}, nil)
+				return mockSvc
+			},
+			args: []string{"--count", "host.services.protocol=SSH"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "4321")
+				// structured output uses the same field name as the API payload
+				require.Contains(t, stdout, "total_hits")
+				// count mode reports the total, not the individual hits
+				require.NotContains(t, stdout, "127.0.0.1")
+			},
+		},
+		{
+			name:  "success - count flag warns on ignored flags",
+			store: newOrgLookupStore,
+			service: func(ctrl *gomock.Controller) search.Service {
+				mockSvc := searchmocks.NewMockSearchService(ctrl)
+				mockSvc.EXPECT().Search(
+					gomock.Any(),
+					gomock.AssignableToTypeOf(search.Params{}),
+				).Return(
+					search.Result{
+						Meta:      &responsemeta.ResponseMeta{Status: 200},
+						TotalHits: 5,
+					}, nil)
+				return mockSvc
+			},
+			args: []string{"--count", "--max-pages", "5", "host.services.protocol=SSH"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "5")
+				require.Contains(t, stderr, "--count ignores")
+				require.Contains(t, stderr, "--max-pages")
+			},
+		},
 		// Pagination validation error cases
 		{
 			name:  "error - page size below minimum",
@@ -472,6 +533,45 @@ func TestSearchCommand_PartialError(t *testing.T) {
 		require.Contains(t, stderr.String(), "(partial data)", "should indicate partial results in stderr")
 		require.Contains(t, stderr.String(), "Page 2 failed", "should print partial error to stderr")
 		require.Contains(t, stderr.String(), "some data was successfully retrieved", "should include partial error message")
+	})
+}
+
+func TestSearchCommand_CountShortFormat(t *testing.T) {
+	t.Run("prints bare number for short format", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockStore := newOrgLookupStore(ctrl)
+		mockSvc := searchmocks.NewMockSearchService(ctrl)
+		mockSvc.EXPECT().Search(
+			gomock.Any(),
+			gomock.AssignableToTypeOf(search.Params{}),
+		).Return(
+			search.Result{
+				Meta:      &responsemeta.ResponseMeta{Status: 200},
+				TotalHits: 987,
+			}, nil)
+
+		tempDir := t.TempDir()
+		viper.Reset()
+		cfg, err := config.New(tempDir)
+		require.NoError(t, err)
+		// The config is re-unmarshaled from viper at runtime, so drive the output
+		// format through viper rather than assigning cfg.OutputFormat directly.
+		viper.Set("output-format", formatter.OutputFormatShort.String())
+
+		cmdContext := command.NewCommandContext(cfg, mockStore, command.WithSearchService(mockSvc))
+		rootCmd, err := command.RootCommandToCobra(NewSearchCommand(cmdContext))
+		require.NoError(t, err)
+
+		var stdout, stderr bytes.Buffer
+		formatter.Stdout = &stdout
+		formatter.Stderr = &stderr
+
+		rootCmd.SetArgs([]string{"--count", "host.services.protocol=SSH"})
+		require.NoError(t, rootCmd.Execute())
+		// short format falls back to the bare number (stdout only; meta is on stderr)
+		require.Equal(t, "987", strings.TrimSpace(stdout.String()))
 	})
 }
 
