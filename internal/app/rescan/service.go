@@ -45,7 +45,7 @@ func (s *rescanService) Rescan(ctx context.Context, params Params) (Result, cenc
 	progress.ReportMessage(ctx, progress.StageFetch, "Initiating live rescan...")
 	createResult, cerr := s.client.CreateTrackedScan(ctx, orgID, target)
 	if cerr != nil {
-		return Result{}, cenclierrors.NewCencliError(cerr)
+		return Result{}, cerr
 	}
 
 	scan := createResult.Data
@@ -74,7 +74,7 @@ func (s *rescanService) Rescan(ctx context.Context, params Params) (Result, cenc
 
 		pollResult, cerr := s.client.GetTrackedScan(ctx, orgID, scanID)
 		if cerr != nil {
-			return Result{}, cenclierrors.NewCencliError(cerr)
+			return Result{}, cerr
 		}
 		if pollResult.Data != nil {
 			scan = pollResult.Data
