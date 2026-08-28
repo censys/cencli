@@ -17,20 +17,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
 
-// ProxyConfig holds proxy and transport settings for outbound HTTP requests.
-type ProxyConfig struct {
-	URL          string `yaml:"url" mapstructure:"url" doc:"Proxy URL for outbound requests (e.g. http://proxy.example.com:8080, socks5://proxy.example.com:1080). Overrides HTTP_PROXY/HTTPS_PROXY environment variables. Supported schemes: http, https, socks5, socks5h."`
-	DisableHTTP2 bool   `yaml:"disable-http2" mapstructure:"disable-http2" doc:"Disable HTTP/2. Use if your proxy or network infrastructure doesn't support HTTP/2."`
-}
-
-// TLSConfig holds TLS and certificate settings for outbound HTTP requests.
-type TLSConfig struct {
-	CABundle           string `yaml:"ca-bundle" mapstructure:"ca-bundle" doc:"Path to a PEM-encoded CA bundle file. Appended to the system CA pool for TLS verification. Supports ~ and environment variables."`
-	InsecureSkipVerify bool   `yaml:"insecure-skip-verify" mapstructure:"insecure-skip-verify" doc:"Disable TLS certificate verification. Insecure — only use when you cannot import the CA."`
-	ClientCert         string `yaml:"client-cert" mapstructure:"client-cert" doc:"Path to a PEM-encoded client certificate for mTLS authentication. Supports ~ and environment variables."`
-	ClientKey          string `yaml:"client-key" mapstructure:"client-key" doc:"Path to the PEM-encoded private key paired with client-cert. Supports ~ and environment variables."`
-}
-
 type Config struct {
 	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|tree)"`
 	Streaming     bool                              `yaml:"streaming" mapstructure:"streaming" doc:"Enable streaming output mode (NDJSON) for commands that support it"`
@@ -59,8 +45,8 @@ var defaultConfig = &Config{
 	DefaultTZ:     datetime.TimeZoneUTC,
 	Templates:     defaultTemplateConfig,
 	Search:        defaultSearchConfig,
-	Proxy:         ProxyConfig{},
-	TLS:           TLSConfig{},
+	Proxy:         defaultProxyConfig,
+	TLS:           defaultTLSConfig,
 }
 
 const (
