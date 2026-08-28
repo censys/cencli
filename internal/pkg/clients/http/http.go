@@ -1,9 +1,14 @@
 package http
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 )
 
@@ -13,10 +18,36 @@ type Client struct {
 
 // New creates an HTTP client configured for CLI usage.
 // If logger is non-nil, requests and responses will be logged at Debug level.
-func New(requestTimeout time.Duration, userAgent string, logger *slog.Logger) *Client {
-	// Custom base transport tuned for CLI usage
+// If proxyURL is non-empty, it overrides environment-based proxy detection.
+// If caBundlePath is non-empty, the PEM file at that path is appended to the system CA pool.
+func New(requestTimeout time.Duration, userAgent string, logger *slog.Logger, proxyURL string, caBundlePath string) (*Client, error) {
+	proxyFunc := http.ProxyFromEnvironment
+	if proxyURL != "" {
+		parsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid proxy URL %q: %w", proxyURL, err)
+		}
+		proxyFunc = http.ProxyURL(parsed)
+	}
+
+	var tlsConfig *tls.Config
+	if caBundlePath != "" {
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			pool = x509.NewCertPool()
+		}
+		pem, err := os.ReadFile(caBundlePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA bundle %q: %w", caBundlePath, err)
+		}
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("no valid certificates found in CA bundle: %s", caBundlePath)
+		}
+		tlsConfig = &tls.Config{RootCAs: pool}
+	}
+
 	base := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		Proxy: proxyFunc,
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -27,6 +58,7 @@ func New(requestTimeout time.Duration, userAgent string, logger *slog.Logger) *C
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       tlsConfig,
 	}
 
 	return &Client{
@@ -38,7 +70,7 @@ func New(requestTimeout time.Duration, userAgent string, logger *slog.Logger) *C
 			},
 			Timeout: requestTimeout,
 		},
-	}
+	}, nil
 }
 
 type roundTripper struct {

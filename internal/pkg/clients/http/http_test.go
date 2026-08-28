@@ -20,7 +20,10 @@ func TestUserAgentInjection_NoExisting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(0, "cencli-test/0.1", nil)
+	client, err := New(0, "cencli-test/0.1", nil, "", "")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
@@ -45,7 +48,10 @@ func TestUserAgentInjection_AppendsExisting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(0, "cencli-test/0.1", nil)
+	client, err := New(0, "cencli-test/0.1", nil, "", "")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
@@ -95,7 +101,10 @@ func TestUserAgentRoundTripper_AppendsOrSets(t *testing.T) {
 }
 
 func TestNew_SetsUserAgent_AndNoDefaultTimeout(t *testing.T) {
-	c := New(0, "cencli/ua", nil)
+	c, err := New(0, "cencli/ua", nil, "", "")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
 	if c.Timeout != 0 {
 		t.Fatalf("expected timeout 0 (disabled), got %v", c.Timeout)
 	}

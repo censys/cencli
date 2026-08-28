@@ -17,6 +17,12 @@ import (
 	"github.com/censys/cencli/internal/pkg/formatter"
 )
 
+// ProxyConfig holds optional proxy and TLS settings for outbound HTTP requests.
+type ProxyConfig struct {
+	URL      string `yaml:"url" mapstructure:"url" doc:"HTTP/HTTPS proxy URL (e.g. http://proxy.example.com:8080). Overrides HTTPS_PROXY/HTTP_PROXY environment variables."`
+	CABundle string `yaml:"ca-bundle" mapstructure:"ca-bundle" doc:"Path to a PEM-encoded CA bundle file. Used in addition to system CAs for TLS verification."`
+}
+
 type Config struct {
 	OutputFormat  formatter.OutputFormat            `yaml:"output-format" mapstructure:"output-format" doc:"Default output format (json|yaml|tree)"`
 	Streaming     bool                              `yaml:"streaming" mapstructure:"streaming" doc:"Enable streaming output mode (NDJSON) for commands that support it"`
@@ -29,6 +35,7 @@ type Config struct {
 	Templates     map[TemplateEntity]TemplateConfig `yaml:"templates" mapstructure:"templates"`
 	Search        SearchConfig                      `yaml:"search" mapstructure:"search"`
 	DefaultTZ     datetime.TimeZone                 `yaml:"default-tz" mapstructure:"default-tz" doc:"Default timezone for timestamps"`
+	Proxy         ProxyConfig                       `yaml:"proxy" mapstructure:"proxy"`
 }
 
 var defaultConfig = &Config{

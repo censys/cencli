@@ -74,7 +74,10 @@ func NewCensysSDK(
 		logger = applog.New(cfg.Debug, nil)
 	}
 
-	httpClient := clienthttp.New(cfg.Timeouts.HTTP, buildUserAgent(), logger)
+	httpClient, err := clienthttp.New(cfg.Timeouts.HTTP, buildUserAgent(), logger, cfg.Proxy.URL, cfg.Proxy.CABundle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
 	sdkOpts := []censys.SDKOption{
 		censys.WithClient(httpClient),
 	}
