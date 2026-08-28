@@ -136,6 +136,40 @@ func (c *Command) parseOrgIDFlag(ctx context.Context) cenclierrors.CencliError {
 	return err
 }
 
+// schemeDefaults maps URL schemes to their Censys protocol name, default port,
+// and default transport protocol. Schemes that are TLS variants of a base
+// protocol (e.g. https, smtps) map to the base protocol name since Censys
+// models TLS as a property of the service rather than a separate protocol.
+type schemeDefaults struct {
+	protocol  string
+	port      int
+	transport components.TargetTransportProtocol
+}
+
+var knownSchemes = map[string]schemeDefaults{
+	"http":       {"HTTP", 80, components.TargetTransportProtocolTCP},
+	"https":      {"HTTP", 443, components.TargetTransportProtocolTCP},
+	"ssh":        {"SSH", 22, components.TargetTransportProtocolTCP},
+	"ftp":        {"FTP", 21, components.TargetTransportProtocolTCP},
+	"ftps":       {"FTP", 990, components.TargetTransportProtocolTCP},
+	"smtp":       {"SMTP", 25, components.TargetTransportProtocolTCP},
+	"smtps":      {"SMTP", 465, components.TargetTransportProtocolTCP},
+	"imap":       {"IMAP", 143, components.TargetTransportProtocolTCP},
+	"imaps":      {"IMAP", 993, components.TargetTransportProtocolTCP},
+	"pop3":       {"POP3", 110, components.TargetTransportProtocolTCP},
+	"pop3s":      {"POP3", 995, components.TargetTransportProtocolTCP},
+	"telnet":     {"TELNET", 23, components.TargetTransportProtocolTCP},
+	"rdp":        {"RDP", 3389, components.TargetTransportProtocolTCP},
+	"vnc":        {"VNC", 5900, components.TargetTransportProtocolTCP},
+	"rtsp":       {"RTSP", 554, components.TargetTransportProtocolTCP},
+	"ldap":       {"LDAP", 389, components.TargetTransportProtocolTCP},
+	"ldaps":      {"LDAP", 636, components.TargetTransportProtocolTCP},
+	"dns":        {"DNS", 53, components.TargetTransportProtocolUDP},
+	"mysql":      {"MYSQL", 3306, components.TargetTransportProtocolTCP},
+	"redis":      {"REDIS", 6379, components.TargetTransportProtocolTCP},
+	"mqtt":       {"MQTT", 1883, components.TargetTransportProtocolTCP},
+}
+
 func (c *Command) parseURLArg(raw string) cenclierrors.CencliError {
 	// Ensure we have a scheme so url.Parse works correctly.
 	if !strings.Contains(raw, "://") {
@@ -147,8 +181,7 @@ func (c *Command) parseURLArg(raw string) cenclierrors.CencliError {
 		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: %w", raw, err))
 	}
 
-	scheme := strings.ToUpper(u.Scheme)
-	if scheme == "" {
+	if u.Scheme == "" {
 		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: missing scheme", raw))
 	}
 
@@ -157,13 +190,19 @@ func (c *Command) parseURLArg(raw string) cenclierrors.CencliError {
 		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: missing host", raw))
 	}
 
-	portStr := u.Port()
-	if portStr == "" {
-		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: port is required (e.g. http://host:80/)", raw))
+	defaults := knownSchemes[strings.ToLower(u.Scheme)]
+
+	// Resolve port: explicit in URL wins, then scheme default, then error.
+	port := defaults.port
+	if portStr := u.Port(); portStr != "" {
+		p, perr := strconv.Atoi(portStr)
+		if perr != nil || p < 1 || p > 65535 {
+			return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: port %q is not a valid port number", raw, portStr))
+		}
+		port = p
 	}
-	port, perr := strconv.Atoi(portStr)
-	if perr != nil || port < 1 || port > 65535 {
-		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: port %q is not a valid port number", raw, portStr))
+	if port == 0 {
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: port is required for scheme %q (e.g. %s://host:PORT/)", raw, u.Scheme, u.Scheme))
 	}
 
 	c.params.OrgID = c.orgID
@@ -171,20 +210,35 @@ func (c *Command) parseURLArg(raw string) cenclierrors.CencliError {
 
 	if net.ParseIP(host) != nil {
 		// IP address → host service target
-		transportStr, ferr := c.cmdFlags.transportProtocol.Value()
-		if ferr != nil {
-			return ferr
+		protocol := defaults.protocol
+		if protocol == "" {
+			protocol = strings.ToUpper(u.Scheme)
 		}
-		transport, terr := parseTransportProtocol(transportStr)
-		if terr != nil {
-			return terr
+
+		// Start from the scheme-derived default; honour --transport-protocol when
+		// explicitly set so the user can override (e.g. force UDP on a custom port).
+		transport := defaults.transport
+		if transport == "" {
+			transport = components.TargetTransportProtocolTCP
 		}
+		if c.Flags().Changed("transport-protocol") {
+			transportStr, ferr := c.cmdFlags.transportProtocol.Value()
+			if ferr != nil {
+				return ferr
+			}
+			overrideTransport, terr := parseTransportProtocol(transportStr)
+			if terr != nil {
+				return terr
+			}
+			transport = overrideTransport
+		}
+
 		c.params.TargetType = rescan.TargetTypeService
 		c.params.IP = host
-		c.params.Protocol = scheme
+		c.params.Protocol = protocol
 		c.params.TransportProtocol = transport
 	} else {
-		// Hostname → web origin target
+		// Hostname → web origin target (scheme and transport not used by API)
 		c.params.TargetType = rescan.TargetTypeWebOrigin
 		c.params.Hostname = host
 	}
