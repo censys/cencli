@@ -3,6 +3,9 @@ package rescan
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/censys/censys-sdk-go/models/components"
@@ -32,10 +35,6 @@ type Command struct {
 
 type rescanCommandFlags struct {
 	orgID             flags.OrgIDFlag
-	ip                flags.StringFlag
-	hostname          flags.StringFlag
-	port              flags.IntegerFlag
-	protocol          flags.StringFlag
 	transportProtocol flags.StringFlag
 }
 
@@ -47,13 +46,23 @@ func NewRescanCommand(cmdContext *command.Context) *Command {
 	}
 }
 
-func (c *Command) Use() string  { return cmdName }
+func (c *Command) Use() string   { return fmt.Sprintf("%s <url>", cmdName) }
 func (c *Command) Short() string { return "Initiate a live rescan and track its progress" }
 func (c *Command) Long() string {
-	return "Initiate a live rescan of a known host service or web property and track the scan's\nprogress until it completes.\n\nThis costs 10 credits per rescan and is available to Enterprise customers."
+	return `Initiate a live rescan of a known host service or web property and track the
+scan's progress until it completes.
+
+The target is specified as a URL. The scheme is used as the application protocol
+for host services. For HTTPS services, Censys models the protocol as HTTP (with a
+TLS object), so use http:// when targeting those.
+
+If the host is an IP address, the target is treated as a host service. If it is a
+hostname, it is treated as a web origin.
+
+This costs 10 credits per rescan and is available to Enterprise customers.`
 }
 
-func (c *Command) Args() command.PositionalArgs { return command.ExactArgs(0) }
+func (c *Command) Args() command.PositionalArgs { return command.ExactArgs(1) }
 
 func (c *Command) DefaultOutputType() command.OutputType { return command.OutputTypeData }
 func (c *Command) SupportedOutputTypes() []command.OutputType {
@@ -63,26 +72,29 @@ func (c *Command) SupportsStreaming() bool { return false }
 
 func (c *Command) Examples() []string {
 	return []string{
-		`--ip 1.2.3.4 --port 443 --protocol HTTP --transport-protocol tcp`,
-		`--hostname example.com --port 443`,
+		`http://1.1.1.1:80`,
+		`rtsp://203.0.113.5:554`,
+		`http://example.com:8088/`,
+		`ssh://192.0.2.10:22 --transport-protocol tcp`,
 	}
 }
 
 func (c *Command) Init() error {
 	c.cmdFlags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
-	c.cmdFlags.ip = flags.NewStringFlag(c.Flags(), false, "ip", "", "", "IP address of the service to rescan (mutually exclusive with --hostname)")
-	c.cmdFlags.hostname = flags.NewStringFlag(c.Flags(), false, "hostname", "", "", "hostname of the web origin to rescan (mutually exclusive with --ip)")
-	c.cmdFlags.port = flags.NewIntegerFlag(c.Flags(), true, "port", "p", mo.None[int64](), "port number", mo.Some[int64](1), mo.Some[int64](65535))
-	c.cmdFlags.protocol = flags.NewStringFlag(c.Flags(), false, "protocol", "", "", "service protocol name (e.g. HTTP, SSH) — required when using --ip")
-	c.cmdFlags.transportProtocol = flags.NewStringFlag(c.Flags(), false, "transport-protocol", "", "tcp", fmt.Sprintf("transport protocol (%s)", strings.Join(validTransportProtocols(), ", ")))
+	c.cmdFlags.transportProtocol = flags.NewStringFlag(
+		c.Flags(), false,
+		"transport-protocol", "",
+		"tcp",
+		fmt.Sprintf("transport protocol for host service targets (%s)", strings.Join(validTransportProtocols(), ", ")),
+	)
 	return nil
 }
 
-func (c *Command) PreRun(cmd *cobra.Command, _ []string) cenclierrors.CencliError {
+func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	if err := c.parseOrgIDFlag(cmd.Context()); err != nil {
 		return err
 	}
-	if err := c.parseTargetFlags(cmd); err != nil {
+	if err := c.parseURLArg(args[0]); err != nil {
 		return err
 	}
 	return c.resolveRescanService()
@@ -124,62 +136,59 @@ func (c *Command) parseOrgIDFlag(ctx context.Context) cenclierrors.CencliError {
 	return err
 }
 
-func (c *Command) parseTargetFlags(cmd *cobra.Command) cenclierrors.CencliError {
-	ipSet := cmd.Flags().Changed("ip")
-	hostnameSet := cmd.Flags().Changed("hostname")
-
-	if ipSet && hostnameSet {
-		return flags.NewConflictingFlagsError("ip", "hostname")
-	}
-	if !ipSet && !hostnameSet {
-		return cenclierrors.NewCencliError(fmt.Errorf("one of --ip or --hostname is required"))
+func (c *Command) parseURLArg(raw string) cenclierrors.CencliError {
+	// Ensure we have a scheme so url.Parse works correctly.
+	if !strings.Contains(raw, "://") {
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: must include a scheme (e.g. http://)", raw))
 	}
 
-	portVal, err := c.cmdFlags.port.Value()
+	u, err := url.Parse(raw)
 	if err != nil {
-		return err
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: %w", raw, err))
 	}
-	port := int(portVal.MustGet())
+
+	scheme := strings.ToUpper(u.Scheme)
+	if scheme == "" {
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: missing scheme", raw))
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: missing host", raw))
+	}
+
+	portStr := u.Port()
+	if portStr == "" {
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: port is required (e.g. http://host:80/)", raw))
+	}
+	port, perr := strconv.Atoi(portStr)
+	if perr != nil || port < 1 || port > 65535 {
+		return cenclierrors.NewCencliError(fmt.Errorf("invalid URL %q: port %q is not a valid port number", raw, portStr))
+	}
 
 	c.params.OrgID = c.orgID
-
-	if hostnameSet {
-		hostname, err := c.cmdFlags.hostname.Value()
-		if err != nil {
-			return err
-		}
-		c.params.TargetType = rescan.TargetTypeWebOrigin
-		c.params.Hostname = hostname
-		c.params.Port = port
-		return nil
-	}
-
-	// service target
-	ip, err := c.cmdFlags.ip.Value()
-	if err != nil {
-		return err
-	}
-	protocol, err := c.cmdFlags.protocol.Value()
-	if err != nil {
-		return err
-	}
-	if protocol == "" {
-		return cenclierrors.NewCencliError(fmt.Errorf("--protocol is required when using --ip"))
-	}
-	transportStr, err := c.cmdFlags.transportProtocol.Value()
-	if err != nil {
-		return err
-	}
-	transport, terr := parseTransportProtocol(transportStr)
-	if terr != nil {
-		return terr
-	}
-
-	c.params.TargetType = rescan.TargetTypeService
-	c.params.IP = ip
 	c.params.Port = port
-	c.params.Protocol = protocol
-	c.params.TransportProtocol = transport
+
+	if net.ParseIP(host) != nil {
+		// IP address → host service target
+		transportStr, ferr := c.cmdFlags.transportProtocol.Value()
+		if ferr != nil {
+			return ferr
+		}
+		transport, terr := parseTransportProtocol(transportStr)
+		if terr != nil {
+			return terr
+		}
+		c.params.TargetType = rescan.TargetTypeService
+		c.params.IP = host
+		c.params.Protocol = scheme
+		c.params.TransportProtocol = transport
+	} else {
+		// Hostname → web origin target
+		c.params.TargetType = rescan.TargetTypeWebOrigin
+		c.params.Hostname = host
+	}
+
 	return nil
 }
 
