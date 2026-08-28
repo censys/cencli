@@ -74,7 +74,17 @@ func NewCensysSDK(
 		logger = applog.New(cfg.Debug, nil)
 	}
 
-	httpClient, err := clienthttp.New(cfg.Timeouts.HTTP, buildUserAgent(), logger, cfg.Proxy.URL, cfg.Proxy.CABundle)
+	httpClient, err := clienthttp.New(clienthttp.Options{
+		RequestTimeout:     cfg.Timeouts.HTTP,
+		UserAgent:          buildUserAgent(),
+		Logger:             logger,
+		ProxyURL:           cfg.Proxy.URL,
+		CABundlePath:       cfg.TLS.CABundle,
+		InsecureSkipVerify: cfg.TLS.InsecureSkipVerify,
+		ClientCertPath:     cfg.TLS.ClientCert,
+		ClientKeyPath:      cfg.TLS.ClientKey,
+		DisableHTTP2:       cfg.TLS.DisableHTTP2,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

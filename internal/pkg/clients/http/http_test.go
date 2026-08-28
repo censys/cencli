@@ -11,6 +11,15 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+func mustNew(t *testing.T, opts Options) *Client {
+	t.Helper()
+	c, err := New(opts)
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	return c
+}
+
 func TestUserAgentInjection_NoExisting(t *testing.T) {
 	serverUA := ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -20,10 +29,7 @@ func TestUserAgentInjection_NoExisting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(0, "cencli-test/0.1", nil, "", "")
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
+	client := mustNew(t, Options{UserAgent: "cencli-test/0.1"})
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
@@ -48,10 +54,7 @@ func TestUserAgentInjection_AppendsExisting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(0, "cencli-test/0.1", nil, "", "")
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
+	client := mustNew(t, Options{UserAgent: "cencli-test/0.1"})
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
@@ -101,10 +104,7 @@ func TestUserAgentRoundTripper_AppendsOrSets(t *testing.T) {
 }
 
 func TestNew_SetsUserAgent_AndNoDefaultTimeout(t *testing.T) {
-	c, err := New(0, "cencli/ua", nil, "", "")
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
+	c := mustNew(t, Options{UserAgent: "cencli/ua"})
 	if c.Timeout != 0 {
 		t.Fatalf("expected timeout 0 (disabled), got %v", c.Timeout)
 	}
@@ -122,5 +122,33 @@ func TestNew_SetsUserAgent_AndNoDefaultTimeout(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://example.com", nil)
 	if _, err := c.Do(req); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNew_InvalidProxyURL(t *testing.T) {
+	_, err := New(Options{ProxyURL: "://bad"})
+	if err == nil {
+		t.Fatal("expected error for invalid proxy URL")
+	}
+}
+
+func TestNew_UnsupportedProxyScheme(t *testing.T) {
+	_, err := New(Options{ProxyURL: "ftp://proxy.example.com:21"})
+	if err == nil {
+		t.Fatal("expected error for unsupported proxy scheme")
+	}
+}
+
+func TestNew_MismatchedClientCert(t *testing.T) {
+	_, err := New(Options{ClientCertPath: "/some/cert.pem"})
+	if err == nil {
+		t.Fatal("expected error when only client-cert is set without client-key")
+	}
+}
+
+func TestNew_MissingCABundle(t *testing.T) {
+	_, err := New(Options{CABundlePath: "/nonexistent/ca.pem"})
+	if err == nil {
+		t.Fatal("expected error for missing CA bundle file")
 	}
 }
