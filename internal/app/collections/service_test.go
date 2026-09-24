@@ -304,3 +304,106 @@ func TestCollectionsService_DeleteCollection(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestCollectionsService_UpdateCollection(t *testing.T) {
+	current := sdkCollection("alpha") // Name "alpha", Query "host.services.protocol=SSH", Description "alpha description"
+
+	testCases := []struct {
+		name        string
+		params      UpdateParams
+		wantRequest client.UpdateCollectionRequest
+	}{
+		{
+			name:   "name only keeps query and description",
+			params: UpdateParams{CollectionID: collectionID(), Name: mo.Some("renamed")},
+			wantRequest: client.UpdateCollectionRequest{
+				CollectionID: testCollectionID, Name: "renamed",
+				Query: "host.services.protocol=SSH", Description: mo.Some("alpha description"),
+			},
+		},
+		{
+			name:   "query only keeps name and description",
+			params: UpdateParams{CollectionID: collectionID(), Query: mo.Some("host.ip=1.1.1.1")},
+			wantRequest: client.UpdateCollectionRequest{
+				CollectionID: testCollectionID, Name: "alpha",
+				Query: "host.ip=1.1.1.1", Description: mo.Some("alpha description"),
+			},
+		},
+		{
+			name:   "description only keeps name and query",
+			params: UpdateParams{CollectionID: collectionID(), Description: mo.Some("new desc")},
+			wantRequest: client.UpdateCollectionRequest{
+				CollectionID: testCollectionID, Name: "alpha",
+				Query: "host.services.protocol=SSH", Description: mo.Some("new desc"),
+			},
+		},
+		{
+			name:   "clear description sends an empty description",
+			params: UpdateParams{CollectionID: collectionID(), Description: mo.Some("")},
+			wantRequest: client.UpdateCollectionRequest{
+				CollectionID: testCollectionID, Name: "alpha",
+				Query: "host.services.protocol=SSH", Description: mo.Some(""),
+			},
+		},
+		{
+			name: "all fields replace all values",
+			params: UpdateParams{
+				CollectionID: collectionID(), Name: mo.Some("n"), Query: mo.Some("q"), Description: mo.Some("d"),
+			},
+			wantRequest: client.UpdateCollectionRequest{
+				CollectionID: testCollectionID, Name: "n", Query: "q", Description: mo.Some("d"),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := mocks.NewMockClient(ctrl)
+			got := current
+			updated := sdkCollection("updated")
+			gomock.InOrder(
+				m.EXPECT().GetCollection(gomock.Any(), mo.None[string](), testCollectionID).
+					Return(client.Result[components.Collection]{Metadata: okMeta(), Data: &got}, nil),
+				m.EXPECT().UpdateCollection(gomock.Any(), tc.wantRequest).
+					Return(client.Result[components.Collection]{Metadata: okMeta(), Data: &updated}, nil),
+			)
+			res, err := New(m).UpdateCollection(context.Background(), tc.params)
+			require.NoError(t, err)
+			require.Equal(t, "updated", res.Collection.Name)
+			require.NotNil(t, res.Meta)
+		})
+	}
+
+	t.Run("failed GET sends no update", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetCollection(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(client.Result[components.Collection]{}, client.NewClientError(errors.New("boom")))
+		// No UpdateCollection expectation: gomock fails the test if it is called.
+		_, err := New(m).UpdateCollection(context.Background(), UpdateParams{CollectionID: collectionID(), Name: mo.Some("x")})
+		require.Error(t, err)
+	})
+
+	t.Run("GET returns nil data sends no update", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		m.EXPECT().GetCollection(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(client.Result[components.Collection]{Metadata: okMeta(), Data: nil}, nil)
+		_, err := New(m).UpdateCollection(context.Background(), UpdateParams{CollectionID: collectionID(), Name: mo.Some("x")})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "the update was not sent")
+	})
+
+	t.Run("failed update is returned", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		got := current
+		m.EXPECT().GetCollection(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(client.Result[components.Collection]{Metadata: okMeta(), Data: &got}, nil)
+		m.EXPECT().UpdateCollection(gomock.Any(), gomock.Any()).
+			Return(client.Result[components.Collection]{}, client.NewClientError(errors.New("boom")))
+		_, err := New(m).UpdateCollection(context.Background(), UpdateParams{CollectionID: collectionID(), Name: mo.Some("x")})
+		require.Error(t, err)
+	})
+}

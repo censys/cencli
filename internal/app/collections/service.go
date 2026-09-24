@@ -133,12 +133,45 @@ func (s *collectionsService) CreateCollection(
 	return CreateResult{Meta: newResponseMeta(result.Metadata), Collection: collection}, nil
 }
 
-// UpdateCollection is implemented in Task 4.
+// UpdateCollection changes a collection's name, query, or description. The API
+// replaces the whole collection and requires the name and query every time, so
+// this reads the current collection and fills in each field the caller left
+// absent (spec D1). A change made by someone else between the read and the
+// write is overwritten.
 func (s *collectionsService) UpdateCollection(
 	ctx context.Context,
 	params UpdateParams,
 ) (UpdateResult, cenclierrors.CencliError) {
-	return UpdateResult{}, cenclierrors.NewCencliError(errNotImplemented)
+	orgIDStr := utilconvert.OptionalString(params.OrgID)
+	collectionID := params.CollectionID.String()
+
+	current, err := s.client.GetCollection(ctx, orgIDStr, collectionID)
+	if err != nil {
+		return UpdateResult{}, err
+	}
+	// Without the current values the replacement would carry an empty name and
+	// query, which would overwrite the collection.
+	if current.Data == nil {
+		return UpdateResult{}, NewMissingCollectionError(collectionID)
+	}
+
+	result, err := s.client.UpdateCollection(ctx, client.UpdateCollectionRequest{
+		OrgID:        orgIDStr,
+		CollectionID: collectionID,
+		Name:         params.Name.OrElse(current.Data.Name),
+		Query:        params.Query.OrElse(current.Data.Query),
+		Description:  mo.Some(params.Description.OrElse(current.Data.Description)),
+	})
+	if err != nil {
+		return UpdateResult{}, err
+	}
+
+	var collection Collection
+	if result.Data != nil {
+		collection = mapCollection(*result.Data)
+	}
+
+	return UpdateResult{Meta: newResponseMeta(result.Metadata), Collection: collection}, nil
 }
 
 func (s *collectionsService) DeleteCollection(

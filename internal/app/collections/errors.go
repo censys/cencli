@@ -1,7 +1,6 @@
 package collections
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -114,6 +113,3 @@ func (e *missingCollectionError) Error() string {
 func (e *missingCollectionError) Title() string { return "Collection Not Returned" }
 
 func (e *missingCollectionError) ShouldPrintUsage() bool { return false }
-
-// errNotImplemented is removed in Task 4.
-var errNotImplemented = errors.New("update not implemented")
