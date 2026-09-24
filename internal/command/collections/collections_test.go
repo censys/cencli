@@ -167,6 +167,23 @@ func TestCollectionsListCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "blank status entries are dropped",
+			service: func(ctrl *gomock.Controller) appcollections.Service {
+				m := collectionsmocks.NewMockCollectionsService(ctrl)
+				m.EXPECT().ListCollections(gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, params appcollections.ListParams) (appcollections.ListResult, cenclierrors.CencliError) {
+						require.Equal(t, []string{"active", "paused"}, params.Statuses)
+						return appcollections.ListResult{Meta: okMeta()}, nil
+					},
+				)
+				return m
+			},
+			args: []string{"--status", "active,,paused"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+			},
+		},
+		{
 			name: "max-pages 0 is rejected",
 			service: func(ctrl *gomock.Controller) appcollections.Service {
 				return collectionsmocks.NewMockCollectionsService(ctrl)
