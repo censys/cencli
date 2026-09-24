@@ -41,22 +41,38 @@ func TestCollectionsUpdateCommand(t *testing.T) {
 		args    []string
 		wantErr string
 	}{
-		{name: "name only", service: expectParams(appcollections.UpdateParams{Name: mo.Some("renamed")}),
-			args: []string{testCollectionID, "--name", "renamed"}},
-		{name: "query only", service: expectParams(appcollections.UpdateParams{Query: mo.Some("host.ip=1.1.1.1")}),
-			args: []string{testCollectionID, "--query", "host.ip=1.1.1.1"}},
-		{name: "description only", service: expectParams(appcollections.UpdateParams{Description: mo.Some("d")}),
-			args: []string{testCollectionID, "--description", "d"}},
-		{name: "clear description", service: expectParams(appcollections.UpdateParams{Description: mo.Some("")}),
-			args: []string{testCollectionID, "--clear-description"}},
-		{name: "no flags", service: noCall, args: []string{testCollectionID},
-			wantErr: "no fields to update"},
-		{name: "blank values count as no flags", service: noCall, args: []string{testCollectionID, "--name", "  "},
-			wantErr: "no fields to update"},
-		{name: "description conflict", service: noCall, args: []string{testCollectionID, "--description", "d", "--clear-description"},
-			wantErr: "cannot be used together"},
-		{name: "invalid ID", service: noCall, args: []string{"nope", "--name", "x"},
-			wantErr: "invalid collection ID"},
+		{
+			name: "name only", service: expectParams(appcollections.UpdateParams{Name: mo.Some("renamed")}),
+			args: []string{testCollectionID, "--name", "renamed"},
+		},
+		{
+			name: "query only", service: expectParams(appcollections.UpdateParams{Query: mo.Some("host.ip=1.1.1.1")}),
+			args: []string{testCollectionID, "--query", "host.ip=1.1.1.1"},
+		},
+		{
+			name: "description only", service: expectParams(appcollections.UpdateParams{Description: mo.Some("d")}),
+			args: []string{testCollectionID, "--description", "d"},
+		},
+		{
+			name: "clear description", service: expectParams(appcollections.UpdateParams{Description: mo.Some("")}),
+			args: []string{testCollectionID, "--clear-description"},
+		},
+		{
+			name: "no flags", service: noCall, args: []string{testCollectionID},
+			wantErr: "no fields to update",
+		},
+		{
+			name: "blank values count as no flags", service: noCall, args: []string{testCollectionID, "--name", "  "},
+			wantErr: "no fields to update",
+		},
+		{
+			name: "description conflict", service: noCall, args: []string{testCollectionID, "--description", "d", "--clear-description"},
+			wantErr: "cannot be used together",
+		},
+		{
+			name: "invalid ID", service: noCall, args: []string{"nope", "--name", "x"},
+			wantErr: "invalid collection ID",
+		},
 	}
 
 	for _, tc := range testCases {

@@ -132,6 +132,10 @@ The `tags` command lets you label and organize assets. You can manage tags thems
 
 The `scan` command requests a live rescan of a web property (`censys scan rescan example.com:443`, 10 credits per accepted request) and tracks scans until they complete (`censys scan get <scan-id> --wait`, free). Rescans require an organization and are never retried automatically. See the [scan command docs](./docs/commands/SCAN.md) for more details.
 
+### Collections
+
+The `collections` command lets you manage collections: saved CenQL queries whose matching assets Censys keeps up to date. You can `list`, `get`, `create`, `update`, and `delete` collections, then query inside one with `censys search --collection-id` or `censys aggregate --collection-id`. See the [collections command docs](./docs/commands/COLLECTIONS.md) for more details.
+
 ### Other Commands
 
 - `$ censys org`: manage and view organization details. See the [org command docs](./docs/commands/ORG.md) for more details.
