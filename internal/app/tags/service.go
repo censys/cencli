@@ -137,7 +137,7 @@ func (s *tagsService) ListAssignments(
 
 	pageSize := optionalInt64(params.PageSize)
 
-	// paginate only returns a hard error when the *first* page failed, so a retry
+	// The paginator only returns a hard error when the *first* page failed, so a retry
 	// here cannot re-emit anything already streamed.
 	page, err := callWithTag(ctx, s, orgIDStr, params.TagID,
 		func(tagID string) (pagination.Result[Assignment], cenclierrors.CencliError) {
