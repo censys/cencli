@@ -1,0 +1,35 @@
+Update an existing collection by its UUID.                                              
+                                                                                        
+At least one mutation flag is required. Use --clear-description to remove a collection's
+description; it cannot be combined with --description.                                  
+                                                                                        
+The API replaces the whole collection on every update, so this command first reads the  
+collection and keeps each value you do not change. A change that someone else makes     
+between the read and the update is overwritten.                                         
+
+Usage:
+  censys collections update <collection-id> [flags]
+
+Examples:
+  censys collections update <collection-id> --name renamed # Rename a collection
+  censys collections update <collection-id> --query "host.services.protocol=RDP" # Change the query
+  censys collections update <collection-id> --description "Hosts to review" # Set a description
+  censys collections update <collection-id> --clear-description # Remove the description
+
+Flags:
+      --clear-description    remove the collection's description
+      --description string   new description for the collection
+  -h, --help                 help for update
+      --name string          new name for the collection
+  -o, --org-id string        organization ID to target (personal access tokens only)
+      --query string         new CenQL query for the collection
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

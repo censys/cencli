@@ -1,0 +1,31 @@
+List all collections in your organization.                                            
+                                                                                      
+Results can be filtered by status. Repeat --status, or separate values with commas, to
+match more than one status.                                                           
+
+Usage:
+  censys collections list [flags]
+
+Examples:
+  censys collections list  # List all collections
+  censys collections list --status active # List only active collections
+  censys collections list --status active,paused # List active and paused collections
+  censys collections list --max-pages -1 # Fetch every page
+  censys collections list --output-format json # Output as JSON
+
+Flags:
+  -h, --help             help for list
+  -p, --max-pages int    maximum number of pages to fetch (-1 for all pages) (default 1)
+  -o, --org-id string    organization ID to target (personal access tokens only)
+  -n, --page-size int    number of collections to return per page (default 100)
+      --status strings   filter by status (populating, active, paused, archived); repeatable
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+
