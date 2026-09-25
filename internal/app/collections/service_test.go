@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/censys/censys-sdk-go/models/components"
+	"github.com/censys/censys-sdk-go/models/sdkerrors"
 
 	"github.com/censys/cencli/gen/client/mocks"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -284,6 +285,121 @@ func TestCollectionsService_CreateCollection(t *testing.T) {
 			tc.assert(t, res, err)
 		})
 	}
+}
+
+// clientStructuredError builds a structured client error carrying the given
+// status code, the same as clientStructuredError in tags/service_test.go.
+func clientStructuredError(detail string, status int64) client.ClientError {
+	return client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})
+}
+
+func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
+	createParams := CreateParams{Name: "alpha", Query: "host.services.protocol=SSH"}
+
+	t.Run("412 with a count", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		gomock.InOrder(
+			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
+				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+				Return(collectionPage([]string{"a", "b", "c"}, ""), nil),
+		)
+
+		_, err := New(m).CreateCollection(context.Background(), createParams)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "reached its collection limit (3 collections count toward it; archived collections do not)")
+
+		var limitErr *collectionLimitError
+		require.True(t, errors.As(err, &limitErr))
+	})
+
+	t.Run("412 across two pages", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		gomock.InOrder(
+			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
+				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+				Return(collectionPage([]string{"a", "b"}, "t"), nil),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageToken: mo.Some("t")}).
+				Return(collectionPage([]string{"c"}, ""), nil),
+		)
+
+		_, err := New(m).CreateCollection(context.Background(), createParams)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "reached its collection limit (3 collections count toward it; archived collections do not)")
+	})
+
+	t.Run("412 whose count fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		gomock.InOrder(
+			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
+				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+				Return(client.Result[components.ListCollectionsResponseV1]{}, client.NewClientError(errors.New("boom"))),
+		)
+
+		_, err := New(m).CreateCollection(context.Background(), createParams)
+		require.Error(t, err)
+		require.NotContains(t, err.Error(), "collections count toward it")
+		require.Contains(t, err.Error(), "reached its collection limit (archived collections do not count toward it)")
+	})
+
+	t.Run("412 whose count fails on page 2 (partial)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		gomock.InOrder(
+			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
+				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+				Return(collectionPage([]string{"a"}, "t"), nil),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageToken: mo.Some("t")}).
+				Return(client.Result[components.ListCollectionsResponseV1]{}, client.NewClientError(errors.New("boom"))),
+		)
+
+		_, err := New(m).CreateCollection(context.Background(), createParams)
+		require.Error(t, err)
+		require.NotContains(t, err.Error(), "collections count toward it")
+		require.Contains(t, err.Error(), "reached its collection limit (archived collections do not count toward it)")
+	})
+
+	t.Run("non-412 error passes through", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		wantErr := clientStructuredError("invalid query", 422)
+		// No ListCollections expectation: gomock fails the test if it is called.
+		m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
+			Return(client.Result[components.Collection]{}, wantErr)
+
+		_, err := New(m).CreateCollection(context.Background(), createParams)
+		require.Error(t, err)
+		require.Equal(t, wantErr.Error(), err.Error())
+
+		var limitErr *collectionLimitError
+		require.False(t, errors.As(err, &limitErr))
+	})
+
+	t.Run("the org ID is passed to the count", func(t *testing.T) {
+		orgID := identifiers.NewOrganizationID(uuid.MustParse(testCollectionID))
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		gomock.InOrder(
+			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
+				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{
+				OrgID:    mo.Some(testCollectionID),
+				Statuses: []string{"populating", "active", "paused"},
+			}).Return(collectionPage([]string{"a"}, ""), nil),
+		)
+
+		_, err := New(m).CreateCollection(context.Background(), CreateParams{
+			OrgID: mo.Some(orgID), Name: "alpha", Query: "host.services.protocol=SSH",
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "1 collections count toward it")
+	})
 }
 
 func TestCollectionsService_DeleteCollection(t *testing.T) {
