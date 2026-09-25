@@ -201,6 +201,15 @@ $ censys collections create ssh-hosts --query "host.services.protocol=SSH" --out
 }
 ```
 
+When the organization is at its collection limit, the API refuses the create with a 412 and the command reports how many collections count toward it:
+
+```console
+$ censys collections create ssh-hosts --query "host.services.protocol=SSH"
+
+[Collection Limit Reached]
+your organization has reached its collection limit (12 collections count toward it; archived collections do not). Delete one with `censys collections delete <id>`, or contact your Censys account team for more
+```
+
 ### `collections update`
 
 Update an existing collection by its UUID. **At least one mutation flag is required** — an update with nothing to change is rejected rather than sent.
@@ -310,6 +319,8 @@ $ censys collections delete 550e8400-e29b-41d4-a716-446655440000 --yes --output-
 ## Data Availability
 
 - Collection limits depend on your organization's plan. The API enforces them when you create a collection. It does not expose the limit or your remaining allowance, so the CLI cannot show how many more collections you can create, or check before it creates one.
+- When the organization is at its limit, `collections create` fails with "Collection Limit Reached". The message shows how many collections count toward the limit. Archived collections do not count.
+- There is no pre-check: the API is the only source of the limit.
 - The list endpoint does not return a total count. `collections list` reports how many collections it fetched, and prints a note on stderr when more pages exist.
 - See the [Censys plan documentation](https://docs.censys.com/docs/platform-collections) for collection limits by plan.
 
