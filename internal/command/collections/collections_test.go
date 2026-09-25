@@ -50,25 +50,30 @@ func runCommand(
 	args []string,
 ) (stdout, stderr string, err error) {
 	t.Helper()
+	return runCommandWith(t, svc, build, args, false)
+}
+
+// runCommandWith is runCommand with an explicit quiet seam: quiet stands in for
+// the global --quiet flag, which lives on the real root command and so is not
+// registered when a subcommand is mounted alone.
+func runCommandWith(
+	t *testing.T,
+	svc appcollections.Service,
+	build func(*command.Context) command.Command,
+	args []string,
+	quiet bool,
+) (stdout, stderr string, err error) {
+	t.Helper()
 
 	tempDir := t.TempDir()
 	viper.Reset()
 	cfg, cfgErr := config.New(tempDir)
 	require.NoError(t, cfgErr)
-
-	// --quiet lives on the real root command, which this harness does not mount
-	// (it wraps a single subcommand), so cobra here would reject it as unknown.
-	// Strip it and set it directly on viper instead, which is where the real
-	// flag lands and where PreRun re-reads the config from.
-	var filteredArgs []string
-	for _, a := range args {
-		if a == "--quiet" || a == "-q" {
-			viper.Set("quiet", true)
-			continue
-		}
-		filteredArgs = append(filteredArgs, a)
+	if quiet {
+		// PreRun re-reads the config from viper, so setting the struct field would
+		// be overwritten; viper is also where the real --quiet flag lands.
+		viper.Set("quiet", true)
 	}
-	args = filteredArgs
 
 	var outBuf, errBuf bytes.Buffer
 	formatter.Stdout = &outBuf
@@ -119,6 +124,7 @@ func TestCollectionsListCommand(t *testing.T) {
 		name    string
 		service func(ctrl *gomock.Controller) appcollections.Service
 		args    []string
+		quiet   bool
 		assert  func(t *testing.T, stdout, stderr string, err error)
 	}{
 		{
@@ -272,7 +278,7 @@ func TestCollectionsListCommand(t *testing.T) {
 					}, nil)
 				return m
 			},
-			args: []string{"--quiet"},
+			quiet: true,
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.NotContains(t, stderr, "More collections are available")
@@ -283,7 +289,7 @@ func TestCollectionsListCommand(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			stdout, stderr, err := runCommand(t, tc.service(ctrl), build, tc.args)
+			stdout, stderr, err := runCommandWith(t, tc.service(ctrl), build, tc.args, tc.quiet)
 			tc.assert(t, stdout, stderr, err)
 		})
 	}
