@@ -83,7 +83,7 @@ func TestCollectionsCreateCommand(t *testing.T) {
 			args: []string{"alpha", "--query", "host.services.protocol=SSH"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "12 collections count toward it")
+				require.Contains(t, err.Error(), "12 collection(s) count toward it")
 			},
 		},
 		{
