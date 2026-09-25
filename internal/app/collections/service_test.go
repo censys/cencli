@@ -302,7 +302,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 		gomock.InOrder(
 			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
 				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
-			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageSize: mo.Some[int64](100)}).
 				Return(collectionPage([]string{"a", "b", "c"}, ""), nil),
 		)
 
@@ -320,9 +320,9 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 		gomock.InOrder(
 			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
 				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
-			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageSize: mo.Some[int64](100)}).
 				Return(collectionPage([]string{"a", "b"}, "t"), nil),
-			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageToken: mo.Some("t")}).
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageSize: mo.Some[int64](100), PageToken: mo.Some("t")}).
 				Return(collectionPage([]string{"c"}, ""), nil),
 		)
 
@@ -337,7 +337,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 		gomock.InOrder(
 			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
 				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
-			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageSize: mo.Some[int64](100)}).
 				Return(client.Result[components.ListCollectionsResponseV1]{}, client.NewClientError(errors.New("boom"))),
 		)
 
@@ -353,9 +353,9 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 		gomock.InOrder(
 			m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
 				Return(client.Result[components.Collection]{}, clientStructuredError("Collection limit exceeded", 412)),
-			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}}).
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageSize: mo.Some[int64](100)}).
 				Return(collectionPage([]string{"a"}, "t"), nil),
-			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageToken: mo.Some("t")}).
+			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{Statuses: []string{"populating", "active", "paused"}, PageSize: mo.Some[int64](100), PageToken: mo.Some("t")}).
 				Return(client.Result[components.ListCollectionsResponseV1]{}, client.NewClientError(errors.New("boom"))),
 		)
 
@@ -391,6 +391,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 			m.EXPECT().ListCollections(gomock.Any(), client.ListCollectionsRequest{
 				OrgID:    mo.Some(testCollectionID),
 				Statuses: []string{"populating", "active", "paused"},
+				PageSize: mo.Some[int64](100),
 			}).Return(collectionPage([]string{"a"}, ""), nil),
 		)
 

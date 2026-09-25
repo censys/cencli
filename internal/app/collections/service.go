@@ -163,13 +163,17 @@ var countedStatuses = func() []string {
 	return statuses
 }()
 
+// countPageSize is the page size for the limit count. It matches the list
+// command's default, so a refused create costs a few calls, not one per collection.
+const countPageSize = 100
+
 // countTowardLimit counts the collections that count toward the limit, across
 // every page. It returns an absent count when any page fails, so a partial
 // count is never shown as the real one. The create command never streams (its
 // context carries no emitter, and it does not support -S), so ListCollections
 // always collects here instead of emitting.
 func (s *collectionsService) countTowardLimit(ctx context.Context, orgID mo.Option[identifiers.OrganizationID]) mo.Option[int] {
-	res, err := s.ListCollections(ctx, ListParams{OrgID: orgID, Statuses: countedStatuses})
+	res, err := s.ListCollections(ctx, ListParams{OrgID: orgID, Statuses: countedStatuses, PageSize: mo.Some[uint64](countPageSize)})
 	if err != nil || res.PartialError != nil {
 		return mo.None[int]()
 	}
