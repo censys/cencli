@@ -41,7 +41,7 @@ $ censys collections list --max-pages -1              # fetch every page
 $ censys collections list --output-format json        # output as JSON
 ```
 
-Results are paginated. By default only the first page is fetched; use `--max-pages` to fetch more, or `-1` for all pages. The API reports no total count, so the `short` output header reads `Collections (N)` for however many were fetched, never a total.
+Results are paginated. By default `list` fetches one page (100 collections); use `--max-pages` to fetch more, or `-1` for all pages. The API reports no total count, so the `short` output header reads `Collections (N)` for however many were fetched, never a total. When more collections exist beyond what was fetched, the command prints a note on stderr — pass `--quiet` to suppress it.
 
 #### Flags
 
@@ -85,7 +85,7 @@ $ censys collections list --output-format json
     "total_assets": 1204,
     "added_assets_24_hours": 12,
     "removed_assets_24_hours": 3,
-    "created_by": "user@example.com",
+    "created_by": "6f985c2a-daa6-4a37-b666-03b4aecd8a88",
     "create_time": "2026-09-01T10:15:00Z"
   }
 ]
@@ -119,7 +119,7 @@ $ censys collections get 550e8400-e29b-41d4-a716-446655440000
   Assets:       1204
   Added 24h:    12
   Removed 24h:  3
-  Created By:   user@example.com
+  Created By:   6f985c2a-daa6-4a37-b666-03b4aecd8a88
   Created At:   2026-09-01 10:15:00 UTC
 ```
 
@@ -135,7 +135,7 @@ $ censys collections get 550e8400-e29b-41d4-a716-446655440000 --output-format js
   "total_assets": 1204,
   "added_assets_24_hours": 12,
   "removed_assets_24_hours": 3,
-  "created_by": "user@example.com",
+  "created_by": "6f985c2a-daa6-4a37-b666-03b4aecd8a88",
   "create_time": "2026-09-01T10:15:00Z"
 }
 ```
@@ -178,7 +178,7 @@ $ censys collections create ssh-hosts --query "host.services.protocol=SSH"
   Assets:       0
   Added 24h:    0
   Removed 24h:  0
-  Created By:   user@example.com
+  Created By:   6f985c2a-daa6-4a37-b666-03b4aecd8a88
   Created At:   2026-09-24 09:00:00 UTC
 
 Search this collection: censys search --collection-id 550e8400-e29b-41d4-a716-446655440000 "host.services.protocol=SSH"
@@ -250,7 +250,7 @@ $ censys collections update 550e8400-e29b-41d4-a716-446655440000 --name renamed-
   Assets:       1204
   Added 24h:    12
   Removed 24h:  3
-  Created By:   user@example.com
+  Created By:   6f985c2a-daa6-4a37-b666-03b4aecd8a88
   Created At:   2026-09-01 10:15:00 UTC
 ```
 
@@ -266,7 +266,7 @@ $ censys collections update 550e8400-e29b-41d4-a716-446655440000 --name renamed-
   "total_assets": 1204,
   "added_assets_24_hours": 12,
   "removed_assets_24_hours": 3,
-  "created_by": "user@example.com",
+  "created_by": "6f985c2a-daa6-4a37-b666-03b4aecd8a88",
   "create_time": "2026-09-01T10:15:00Z"
 }
 ```
@@ -306,6 +306,12 @@ $ censys collections delete 550e8400-e29b-41d4-a716-446655440000 --yes --output-
 }
 ```
 
+## Data Availability
+
+- Collection limits depend on your organization's plan. The API enforces them when you create a collection. It does not expose the limit or your remaining allowance, so the CLI cannot show how many more collections you can create, or check before it creates one.
+- The list endpoint does not return a total count. `collections list` reports how many collections it fetched, and prints a note on stderr when more pages exist.
+- See the [Censys plan documentation](https://docs.censys.com/docs/platform-collections) for collection limits by plan.
+
 ## Output Formats
 
 All `collections` commands default to **`short`** output. Override with `--output-format` (or `-O`).
@@ -323,4 +329,4 @@ Templates (`-O template`) are not supported for `collections`.
 ## Related Commands
 
 - [`search`](SEARCH.md) — query within a collection with `censys search --collection-id <collection-id> "<query>"`
-- [`aggregate`](AGGREGATE.md) — aggregate within a collection with `censys aggregate --collection-id <collection-id> "<query>"`
+- [`aggregate`](AGGREGATE.md) — aggregate within a collection with `censys aggregate --collection-id <collection-id> "<query>" "<field>"`
