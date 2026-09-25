@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/samber/mo"
+
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 )
 
@@ -113,3 +115,27 @@ func (e *missingCollectionError) Error() string {
 func (e *missingCollectionError) Title() string { return "Collection Not Returned" }
 
 func (e *missingCollectionError) ShouldPrintUsage() bool { return false }
+
+// collectionLimitError signals that the API refused a create because the
+// organization is at its collection limit (HTTP 412). Count is the number of
+// collections that count toward the limit (archived ones do not), or absent
+// when counting them failed.
+type collectionLimitError struct {
+	count mo.Option[int]
+}
+
+// NewCollectionLimitError creates a collection-limit error.
+func NewCollectionLimitError(count mo.Option[int]) cenclierrors.CencliError {
+	return &collectionLimitError{count: count}
+}
+
+func (e *collectionLimitError) Error() string {
+	if e.count.IsPresent() {
+		return fmt.Sprintf("your organization has reached its collection limit (%d collections count toward it; archived collections do not). Delete one with `censys collections delete <id>`, or contact your Censys account team for more", e.count.MustGet())
+	}
+	return "your organization has reached its collection limit (archived collections do not count toward it). Delete one with `censys collections delete <id>`, or contact your Censys account team for more"
+}
+
+func (e *collectionLimitError) Title() string { return "Collection Limit Reached" }
+
+func (e *collectionLimitError) ShouldPrintUsage() bool { return false }

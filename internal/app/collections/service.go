@@ -2,6 +2,7 @@ package collections
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/samber/mo"
@@ -12,6 +13,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
+	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 )
 
@@ -123,6 +125,9 @@ func (s *collectionsService) CreateCollection(
 		Description: params.Description,
 	})
 	if err != nil {
+		if isCollectionLimitError(err) {
+			return CreateResult{}, NewCollectionLimitError(s.countTowardLimit(ctx, params.OrgID))
+		}
 		return CreateResult{}, err
 	}
 
@@ -132,6 +137,43 @@ func (s *collectionsService) CreateCollection(
 	}
 
 	return CreateResult{Meta: newResponseMeta(result.Metadata), Collection: collection}, nil
+}
+
+// isCollectionLimitError reports whether err is the create endpoint's 412
+// "Collection limit exceeded" response. The endpoint uses 412 for no other reason.
+func isCollectionLimitError(err cenclierrors.CencliError) bool {
+	var coded interface{ StatusCode() mo.Option[int64] }
+	if !errors.As(err, &coded) {
+		return false
+	}
+	status := coded.StatusCode()
+	return status.IsPresent() && status.MustGet() == 412
+}
+
+// countedStatuses are the statuses that count toward the collection limit;
+// archived collections do not. Built from SupportedStatuses so the two lists
+// cannot drift.
+var countedStatuses = func() []string {
+	statuses := make([]string, 0, len(SupportedStatuses)-1)
+	for _, s := range SupportedStatuses {
+		if s != "archived" {
+			statuses = append(statuses, s)
+		}
+	}
+	return statuses
+}()
+
+// countTowardLimit counts the collections that count toward the limit, across
+// every page. It returns an absent count when any page fails, so a partial
+// count is never shown as the real one. The create command never streams (its
+// context carries no emitter, and it does not support -S), so ListCollections
+// always collects here instead of emitting.
+func (s *collectionsService) countTowardLimit(ctx context.Context, orgID mo.Option[identifiers.OrganizationID]) mo.Option[int] {
+	res, err := s.ListCollections(ctx, ListParams{OrgID: orgID, Statuses: countedStatuses})
+	if err != nil || res.PartialError != nil {
+		return mo.None[int]()
+	}
+	return mo.Some(len(res.Collections))
 }
 
 // UpdateCollection changes a collection's name, query, or description. The API
