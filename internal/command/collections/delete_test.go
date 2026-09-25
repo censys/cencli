@@ -62,6 +62,10 @@ func deleteSuccessService(ctrl *gomock.Controller) appcollections.Service {
 	return m
 }
 
+func deleteNoCallService(ctrl *gomock.Controller) appcollections.Service {
+	return collectionsmocks.NewMockCollectionsService(ctrl)
+}
+
 func TestCollectionsDeleteCommand(t *testing.T) {
 	isTTY := func() bool { return true }
 	notTTY := func() bool { return false }
@@ -75,59 +79,90 @@ func TestCollectionsDeleteCommand(t *testing.T) {
 		}
 	}
 
-	t.Run("--yes skips the prompt", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		stdout, _, err := runDeleteCommand(t, deleteSuccessService(ctrl),
-			deleteSeams{confirm: mustNotPrompt(t), stdinIsTTY: notTTY}, []string{testCollectionID, "--yes"})
-		require.NoError(t, err)
-		require.Contains(t, stdout, "deleted")
-	})
+	testCases := []struct {
+		name    string
+		service func(ctrl *gomock.Controller) appcollections.Service
+		args    []string
+		seams   deleteSeams
+		assert  func(t *testing.T, stdout, stderr string, err error)
+	}{
+		{
+			name:    "--yes skips the prompt",
+			service: deleteSuccessService,
+			args:    []string{testCollectionID, "--yes"},
+			seams:   deleteSeams{confirm: mustNotPrompt(t), stdinIsTTY: notTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "deleted")
+			},
+		},
+		{
+			name:    "confirmed prompt deletes",
+			service: deleteSuccessService,
+			args:    []string{testCollectionID},
+			seams:   deleteSeams{confirm: yes, stdinIsTTY: isTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "deleted")
+			},
+		},
+		{
+			name:    "declined confirmation sends no request",
+			service: deleteNoCallService,
+			args:    []string{testCollectionID},
+			seams:   deleteSeams{confirm: no, stdinIsTTY: isTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stderr, "Deletion aborted.")
+			},
+		},
+		{
+			name:    "aborted prompt is an interrupted error",
+			service: deleteNoCallService,
+			args:    []string{testCollectionID},
+			seams:   deleteSeams{confirm: aborted, stdinIsTTY: isTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+			},
+		},
+		{
+			name:    "non-interactive without --yes is refused",
+			service: deleteNoCallService,
+			args:    []string{testCollectionID},
+			seams:   deleteSeams{confirm: mustNotPrompt(t), stdinIsTTY: notTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "confirmation required")
+			},
+		},
+		{
+			name:    "invalid ID fails before the prompt",
+			service: deleteNoCallService,
+			args:    []string{"nope"},
+			seams:   deleteSeams{confirm: mustNotPrompt(t), stdinIsTTY: isTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "is not a valid UUID")
+			},
+		},
+		{
+			name:    "json output",
+			service: deleteSuccessService,
+			args:    []string{testCollectionID, "--yes", "--output-format", "json"},
+			seams:   deleteSeams{stdinIsTTY: notTTY},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, `"collection": "`+testCollectionID+`"`)
+				require.Contains(t, stdout, `"deleted": true`)
+			},
+		},
+	}
 
-	t.Run("confirmed prompt deletes", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		stdout, _, err := runDeleteCommand(t, deleteSuccessService(ctrl),
-			deleteSeams{confirm: yes, stdinIsTTY: isTTY}, []string{testCollectionID})
-		require.NoError(t, err)
-		require.Contains(t, stdout, "deleted")
-	})
-
-	t.Run("declined confirmation sends no request", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		_, stderr, err := runDeleteCommand(t, collectionsmocks.NewMockCollectionsService(ctrl),
-			deleteSeams{confirm: no, stdinIsTTY: isTTY}, []string{testCollectionID})
-		require.NoError(t, err)
-		require.Contains(t, stderr, "Deletion aborted.")
-	})
-
-	t.Run("aborted prompt is an interrupted error", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		_, _, err := runDeleteCommand(t, collectionsmocks.NewMockCollectionsService(ctrl),
-			deleteSeams{confirm: aborted, stdinIsTTY: isTTY}, []string{testCollectionID})
-		require.Error(t, err)
-	})
-
-	t.Run("non-interactive without --yes is refused", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		_, _, err := runDeleteCommand(t, collectionsmocks.NewMockCollectionsService(ctrl),
-			deleteSeams{confirm: mustNotPrompt(t), stdinIsTTY: notTTY}, []string{testCollectionID})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "confirmation required")
-	})
-
-	t.Run("invalid ID fails before the prompt", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		_, _, err := runDeleteCommand(t, collectionsmocks.NewMockCollectionsService(ctrl),
-			deleteSeams{confirm: mustNotPrompt(t), stdinIsTTY: isTTY}, []string{"nope"})
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid collection ID")
-	})
-
-	t.Run("json output", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		stdout, _, err := runDeleteCommand(t, deleteSuccessService(ctrl),
-			deleteSeams{stdinIsTTY: notTTY}, []string{testCollectionID, "--yes", "--output-format", "json"})
-		require.NoError(t, err)
-		require.Contains(t, stdout, `"collection": "`+testCollectionID+`"`)
-		require.Contains(t, stdout, `"deleted": true`)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			stdout, stderr, err := runDeleteCommand(t, tc.service(ctrl), tc.seams, tc.args)
+			tc.assert(t, stdout, stderr, err)
+		})
+	}
 }

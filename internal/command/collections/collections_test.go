@@ -101,7 +101,7 @@ func TestRequireCollectionID(t *testing.T) {
 	}{
 		{name: "valid", raw: testCollectionID, want: testCollectionID},
 		{name: "trims spaces and accepts upper case", raw: " 550E8400-E29B-41D4-A716-446655440000 ", want: testCollectionID},
-		{name: "not a uuid", raw: "not-a-uuid", wantErr: `invalid collection ID "not-a-uuid"`},
+		{name: "not a uuid", raw: "not-a-uuid", wantErr: `collection ID "not-a-uuid" is not a valid UUID`},
 		{name: "blank", raw: "   ", wantErr: "a collection ID is required"},
 	}
 	for _, tc := range testCases {

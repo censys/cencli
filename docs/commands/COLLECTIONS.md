@@ -7,10 +7,10 @@ Running `censys collections` without a subcommand prints help.
 ## Usage
 
 ```bash
-$ censys collections list                              # list all collections
-$ censys collections get <collection-id>                # show one collection
-$ censys collections create my-collection --query "..." # create a collection
-$ censys collections update <collection-id> --name new  # change a collection
+$ censys collections list                                # list all collections
+$ censys collections get <collection-id>                 # show one collection
+$ censys collections create my-collection --query "..."  # create a collection
+$ censys collections update <collection-id> --name new   # change a collection
 $ censys collections delete <collection-id>              # delete a collection
 ```
 
@@ -31,7 +31,7 @@ Collections are identified by **UUID only**. `collections get`, `update`, and `d
 
 ### `collections list`
 
-List all collections in your organization.
+List collections in your organization.
 
 ```bash
 $ censys collections list                             # list all collections
@@ -60,7 +60,7 @@ Results are paginated. By default `list` fetches one page (100 collections); use
 **Type:** `integer`  
 **Default:** `1`
 
-#### Sample output
+#### Sample Output
 
 ```console
 $ censys collections list
@@ -97,7 +97,7 @@ $ censys collections list --output-format json
 Retrieve a single collection by its UUID.
 
 ```bash
-$ censys collections get <collection-id>                     # get a collection
+$ censys collections get <collection-id>                      # get a collection
 $ censys collections get <collection-id> --output-format json # output as JSON
 ```
 
@@ -105,7 +105,7 @@ $ censys collections get <collection-id> --output-format json # output as JSON
 
 Only the global flags and `--org-id`.
 
-#### Sample output
+#### Sample Output
 
 ```console
 $ censys collections get 550e8400-e29b-41d4-a716-446655440000
@@ -146,11 +146,11 @@ $ censys collections get 550e8400-e29b-41d4-a716-446655440000 --output-format js
 Create a new collection from a CenQL query.
 
 ```bash
-$ censys collections create ssh-hosts --query "host.services.protocol=SSH"                             # create a collection
+$ censys collections create ssh-hosts --query "host.services.protocol=SSH"                               # create a collection
 $ censys collections create ssh-hosts --query "host.services.protocol=SSH" --description "All SSH hosts" # create a collection with a description
 ```
 
-Censys populates the collection in the background, so a newly created collection can show `populating` until the first build ends. On success, the command prints a stderr hint showing how to search the new collection, e.g. `censys search --collection-id <collection-id> "host.services.protocol=SSH"`.
+Censys populates the collection in the background, so a newly created collection can show `populating` until the first build finishes. On success, the command prints a stderr hint showing how to search the new collection, e.g. `censys search --collection-id <collection-id> "host.services.protocol=SSH"`.
 
 #### Flags
 
@@ -164,7 +164,7 @@ Censys populates the collection in the background, so a newly created collection
 **Type:** `string`  
 **Default:** none
 
-#### Sample output
+#### Sample Output
 
 ```console
 $ censys collections create ssh-hosts --query "host.services.protocol=SSH"
@@ -197,6 +197,7 @@ $ censys collections create ssh-hosts --query "host.services.protocol=SSH" --out
   "total_assets": 0,
   "added_assets_24_hours": 0,
   "removed_assets_24_hours": 0,
+  "created_by": "6f985c2a-daa6-4a37-b666-03b4aecd8a88",
   "create_time": "2026-09-24T09:00:00Z"
 }
 ```
@@ -215,10 +216,10 @@ your organization has reached its collection limit (12 collection(s) count towar
 Update an existing collection by its UUID. **At least one mutation flag is required** — an update with nothing to change is rejected rather than sent.
 
 ```bash
-$ censys collections update <collection-id> --name renamed                          # rename a collection
+$ censys collections update <collection-id> --name renamed                           # rename a collection
 $ censys collections update <collection-id> --query "host.services.protocol=RDP"     # change the query
 $ censys collections update <collection-id> --description "Hosts to review"          # set a description
-$ censys collections update <collection-id> --clear-description                     # remove the description
+$ censys collections update <collection-id> --clear-description                      # remove the description
 ```
 
 The API replaces the whole collection on every update, so this command first reads the collection, then sends the full record back with only the requested fields changed — every value you do not change is kept as-is. This means a change someone else makes to the collection between the read and the update is overwritten.
@@ -245,7 +246,7 @@ The API replaces the whole collection on every update, so this command first rea
 **Type:** `boolean`  
 **Default:** `false`
 
-#### Sample output
+#### Sample Output
 
 ```console
 $ censys collections update 550e8400-e29b-41d4-a716-446655440000 --name renamed-hosts
@@ -299,7 +300,7 @@ You are prompted to confirm before the collection is deleted. In a non-interacti
 **Type:** `boolean`  
 **Default:** `false`
 
-#### Sample output
+#### Sample Output
 
 ```console
 $ censys collections delete 550e8400-e29b-41d4-a716-446655440000 --yes
@@ -337,6 +338,16 @@ All `collections` commands default to **`short`** output. Override with `--outpu
 - **`tree`** — hierarchical tree view (interactive; requires a terminal)
 
 Templates (`-O template`) are not supported for `collections`.
+
+## Exit Codes
+
+| Code | Meaning                                                                     |
+| ---- | --------------------------------------------------------------------------- |
+| 0    | Success                                                                      |
+| 1    | API error, missing or invalid credentials, the collection limit was reached, or the API returned no usable collection to update |
+| 2    | Usage or input error — an invalid ID, name, or query, an unsupported `--status` value, invalid pagination flags, a rejected flag combination, nothing to update, or missing confirmation in a non-interactive terminal |
+| 124  | Timed out                                                                    |
+| 130  | Interrupted                                                                  |
 
 ## Related Commands
 

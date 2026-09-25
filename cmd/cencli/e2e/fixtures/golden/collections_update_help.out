@@ -18,11 +18,11 @@ Examples:
 
 Flags:
       --clear-description    remove the collection's description
-      --description string   new description for the collection
+      --description string   a new description for the collection
   -h, --help                 help for update
-      --name string          new name for the collection
+      --name string          a new name for the collection
   -o, --org-id string        organization ID to target (personal access tokens only)
-      --query string         new CenQL query for the collection
+      --query string         a new CenQL query for the collection
 
 Global Flags:
       --debug                   enable debug logging

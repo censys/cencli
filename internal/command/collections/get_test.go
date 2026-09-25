@@ -70,7 +70,7 @@ func TestCollectionsGetCommand(t *testing.T) {
 			args: []string{"not-a-uuid"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "invalid collection ID")
+				require.Contains(t, err.Error(), "is not a valid UUID")
 			},
 		},
 		{

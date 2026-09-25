@@ -90,6 +90,7 @@ func (c *ListCommand) RenderShort() cenclierrors.CencliError {
 	return nil
 }
 
+// renderCollectionDetail renders a single collection as a labeled detail view (TTY-aware) under the given section header. The get, create, and update commands share it.
 func renderCollectionDetail(header string, col collections.Collection) cenclierrors.CencliError {
 	var out strings.Builder
 	out.WriteRune('\n')
