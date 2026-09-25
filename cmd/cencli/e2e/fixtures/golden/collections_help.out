@@ -1,0 +1,32 @@
+Manage collections for your organization.                                               
+                                                                                        
+A collection is a saved CenQL query whose matching assets Censys keeps up to date. Use  
+"censys search --collection-id" or "censys aggregate --collection-id" to query inside a 
+collection.                                                                             
+                                                                                        
+Use --org-id on any subcommand to target a different organization; otherwise your stored
+organization ID is used.                                                                
+
+Usage:
+  censys collections [flags]
+  censys collections [command]
+
+Available Commands:
+  create      Create a new collection
+  delete      Delete a collection
+  get         Retrieve a single collection
+  list        List collections
+  update      Update an existing collection
+
+Flags:
+  -h, --help   help for collections
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

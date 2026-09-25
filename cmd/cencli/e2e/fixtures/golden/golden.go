@@ -55,4 +55,16 @@ var (
 	TagsOperationsGetHelpStdout []byte
 	//go:embed tags_operations_cancel_help.out
 	TagsOperationsCancelHelpStdout []byte
+	//go:embed collections_help.out
+	CollectionsHelpStdout []byte
+	//go:embed collections_list_help.out
+	CollectionsListHelpStdout []byte
+	//go:embed collections_get_help.out
+	CollectionsGetHelpStdout []byte
+	//go:embed collections_create_help.out
+	CollectionsCreateHelpStdout []byte
+	//go:embed collections_update_help.out
+	CollectionsUpdateHelpStdout []byte
+	//go:embed collections_delete_help.out
+	CollectionsDeleteHelpStdout []byte
 )

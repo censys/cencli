@@ -10,6 +10,7 @@ Available Commands:
   aggregate   Aggregate results for a Platform search query
   auth        Log in and manage your Censys credentials
   censeye     Analyze a host and generate pivotable queries with rarity bounds
+  collections Manage collections for your organization
   completion  Generate shell completion scripts
   config      Manage configuration
   credits     Display credit details for your Censys account

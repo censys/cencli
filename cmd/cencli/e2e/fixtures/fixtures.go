@@ -23,15 +23,16 @@ type Fixture struct {
 // Fixtures returns all the fixtures for the e2ev2 tests.
 func Fixtures() map[string][]Fixture {
 	return map[string][]Fixture{
-		"root":      RootFixtures,
-		"view":      viewFixtures,
-		"enrich":    enrichFixtures,
-		"aggregate": aggregateFixtures,
-		"search":    searchFixtures,
-		"censeye":   censeyeFixtures,
-		"history":   historyFixtures,
-		"credits":   creditsFixtures,
-		"org":       orgFixtures,
-		"tags":      tagsFixtures,
+		"root":        RootFixtures,
+		"view":        viewFixtures,
+		"enrich":      enrichFixtures,
+		"aggregate":   aggregateFixtures,
+		"search":      searchFixtures,
+		"censeye":     censeyeFixtures,
+		"history":     historyFixtures,
+		"credits":     creditsFixtures,
+		"org":         orgFixtures,
+		"tags":        tagsFixtures,
+		"collections": collectionsFixtures,
 	}
 }

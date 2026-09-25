@@ -10,6 +10,7 @@ import (
 
 	"github.com/censys/censys-sdk-go/models/components"
 
+	"github.com/censys/cencli/internal/app/pagination"
 	"github.com/censys/cencli/internal/app/progress"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
@@ -55,7 +56,7 @@ func (s *tagsService) ListOperations(
 
 	pageSize := optionalInt64(params.PageSize)
 
-	listPage := func(tagID string) (paginated[TagOperation], cenclierrors.CencliError) {
+	listPage := func(tagID string) (pagination.Result[TagOperation], cenclierrors.CencliError) {
 		listFn := func(pageToken mo.Option[string]) (client.Result[components.TagOperationsList], client.ClientError) {
 			return s.client.ListTagOperations(ctx, client.ListTagOperationsRequest{
 				OrgID:     orgIDStr,
@@ -67,11 +68,11 @@ func (s *tagsService) ListOperations(
 				PageToken: pageToken,
 			})
 		}
-		return paginate(ctx, params.MaxPages, "operations", listFn, extractOperationsPage)
+		return pagination.Paginate(ctx, params.MaxPages, "operations", listFn, extractOperationsPage)
 	}
 
 	// An absent tag lists org-wide, which needs no resolution at all.
-	var page paginated[TagOperation]
+	var page pagination.Result[TagOperation]
 	var err cenclierrors.CencliError
 	if params.TagID.IsPresent() {
 		page, err = callWithTag(ctx, s, orgIDStr, params.TagID.MustGet(), listPage)
@@ -314,7 +315,7 @@ func mapOperationResult(
 }
 
 // extractOperationsPage adapts an operations list envelope for the paginator.
-func extractOperationsPage(list *components.TagOperationsList) pageData[TagOperation] {
+func extractOperationsPage(list *components.TagOperationsList) pagination.Page[TagOperation] {
 	items := make([]TagOperation, 0, len(list.Operations))
 	for _, op := range list.Operations {
 		items = append(items, mapTagOperation(op))
@@ -325,7 +326,7 @@ func extractOperationsPage(list *components.TagOperationsList) pageData[TagOpera
 		nextPageToken = *npt
 	}
 
-	return pageData[TagOperation]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
+	return pagination.Page[TagOperation]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
 }
 
 // mapTagOperation converts an SDK tag operation into the domain DTO.
