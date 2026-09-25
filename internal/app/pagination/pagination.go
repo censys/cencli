@@ -29,6 +29,10 @@ type Result[Item any] struct {
 	Items        []Item
 	TotalSize    int64
 	PartialError cenclierrors.CencliError
+	// HasMore is true when the walk stopped at maxPages while the server still
+	// offered a next page. It is false when the pages ran out, on a partial
+	// error, and when the server echoed the same token back.
+	HasMore bool
 }
 
 // Paginate walks a list endpoint page by page until it runs out of pages or hits
@@ -52,6 +56,7 @@ func Paginate[P, Item any](
 	var lastMeta *responsemeta.ResponseMeta
 	var pagesProcessed uint64
 	var firstError cenclierrors.CencliError
+	var hasMore bool
 	pageToken := mo.None[string]()
 
 	start := time.Now()
@@ -135,6 +140,7 @@ func Paginate[P, Item any](
 		}
 
 		if maxPages.IsPresent() && pagesProcessed >= maxPages.MustGet() {
+			hasMore = true
 			break
 		}
 
@@ -148,6 +154,7 @@ func Paginate[P, Item any](
 		Items:        items,
 		TotalSize:    totalSize,
 		PartialError: cenclierrors.ToPartialError(firstError),
+		HasMore:      hasMore,
 	}, nil
 }
 
