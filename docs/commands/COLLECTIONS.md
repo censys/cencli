@@ -67,7 +67,8 @@ $ censys collections list
 
 Collections (2)
 
-ID                                   | Name       | Status | Assets | +24h | -24h | Created At
+ID                                     Name         Status   Assets   +24h   -24h   Created At      
+
 550e8400-e29b-41d4-a716-446655440000 | ssh-hosts  | active | 1204   | 12   | 3    | 2026-09-01 10:15
 6ba7b810-9dad-11d1-80b4-00c04fd430c8 | rdp-review | paused | 88     | 0    | 0    | 2026-09-10 14:02
 ```
