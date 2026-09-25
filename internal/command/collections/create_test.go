@@ -41,7 +41,7 @@ func TestCollectionsCreateCommand(t *testing.T) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "Collection Created")
 				require.Contains(t, stdout, "alpha")
-				require.Contains(t, stderr, "censys search --collection-id "+testCollectionID)
+				require.Contains(t, stderr, "censys search --collection-id "+testCollectionID+" 'host.services.protocol=SSH'")
 			},
 		},
 		{

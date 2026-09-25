@@ -88,8 +88,14 @@ func (c *CreateCommand) Init() error {
 }
 
 func (c *CreateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	var err cenclierrors.CencliError
-	c.orgID, err = c.flags.orgID.Value()
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Route through the credential-aware resolver: --org-id applies only to
+	// personal access tokens, so this rejects it when the credential defines the
+	// organization itself, and otherwise supplies the credential's organization.
+	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
 	if err != nil {
 		return err
 	}
@@ -144,7 +150,7 @@ func (c *CreateCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 
 	if c.result.Collection.ID != "" {
 		printNote(c.Config().Quiet, fmt.Sprintf(
-			"Search this collection: censys search --collection-id %s %q", c.result.Collection.ID, c.query))
+			"Search this collection: censys search --collection-id %s %s", c.result.Collection.ID, shellQuote(c.query)))
 	}
 
 	return nil
