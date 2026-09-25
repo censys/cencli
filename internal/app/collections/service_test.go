@@ -397,6 +397,38 @@ func TestCollectionsService_UpdateCollection(t *testing.T) {
 		require.Contains(t, err.Error(), "the update was not sent")
 	})
 
+	t.Run("blank current query blocks a name-only update", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		blank := current
+		blank.Query = ""
+		m.EXPECT().GetCollection(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(client.Result[components.Collection]{Metadata: okMeta(), Data: &blank}, nil)
+		// No UpdateCollection expectation: gomock fails the test if it is called.
+		_, err := New(m).UpdateCollection(context.Background(), UpdateParams{CollectionID: collectionID(), Name: mo.Some("renamed")})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "the update was not sent")
+	})
+
+	t.Run("caller's query fills a blank current query", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockClient(ctrl)
+		blank := current
+		blank.Query = ""
+		updated := sdkCollection("updated")
+		gomock.InOrder(
+			m.EXPECT().GetCollection(gomock.Any(), mo.None[string](), testCollectionID).
+				Return(client.Result[components.Collection]{Metadata: okMeta(), Data: &blank}, nil),
+			m.EXPECT().UpdateCollection(gomock.Any(), client.UpdateCollectionRequest{
+				CollectionID: testCollectionID, Name: "alpha",
+				Query: "q", Description: mo.Some("alpha description"),
+			}).Return(client.Result[components.Collection]{Metadata: okMeta(), Data: &updated}, nil),
+		)
+		res, err := New(m).UpdateCollection(context.Background(), UpdateParams{CollectionID: collectionID(), Query: mo.Some("q")})
+		require.NoError(t, err)
+		require.Equal(t, "updated", res.Collection.Name)
+	})
+
 	t.Run("failed update is returned", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		m := mocks.NewMockClient(ctrl)

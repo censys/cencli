@@ -107,7 +107,7 @@ func NewMissingCollectionError(collectionID string) cenclierrors.CencliError {
 }
 
 func (e *missingCollectionError) Error() string {
-	return fmt.Sprintf("the API returned no data for collection %q; the update was not sent", e.collectionID)
+	return fmt.Sprintf("the API returned no usable data for collection %q (missing name or query); the update was not sent", e.collectionID)
 }
 
 func (e *missingCollectionError) Title() string { return "Collection Not Returned" }

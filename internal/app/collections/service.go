@@ -156,11 +156,17 @@ func (s *collectionsService) UpdateCollection(
 		return UpdateResult{}, NewMissingCollectionError(collectionID)
 	}
 
+	name := params.Name.OrElse(current.Data.Name)
+	query := params.Query.OrElse(current.Data.Query)
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(query) == "" {
+		return UpdateResult{}, NewMissingCollectionError(collectionID)
+	}
+
 	result, err := s.client.UpdateCollection(ctx, client.UpdateCollectionRequest{
 		OrgID:        orgIDStr,
 		CollectionID: collectionID,
-		Name:         params.Name.OrElse(current.Data.Name),
-		Query:        params.Query.OrElse(current.Data.Query),
+		Name:         name,
+		Query:        query,
 		Description:  mo.Some(params.Description.OrElse(current.Data.Description)),
 	})
 	if err != nil {
