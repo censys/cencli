@@ -246,7 +246,7 @@ func TestCollectionsListCommand(t *testing.T) {
 			},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
-				require.Contains(t, stderr, "More collections are available")
+				require.Contains(t, stderr, "more collections are available")
 			},
 		},
 		{
@@ -263,7 +263,7 @@ func TestCollectionsListCommand(t *testing.T) {
 			},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
-				require.NotContains(t, stderr, "More collections are available")
+				require.NotContains(t, stderr, "more collections are available")
 			},
 		},
 		{
@@ -281,7 +281,7 @@ func TestCollectionsListCommand(t *testing.T) {
 			quiet: true,
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
-				require.NotContains(t, stderr, "More collections are available")
+				require.NotContains(t, stderr, "more collections are available")
 			},
 		},
 	}

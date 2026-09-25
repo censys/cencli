@@ -172,7 +172,7 @@ func (c *ListCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencli
 	}
 
 	if c.result.HasMore {
-		printNote(c.Config().Quiet, "More collections are available. Use --max-pages -1 to fetch all pages, or raise --max-pages.")
+		printNote(c.Config().Quiet, "Note: more collections are available; use --max-pages -1 to fetch all pages, or raise --max-pages.")
 	}
 
 	if c.result.PartialError != nil {
@@ -191,7 +191,7 @@ func (c *ListCommand) resolveCollectionsService() cenclierrors.CencliError {
 	return nil
 }
 
-// nonEmpty drops blank values, so "--status ”" leaves the filter off.
+// nonEmpty drops blank values, so --status "" leaves the filter off.
 func nonEmpty(values []string) []string {
 	var out []string
 	for _, v := range values {

@@ -150,7 +150,7 @@ $ censys collections create ssh-hosts --query "host.services.protocol=SSH"      
 $ censys collections create ssh-hosts --query "host.services.protocol=SSH" --description "All SSH hosts" # create a collection with a description
 ```
 
-Censys populates the collection in the background, so a newly created collection can show `populating` until the first build ends. On success, the command prints a stderr hint showing how to search the new collection, e.g. `censys search --collection-id <id> "host.services.protocol=SSH"`.
+Censys populates the collection in the background, so a newly created collection can show `populating` until the first build ends. On success, the command prints a stderr hint showing how to search the new collection, e.g. `censys search --collection-id <collection-id> "host.services.protocol=SSH"`.
 
 #### Flags
 
@@ -207,7 +207,7 @@ When the organization is at its collection limit, the API refuses the create wit
 $ censys collections create ssh-hosts --query "host.services.protocol=SSH"
 
 [Collection Limit Reached]
-your organization has reached its collection limit (12 collections count toward it; archived collections do not). Delete one with `censys collections delete <id>`, or contact your Censys account team for more
+your organization has reached its collection limit (12 collection(s) count toward it; archived collections do not). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more
 ```
 
 ### `collections update`

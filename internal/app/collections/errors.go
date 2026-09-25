@@ -131,9 +131,9 @@ func NewCollectionLimitError(count mo.Option[int]) cenclierrors.CencliError {
 
 func (e *collectionLimitError) Error() string {
 	if e.count.IsPresent() {
-		return fmt.Sprintf("your organization has reached its collection limit (%d collections count toward it; archived collections do not). Delete one with `censys collections delete <id>`, or contact your Censys account team for more", e.count.MustGet())
+		return fmt.Sprintf("your organization has reached its collection limit (%d collection(s) count toward it; archived collections do not). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more", e.count.MustGet())
 	}
-	return "your organization has reached its collection limit (archived collections do not count toward it). Delete one with `censys collections delete <id>`, or contact your Censys account team for more"
+	return "your organization has reached its collection limit (archived collections do not count toward it). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more"
 }
 
 func (e *collectionLimitError) Title() string { return "Collection Limit Reached" }

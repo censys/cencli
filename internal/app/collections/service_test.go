@@ -308,7 +308,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 
 		_, err := New(m).CreateCollection(context.Background(), createParams)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "reached its collection limit (3 collections count toward it; archived collections do not)")
+		require.Contains(t, err.Error(), "reached its collection limit (3 collection(s) count toward it; archived collections do not)")
 
 		var limitErr *collectionLimitError
 		require.True(t, errors.As(err, &limitErr))
@@ -328,7 +328,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 
 		_, err := New(m).CreateCollection(context.Background(), createParams)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "reached its collection limit (3 collections count toward it; archived collections do not)")
+		require.Contains(t, err.Error(), "reached its collection limit (3 collection(s) count toward it; archived collections do not)")
 	})
 
 	t.Run("412 whose count fails", func(t *testing.T) {
@@ -399,7 +399,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 			OrgID: mo.Some(orgID), Name: "alpha", Query: "host.services.protocol=SSH",
 		})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "1 collections count toward it")
+		require.Contains(t, err.Error(), "1 collection(s) count toward it")
 	})
 }
 

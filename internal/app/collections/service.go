@@ -183,7 +183,7 @@ func (s *collectionsService) countTowardLimit(ctx context.Context, orgID mo.Opti
 // UpdateCollection changes a collection's name, query, or description. The API
 // replaces the whole collection and requires the name and query every time, so
 // this reads the current collection and fills in each field the caller left
-// absent (spec D1). A change made by someone else between the read and the
+// absent. A change made by someone else between the read and the
 // write is overwritten.
 func (s *collectionsService) UpdateCollection(
 	ctx context.Context,
