@@ -56,6 +56,20 @@ func runCommand(
 	cfg, cfgErr := config.New(tempDir)
 	require.NoError(t, cfgErr)
 
+	// --quiet lives on the real root command, which this harness does not mount
+	// (it wraps a single subcommand), so cobra here would reject it as unknown.
+	// Strip it and set it directly on viper instead, which is where the real
+	// flag lands and where PreRun re-reads the config from.
+	var filteredArgs []string
+	for _, a := range args {
+		if a == "--quiet" || a == "-q" {
+			viper.Set("quiet", true)
+			continue
+		}
+		filteredArgs = append(filteredArgs, a)
+	}
+	args = filteredArgs
+
 	var outBuf, errBuf bytes.Buffer
 	formatter.Stdout = &outBuf
 	formatter.Stderr = &errBuf
@@ -241,6 +255,24 @@ func TestCollectionsListCommand(t *testing.T) {
 					}, nil)
 				return m
 			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.NotContains(t, stderr, "More collections are available")
+			},
+		},
+		{
+			name: "--quiet suppresses the truncation note",
+			service: func(ctrl *gomock.Controller) appcollections.Service {
+				m := collectionsmocks.NewMockCollectionsService(ctrl)
+				m.EXPECT().ListCollections(gomock.Any(), gomock.Any()).Return(
+					appcollections.ListResult{
+						Meta:        okMeta(),
+						Collections: []appcollections.Collection{collection("alpha")},
+						HasMore:     true,
+					}, nil)
+				return m
+			},
+			args: []string{"--quiet"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.NotContains(t, stderr, "More collections are available")
