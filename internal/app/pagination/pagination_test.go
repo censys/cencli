@@ -56,6 +56,7 @@ func TestPaginate(t *testing.T) {
 		wantCalls   int
 		wantErr     bool
 		wantPartial bool
+		wantHasMore bool
 	}{
 		{
 			name:      "single page without next token",
@@ -66,12 +67,13 @@ func TestPaginate(t *testing.T) {
 			wantCalls: 1,
 		},
 		{
-			name:      "stops at max pages",
-			pages:     []testPage{{items: []string{"a"}, next: "t1"}, {items: []string{"b"}, next: "t2"}},
-			errAt:     -1,
-			maxPages:  mo.Some[uint64](1),
-			wantItems: []string{"a"},
-			wantCalls: 1,
+			name:        "stops at max pages",
+			pages:       []testPage{{items: []string{"a"}, next: "t1"}, {items: []string{"b"}, next: "t2"}},
+			errAt:       -1,
+			maxPages:    mo.Some[uint64](1),
+			wantItems:   []string{"a"},
+			wantCalls:   1,
+			wantHasMore: true,
 		},
 		{
 			name:      "all pages until next token is empty",
@@ -119,6 +121,7 @@ func TestPaginate(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.wantItems, res.Items)
+			require.Equal(t, tc.wantHasMore, res.HasMore)
 			if tc.wantPartial {
 				require.NotNil(t, res.PartialError)
 			} else {
