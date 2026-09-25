@@ -74,6 +74,8 @@ type ListResult struct {
 	TotalSize int64
 	// PartialError summarizes an error hit after the first successful page.
 	PartialError cenclierrors.CencliError
+	// HasMore is true when more pages exist beyond MaxPages.
+	HasMore bool
 }
 
 // GetResult is the outcome of retrieving a single collection.

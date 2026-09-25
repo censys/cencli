@@ -212,6 +212,40 @@ func TestCollectionsListCommand(t *testing.T) {
 				require.Contains(t, stderr, "fetching all pages")
 			},
 		},
+		{
+			name: "truncated results print a stderr note",
+			service: func(ctrl *gomock.Controller) appcollections.Service {
+				m := collectionsmocks.NewMockCollectionsService(ctrl)
+				m.EXPECT().ListCollections(gomock.Any(), gomock.Any()).Return(
+					appcollections.ListResult{
+						Meta:        okMeta(),
+						Collections: []appcollections.Collection{collection("alpha")},
+						HasMore:     true,
+					}, nil)
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stderr, "More collections are available")
+			},
+		},
+		{
+			name: "no more pages prints no stderr note",
+			service: func(ctrl *gomock.Controller) appcollections.Service {
+				m := collectionsmocks.NewMockCollectionsService(ctrl)
+				m.EXPECT().ListCollections(gomock.Any(), gomock.Any()).Return(
+					appcollections.ListResult{
+						Meta:        okMeta(),
+						Collections: []appcollections.Collection{collection("alpha")},
+						HasMore:     false,
+					}, nil)
+				return m
+			},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.NotContains(t, stderr, "More collections are available")
+			},
+		},
 	}
 
 	for _, tc := range testCases {

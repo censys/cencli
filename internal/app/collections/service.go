@@ -71,6 +71,7 @@ func (s *collectionsService) ListCollections(
 		Collections:  page.Items,
 		TotalSize:    page.TotalSize,
 		PartialError: page.PartialError,
+		HasMore:      page.HasMore,
 	}, nil
 }
 

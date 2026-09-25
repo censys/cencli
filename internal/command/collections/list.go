@@ -63,7 +63,7 @@ func (c *ListCommand) Short() string {
 }
 
 func (c *ListCommand) Long() string {
-	return `List all collections in your organization.
+	return `List collections in your organization. By default only the first page (100 collections) is fetched; use --max-pages -1 to fetch every page.
 
 Results can be filtered by status. Repeat --status, or separate values with commas, to match more than one status.`
 }
@@ -169,6 +169,10 @@ func (c *ListCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencli
 
 	if renderErr := c.PrintData(c, c.result.Collections); renderErr != nil {
 		return renderErr
+	}
+
+	if c.result.HasMore {
+		printNote(c.Config().Quiet, "More collections are available. Use --max-pages -1 to fetch all pages, or raise --max-pages.")
 	}
 
 	if c.result.PartialError != nil {
