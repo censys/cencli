@@ -343,7 +343,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 
 		_, err := New(m).CreateCollection(context.Background(), createParams)
 		require.Error(t, err)
-		require.NotContains(t, err.Error(), "collections count toward it")
+		require.NotContains(t, err.Error(), "collection(s) count toward it")
 		require.Contains(t, err.Error(), "reached its collection limit (archived collections do not count toward it)")
 	})
 
@@ -361,7 +361,7 @@ func TestCollectionsService_CreateCollection_Limit(t *testing.T) {
 
 		_, err := New(m).CreateCollection(context.Background(), createParams)
 		require.Error(t, err)
-		require.NotContains(t, err.Error(), "collections count toward it")
+		require.NotContains(t, err.Error(), "collection(s) count toward it")
 		require.Contains(t, err.Error(), "reached its collection limit (archived collections do not count toward it)")
 	})
 
