@@ -16,6 +16,7 @@ import (
 	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/ui/form"
+	"github.com/censys/cencli/internal/store"
 )
 
 type deleteSeams struct {
@@ -39,6 +40,11 @@ func runDeleteCommand(t *testing.T, svc appcollections.Service, seams deleteSeam
 	defer ctrl.Finish()
 
 	mockStore := storemocks.NewMockStore(ctrl)
+	// With no client set (credential.KindNone), ResolveOrgID falls back to the
+	// stored org-id global when --org-id is absent; report none stored so a
+	// missing flag resolves cleanly.
+	mockStore.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
 	cmdContext := command.NewCommandContext(cfg, mockStore, command.WithCollectionsService(svc))
 	cmd := NewDeleteCommand(cmdContext)
 	if seams.confirm != nil {

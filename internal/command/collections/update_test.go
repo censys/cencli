@@ -94,6 +94,12 @@ func TestCollectionsUpdateCommand(t *testing.T) {
 			assert:  wantErr("cannot be used together"),
 		},
 		{
+			name:    "explicit empty description conflicts with clear-description",
+			service: noCall,
+			args:    []string{testCollectionID, "--description", "", "--clear-description"},
+			assert:  wantErr("cannot be used together"),
+		},
+		{
 			name:    "invalid ID",
 			service: noCall,
 			args:    []string{"nope", "--name", "x"},

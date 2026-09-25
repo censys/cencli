@@ -182,7 +182,7 @@ $ censys collections create ssh-hosts --query "host.services.protocol=SSH"
   Created By:   6f985c2a-daa6-4a37-b666-03b4aecd8a88
   Created At:   2026-09-24 09:00:00 UTC
 
-Search this collection: censys search --collection-id 550e8400-e29b-41d4-a716-446655440000 "host.services.protocol=SSH"
+Search this collection: censys search --collection-id 550e8400-e29b-41d4-a716-446655440000 'host.services.protocol=SSH'
 ```
 
 ```json

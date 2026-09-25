@@ -75,6 +75,12 @@ func warnFetchingAllPages(quiet bool, logger *slog.Logger, maxPages mo.Option[ui
 	logger.Debug("fetching all pages", "message", msg)
 }
 
+// shellQuote wraps s in single quotes for a POSIX shell, so a copied command
+// line passes it through literally ($, backticks, and spaces included).
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // optionalNonEmpty treats a blank flag value as "not provided", so it is
 // omitted from the request rather than sent as an empty value.
 func optionalNonEmpty(v string) mo.Option[string] {
