@@ -82,6 +82,7 @@ func TestCollectionsService_ListCollections(t *testing.T) {
 				require.Equal(t, "active", res.Collections[0].Status)
 				require.Equal(t, int64(42), res.Collections[0].TotalAssets)
 				require.NotNil(t, res.Meta)
+				require.False(t, res.HasMore)
 			},
 		},
 		{
@@ -125,6 +126,7 @@ func TestCollectionsService_ListCollections(t *testing.T) {
 			assert: func(t *testing.T, res ListResult, err cenclierrors.CencliError) {
 				require.NoError(t, err)
 				require.Len(t, res.Collections, 1)
+				require.True(t, res.HasMore)
 			},
 		},
 		{

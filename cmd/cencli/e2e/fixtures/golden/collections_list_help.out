@@ -1,7 +1,8 @@
-List all collections in your organization.                                            
-                                                                                      
-Results can be filtered by status. Repeat --status, or separate values with commas, to
-match more than one status.                                                           
+List collections in your organization. By default only the first page (100 collections) is
+fetched; use --max-pages -1 to fetch every page.                                          
+                                                                                          
+Results can be filtered by status. Repeat --status, or separate values with commas, to    
+match more than one status.                                                               
 
 Usage:
   censys collections list [flags]
