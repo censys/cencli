@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/censys/cencli/cmd/cencli/e2e/fixtures/golden"
+	"github.com/censys/cencli/internal/app/collections"
 )
 
 var collectionsFixtures = []Fixture{
@@ -51,6 +52,20 @@ var collectionsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "list basic",
+		Args:      []string{"list", "--output-format", "json"},
+		ExitCode:  0,
+		Timeout:   10 * time.Second,
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			data := unmarshalJSONAny[[]collections.Collection](t, stdout)
+			for _, c := range data {
+				assert.NotEmpty(t, c.ID)
+			}
+		},
+	},
+	{
 		Name:      "get help",
 		Args:      []string{"get", "--help"},
 		ExitCode:  0,
@@ -67,7 +82,7 @@ var collectionsFixtures = []Fixture{
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assert.Contains(t, string(stderr), "invalid collection ID")
+			assert.Contains(t, string(stderr), "is not a valid UUID")
 		},
 	},
 	{

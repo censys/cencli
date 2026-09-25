@@ -77,12 +77,12 @@ func (s *collectionsService) ListCollections(
 	}, nil
 }
 
+// extractCollectionsPage adapts a collections list envelope for the paginator.
 func extractCollectionsPage(list *components.ListCollectionsResponseV1) pagination.Page[Collection] {
 	items := make([]Collection, 0, len(list.Collections))
 	for _, c := range list.Collections {
 		items = append(items, mapCollection(c))
 	}
-	// The list endpoint reports no total, so TotalSize stays 0.
 	return pagination.Page[Collection]{Items: items, NextPageToken: list.NextPageToken}
 }
 

@@ -88,9 +88,9 @@ func (c *UpdateCommand) SupportedOutputTypes() []command.OutputType {
 
 func (c *UpdateCommand) Init() error {
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
-	c.flags.name = flags.NewStringFlag(c.Flags(), false, "name", "", "", "new name for the collection")
-	c.flags.query = flags.NewStringFlag(c.Flags(), false, "query", "", "", "new CenQL query for the collection")
-	c.flags.description = flags.NewStringFlag(c.Flags(), false, "description", "", "", "new description for the collection")
+	c.flags.name = flags.NewStringFlag(c.Flags(), false, "name", "", "", "a new name for the collection")
+	c.flags.query = flags.NewStringFlag(c.Flags(), false, "query", "", "", "a new CenQL query for the collection")
+	c.flags.description = flags.NewStringFlag(c.Flags(), false, "description", "", "", "a new description for the collection")
 	c.flags.clearDescription = flags.NewBoolFlag(c.Flags(), "clear-description", "", false, "remove the collection's description")
 	return nil
 }

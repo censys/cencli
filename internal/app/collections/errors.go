@@ -64,7 +64,7 @@ func (e *invalidCollectionIDError) Error() string {
 	if e.provided == "" {
 		return "a collection ID is required"
 	}
-	return fmt.Sprintf("invalid collection ID %q; expected a UUID", e.provided)
+	return fmt.Sprintf("collection ID %q is not a valid UUID", e.provided)
 }
 
 func (e *invalidCollectionIDError) Title() string { return "Invalid Collection ID" }
