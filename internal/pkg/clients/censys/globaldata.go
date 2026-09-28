@@ -86,6 +86,50 @@ type GlobalDataClient interface {
 		orgID mo.Option[string],
 		hostIP string,
 	) (Result[components.HostEnrichment], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#listdnsnameresolutionbounds
+	ListDNSNameResolutionBounds(
+		ctx context.Context,
+		orgID mo.Option[string],
+		name string,
+		fromTime time.Time,
+		toTime time.Time,
+		recordTypes []string,
+		pageSize mo.Option[int64],
+		pageToken mo.Option[string],
+	) (Result[components.DNSNameResolutionBoundResponse], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#listdnsnameresolutionranges
+	ListDNSNameResolutionRanges(
+		ctx context.Context,
+		orgID mo.Option[string],
+		name string,
+		fromTime time.Time,
+		toTime time.Time,
+		recordTypes []string,
+		pageSize mo.Option[int64],
+		pageToken mo.Option[string],
+	) (Result[components.DNSNameResolutionRangeResponse], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#listdnsipresolutionbounds
+	ListDNSIPResolutionBounds(
+		ctx context.Context,
+		orgID mo.Option[string],
+		ip string,
+		fromTime time.Time,
+		toTime time.Time,
+		recordTypes []string,
+		pageSize mo.Option[int64],
+		pageToken mo.Option[string],
+	) (Result[components.DNSIPResolutionBoundResponse], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#listdnsipresolutionranges
+	ListDNSIPResolutionRanges(
+		ctx context.Context,
+		orgID mo.Option[string],
+		ip string,
+		fromTime time.Time,
+		toTime time.Time,
+		recordTypes []string,
+		pageSize mo.Option[int64],
+		pageToken mo.Option[string],
+	) (Result[components.DNSIPResolutionRangeResponse], ClientError)
 }
 
 type globalDataSDK struct {
@@ -446,4 +490,202 @@ func (g *globalDataSDK) EnrichHost(
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     &enrichment,
 	}, nil
+}
+
+func (g *globalDataSDK) ListDNSNameResolutionBounds(
+	ctx context.Context,
+	orgID mo.Option[string],
+	name string,
+	fromTime time.Time,
+	toTime time.Time,
+	recordTypes []string,
+	pageSize mo.Option[int64],
+	pageToken mo.Option[string],
+) (Result[components.DNSNameResolutionBoundResponse], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataDNSNameResolutionBoundResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		startStr := fromTime.UTC().Format(time.RFC3339)
+		endStr := toTime.UTC().Format(time.RFC3339)
+		req := operations.V3GlobaldataDNSNameResolutionBoundRequest{
+			OrganizationID: orgID.ToPointer(),
+			Name:           name,
+			StartTime:      &startStr,
+			EndTime:        &endStr,
+			PageToken:      pageToken.ToPointer(),
+			RecordTypes:    dnsRecordTypes[operations.V3GlobaldataDNSNameResolutionBoundQueryParamRecordTypes](recordTypes),
+		}
+		if pageSize.IsPresent() {
+			ps := int(pageSize.MustGet())
+			req.PageSize = &ps
+		}
+		var err error
+		res, err = g.censysSDK.client.GlobalData.ListDNSNameResolutionBounds(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.DNSNameResolutionBoundResponse]{}
+		return zero, err
+	}
+	bounds := res.GetResponseEnvelopeDNSNameResolutionBoundResponse().GetResult()
+	return Result[components.DNSNameResolutionBoundResponse]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     bounds,
+	}, nil
+}
+
+func (g *globalDataSDK) ListDNSNameResolutionRanges(
+	ctx context.Context,
+	orgID mo.Option[string],
+	name string,
+	fromTime time.Time,
+	toTime time.Time,
+	recordTypes []string,
+	pageSize mo.Option[int64],
+	pageToken mo.Option[string],
+) (Result[components.DNSNameResolutionRangeResponse], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataDNSNameResolutionRangesResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		startStr := fromTime.UTC().Format(time.RFC3339)
+		endStr := toTime.UTC().Format(time.RFC3339)
+		req := operations.V3GlobaldataDNSNameResolutionRangesRequest{
+			OrganizationID: orgID.ToPointer(),
+			Name:           name,
+			StartTime:      &startStr,
+			EndTime:        &endStr,
+			PageToken:      pageToken.ToPointer(),
+			RecordTypes:    dnsRecordTypes[operations.V3GlobaldataDNSNameResolutionRangesQueryParamRecordTypes](recordTypes),
+		}
+		if pageSize.IsPresent() {
+			ps := int(pageSize.MustGet())
+			req.PageSize = &ps
+		}
+		var err error
+		res, err = g.censysSDK.client.GlobalData.ListDNSNameResolutionRanges(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.DNSNameResolutionRangeResponse]{}
+		return zero, err
+	}
+	ranges := res.GetResponseEnvelopeDNSNameResolutionRangeResponse().GetResult()
+	return Result[components.DNSNameResolutionRangeResponse]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     ranges,
+	}, nil
+}
+
+func (g *globalDataSDK) ListDNSIPResolutionBounds(
+	ctx context.Context,
+	orgID mo.Option[string],
+	ip string,
+	fromTime time.Time,
+	toTime time.Time,
+	recordTypes []string,
+	pageSize mo.Option[int64],
+	pageToken mo.Option[string],
+) (Result[components.DNSIPResolutionBoundResponse], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataDNSIPResolutionBoundResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		startStr := fromTime.UTC().Format(time.RFC3339)
+		endStr := toTime.UTC().Format(time.RFC3339)
+		req := operations.V3GlobaldataDNSIPResolutionBoundRequest{
+			OrganizationID: orgID.ToPointer(),
+			IP:             ip,
+			StartTime:      &startStr,
+			EndTime:        &endStr,
+			PageToken:      pageToken.ToPointer(),
+			RecordTypes:    dnsRecordTypes[operations.RecordTypes](recordTypes),
+		}
+		if pageSize.IsPresent() {
+			ps := int(pageSize.MustGet())
+			req.PageSize = &ps
+		}
+		var err error
+		res, err = g.censysSDK.client.GlobalData.ListDNSIPResolutionBounds(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.DNSIPResolutionBoundResponse]{}
+		return zero, err
+	}
+	bounds := res.GetResponseEnvelopeDNSIPResolutionBoundResponse().GetResult()
+	return Result[components.DNSIPResolutionBoundResponse]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     bounds,
+	}, nil
+}
+
+func (g *globalDataSDK) ListDNSIPResolutionRanges(
+	ctx context.Context,
+	orgID mo.Option[string],
+	ip string,
+	fromTime time.Time,
+	toTime time.Time,
+	recordTypes []string,
+	pageSize mo.Option[int64],
+	pageToken mo.Option[string],
+) (Result[components.DNSIPResolutionRangeResponse], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataDNSIPResolutionRangesResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		startStr := fromTime.UTC().Format(time.RFC3339)
+		endStr := toTime.UTC().Format(time.RFC3339)
+		req := operations.V3GlobaldataDNSIPResolutionRangesRequest{
+			OrganizationID: orgID.ToPointer(),
+			IP:             ip,
+			StartTime:      &startStr,
+			EndTime:        &endStr,
+			PageToken:      pageToken.ToPointer(),
+			RecordTypes:    dnsRecordTypes[operations.QueryParamRecordTypes](recordTypes),
+		}
+		if pageSize.IsPresent() {
+			ps := int(pageSize.MustGet())
+			req.PageSize = &ps
+		}
+		var err error
+		res, err = g.censysSDK.client.GlobalData.ListDNSIPResolutionRanges(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.DNSIPResolutionRangeResponse]{}
+		return zero, err
+	}
+	ranges := res.GetResponseEnvelopeDNSIPResolutionRangeResponse().GetResult()
+	return Result[components.DNSIPResolutionRangeResponse]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     ranges,
+	}, nil
+}
+
+// dnsRecordTypes converts record-type strings to an SDK record-type enum. The
+// SDK generates a separate enum type for each DNS operation, so callers pass
+// plain strings and the conversion stays here.
+func dnsRecordTypes[T ~string](values []string) []T {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]T, 0, len(values))
+	for _, v := range values {
+		out = append(out, T(v))
+	}
+	return out
 }
