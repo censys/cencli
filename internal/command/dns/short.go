@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/censys/censys-sdk-go/models/components"
@@ -27,6 +28,25 @@ var recordTypeOrder = []string{
 
 // maxTXTWidth limits TXT values in the table; data output keeps the full value.
 const maxTXTWidth = 60
+
+// txtNewlineReplacer collapses newline, carriage return, and tab characters in
+// a TXT value to a single space, so an embedded control character cannot break
+// a table row onto multiple lines.
+var txtNewlineReplacer = strings.NewReplacer("\n", " ", "\r", " ", "\t", " ")
+
+// sanitizeTXTValue removes characters from a TXT value that would break the
+// table's one-row-per-record layout.
+func sanitizeTXTValue(v string) string { return txtNewlineReplacer.Replace(v) }
+
+// truncateRunesEnd is formatter.TruncateEnd's byte-oriented truncation done by
+// rune instead, so a multi-byte character in a TXT value is never split.
+func truncateRunesEnd(s string, max int) string {
+	runes := []rune(s)
+	if max <= 0 || len(runes) <= max {
+		return s
+	}
+	return string(runes[:max]) + "..."
+}
 
 // recordRow is one table row in the short output, for any of the four lookups.
 type recordRow struct {
@@ -63,7 +83,11 @@ func (c *Command) RenderShort() cenclierrors.CencliError {
 	count := fmt.Sprintf("%d", len(rows))
 	if c.result.total > int64(len(rows)) {
 		count = fmt.Sprintf("%d of %d", len(rows), c.result.total)
-		if !c.Config().Quiet {
+		// Only advise --max-pages -1 when it is the reason the fetch stopped: a
+		// finite --max-pages was set (an absent value means -1, already fetching
+		// everything), and no later page failed (a partial error already explains
+		// the truncation, printed after the table).
+		if !c.Config().Quiet && c.params.MaxPages.IsPresent() && c.result.partialError == nil {
 			formatter.Println(formatter.Stderr, fmt.Sprintf("Showing %s records. Use --max-pages -1 to fetch all.", count))
 		}
 	}
@@ -197,7 +221,7 @@ func recordValue(recordType string, ip, mailServer, nameServer, mname, rname, va
 		}
 		return *mname + " " + *rname
 	case "TXT":
-		return formatter.TruncateEnd(deref(value), maxTXTWidth)
+		return truncateRunesEnd(sanitizeTXTValue(deref(value)), maxTXTWidth)
 	default:
 		return ""
 	}

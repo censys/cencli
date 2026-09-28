@@ -236,6 +236,9 @@ func TestNewDomainName(t *testing.T) {
 		{name: "invalid bracketed ipv6", input: "[2001:db8::1]", wantErr: true, errContains: "remove the brackets from the IPv6 address"},
 		{name: "invalid no dot", input: "localhost", wantErr: true, errContains: "a domain name must contain a dot"},
 		{name: "invalid inner space", input: "a.com b.com", wantErr: true, errContains: "a domain name cannot contain whitespace"},
+		{name: "invalid email address", input: "user@censys.com", wantErr: true, errContains: "a domain name cannot contain '@'"},
+		{name: "invalid empty label in the middle", input: "a..b.com", wantErr: true, errContains: "a domain name cannot contain an empty label"},
+		{name: "invalid empty label from a double trailing dot", input: "censys.com..", wantErr: true, errContains: "a domain name cannot contain an empty label"},
 	}
 
 	for _, tt := range tests {

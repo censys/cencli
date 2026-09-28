@@ -55,7 +55,7 @@ var dnsFixtures = []Fixture{
 	},
 	{
 		Name:      "ip-short",
-		Args:      []string{"8.8.8.8"},
+		Args:      []string{"8.8.8.8", "-p", "1"},
 		ExitCode:  0,
 		Timeout:   12 * time.Second,
 		NeedsAuth: true,
