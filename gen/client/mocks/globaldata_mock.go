@@ -59,6 +59,21 @@ func (mr *MockGlobalDataClientMockRecorder) Aggregate(ctx, orgID, query, field, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockGlobalDataClient)(nil).Aggregate), ctx, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// CreateTrackedScan mocks base method.
+func (m *MockGlobalDataClient) CreateTrackedScan(ctx context.Context, orgID mo.Option[string], target components.ScansRescanInputBodyTarget) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTrackedScan", ctx, orgID, target)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTrackedScan indicates an expected call of CreateTrackedScan.
+func (mr *MockGlobalDataClientMockRecorder) CreateTrackedScan(ctx, orgID, target any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrackedScan", reflect.TypeOf((*MockGlobalDataClient)(nil).CreateTrackedScan), ctx, orgID, target)
+}
+
 // EnrichHost mocks base method.
 func (m *MockGlobalDataClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -102,6 +117,21 @@ func (m *MockGlobalDataClient) GetHosts(ctx context.Context, orgID mo.Option[str
 func (mr *MockGlobalDataClientMockRecorder) GetHosts(ctx, orgID, hostIDs, atTime any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHosts", reflect.TypeOf((*MockGlobalDataClient)(nil).GetHosts), ctx, orgID, hostIDs, atTime)
+}
+
+// GetTrackedScan mocks base method.
+func (m *MockGlobalDataClient) GetTrackedScan(ctx context.Context, orgID mo.Option[string], scanID string) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrackedScan", ctx, orgID, scanID)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTrackedScan indicates an expected call of GetTrackedScan.
+func (mr *MockGlobalDataClientMockRecorder) GetTrackedScan(ctx, orgID, scanID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackedScan", reflect.TypeOf((*MockGlobalDataClient)(nil).GetTrackedScan), ctx, orgID, scanID)
 }
 
 // GetWebProperties mocks base method.

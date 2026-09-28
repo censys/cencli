@@ -150,6 +150,21 @@ func (mr *MockClientMockRecorder) CreateTagAssignment(ctx, req any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTagAssignment", reflect.TypeOf((*MockClient)(nil).CreateTagAssignment), ctx, req)
 }
 
+// CreateTrackedScan mocks base method.
+func (m *MockClient) CreateTrackedScan(ctx context.Context, orgID mo.Option[string], target components.ScansRescanInputBodyTarget) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTrackedScan", ctx, orgID, target)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateTrackedScan indicates an expected call of CreateTrackedScan.
+func (mr *MockClientMockRecorder) CreateTrackedScan(ctx, orgID, target any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrackedScan", reflect.TypeOf((*MockClient)(nil).CreateTrackedScan), ctx, orgID, target)
+}
+
 // CredentialInfo mocks base method.
 func (m *MockClient) CredentialInfo() credential.Info {
 	m.ctrl.T.Helper()
@@ -312,6 +327,21 @@ func (m *MockClient) GetTagOperation(ctx context.Context, orgID mo.Option[string
 func (mr *MockClientMockRecorder) GetTagOperation(ctx, orgID, tagID, operationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTagOperation", reflect.TypeOf((*MockClient)(nil).GetTagOperation), ctx, orgID, tagID, operationID)
+}
+
+// GetTrackedScan mocks base method.
+func (m *MockClient) GetTrackedScan(ctx context.Context, orgID mo.Option[string], scanID string) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrackedScan", ctx, orgID, scanID)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTrackedScan indicates an expected call of GetTrackedScan.
+func (mr *MockClientMockRecorder) GetTrackedScan(ctx, orgID, scanID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackedScan", reflect.TypeOf((*MockClient)(nil).GetTrackedScan), ctx, orgID, scanID)
 }
 
 // GetUserCreditDetails mocks base method.
