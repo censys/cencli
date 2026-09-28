@@ -56,10 +56,36 @@ func TestPaginate(t *testing.T) {
 		wantErr     bool
 		wantPartial bool
 	}{
-		{name: "success - all pages", maxPages: mo.None[uint64](), pages: threePages, wantItems: []int{1, 2, 3, 4, 5}, wantTotal: 5},
-		{name: "success - stops at max pages", maxPages: mo.Some[uint64](2), pages: threePages, wantItems: []int{1, 2, 3, 4}, wantTotal: 5},
-		{name: "error - first page error is a hard error", maxPages: mo.None[uint64](), pages: threePages, failOn: []string{""}, wantErr: true},
-		{name: "error - later page error is partial", maxPages: mo.None[uint64](), pages: threePages, failOn: []string{"p2"}, wantItems: []int{1, 2}, wantTotal: 5, wantPartial: true},
+		{
+			name:      "success - all pages",
+			maxPages:  mo.None[uint64](),
+			pages:     threePages,
+			wantItems: []int{1, 2, 3, 4, 5},
+			wantTotal: 5,
+		},
+		{
+			name:      "success - stops at max pages",
+			maxPages:  mo.Some[uint64](2),
+			pages:     threePages,
+			wantItems: []int{1, 2, 3, 4},
+			wantTotal: 5,
+		},
+		{
+			name:     "error - first page error is a hard error",
+			maxPages: mo.None[uint64](),
+			pages:    threePages,
+			failOn:   []string{""},
+			wantErr:  true,
+		},
+		{
+			name:        "error - later page error is partial",
+			maxPages:    mo.None[uint64](),
+			pages:       threePages,
+			failOn:      []string{"p2"},
+			wantItems:   []int{1, 2},
+			wantTotal:   5,
+			wantPartial: true,
+		},
 		{
 			name:     "success - stops when the server repeats a token",
 			maxPages: mo.None[uint64](),
@@ -70,7 +96,13 @@ func TestPaginate(t *testing.T) {
 			wantItems: []int{1, 2},
 			wantTotal: 9,
 		},
-		{name: "success - empty first page", maxPages: mo.None[uint64](), pages: map[string]testPage{"": {}}, wantItems: nil, wantTotal: 0},
+		{
+			name:      "success - empty first page",
+			maxPages:  mo.None[uint64](),
+			pages:     map[string]testPage{"": {}},
+			wantItems: nil,
+			wantTotal: 0,
+		},
 	}
 
 	for _, tc := range testCases {

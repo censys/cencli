@@ -21,6 +21,7 @@ The `dns` command detects the lookup direction from the input:
 - An IP address (IPv4 or IPv6, defanged or not) looks up the domain names that resolved to it.
 - Anything else is read as a domain name. The command removes a scheme (`https://`), a path, and a trailing dot, and changes the name to lowercase. Defanged names such as `censys[.]com` are accepted.
 - A port (`censys.com:443`) is rejected: DNS names have no port. The command takes one input only.
+- A bare CIDR range (for example `8.8.8.8/32`) is rejected: give one IP address.
 
 ## Flags
 
@@ -176,7 +177,7 @@ $ censys dns censys.com --streaming
 - **The window line** under the title shows the window in UTC. The default window is the last 7 days, so older records do not appear unless you widen it with `--duration`.
 - **Timeline mode** (`--timeline`) shows `First Observed` and `Last Observed` for each separate time range in which a record was seen.
 - **Values:** MX shows `priority server`. SOA shows `mname rname`. The table shortens long TXT values; JSON output keeps the full value.
-- **A count like `(1000 of 5321)`** means not all matching records were fetched. The note printed under the table says when `--max-pages` is the reason (use `--max-pages -1` to fetch all records); a fetch that failed partway through instead prints the error that stopped it.
+- **A count like `(1000 of 5321)`** means not all matching records were fetched. The note printed under the table (suppressed by `--quiet`) says when `--max-pages` is the reason (use `--max-pages -1` to fetch all records); a fetch that failed partway through instead prints the error that stopped it.
 
 ### `dns` and `view`
 
