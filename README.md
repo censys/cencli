@@ -124,6 +124,10 @@ The `censeye` command allows you to perform a Censeye scan on a host. See the [c
 
 See how a host, web property, or certificate has changed over time: timeline events for hosts, daily snapshots for web properties (or scan timeline events with `--mode events`), and observation ranges for certificates. See the [history command docs](./docs/commands/HISTORY.md) for more details.
 
+### DNS
+
+The `dns` command looks up Active DNS records for a domain name, or the domain names that resolved to an IP address, over a time window. See the [dns command docs](./docs/commands/DNS.md) for more details.
+
 ### Tags
 
 The `tags` command lets you label and organize assets. You can manage tags themselves (`list`, `get`, `create`, `update`, `delete`), assign and unassign them on hosts, certificates, and web properties, and list what a tag is assigned to. Assets can be given as arguments, read from a file or STDIN, or selected in bulk by a CenQL query — bulk changes run as asynchronous jobs you can track, wait on, and cancel with `censys tags operations`. See the [tags command docs](./docs/commands/TAGS.md) for more details.
