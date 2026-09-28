@@ -220,25 +220,106 @@ func TestNewDomainName(t *testing.T) {
 		wantErr     bool
 		errContains string
 	}{
-		{name: "valid plain name", input: "censys.com", wantValue: "censys.com"},
-		{name: "valid with leading/trailing whitespace", input: "  censys.com  ", wantValue: "censys.com"},
-		{name: "valid uppercase is lowered", input: "WWW.Censys.COM", wantValue: "www.censys.com"},
-		{name: "valid trailing dot removed", input: "censys.com.", wantValue: "censys.com"},
-		{name: "valid https scheme removed", input: "https://censys.com", wantValue: "censys.com"},
-		{name: "valid uppercase scheme removed", input: "HTTPS://Censys.com", wantValue: "censys.com"},
-		{name: "valid path removed", input: "https://censys.com/some/path?q=1", wantValue: "censys.com"},
-		{name: "valid defanged", input: "censys[.]com", wantValue: "censys.com"},
-		// NewDomainName does not reject IP addresses: callers try NewHostID first.
-		{name: "valid ip-shaped input", input: "8.8.8.8", wantValue: "8.8.8.8"},
-		{name: "invalid empty", input: "   ", wantErr: true, errContains: `invalid domain name: "   ": empty input`},
-		{name: "invalid port", input: "censys.com:443", wantErr: true, errContains: "remove the port"},
-		{name: "invalid url with port", input: "https://censys.com:8443/x", wantErr: true, errContains: "remove the port"},
-		{name: "invalid bracketed ipv6", input: "[2001:db8::1]", wantErr: true, errContains: "remove the brackets from the IPv6 address"},
-		{name: "invalid no dot", input: "localhost", wantErr: true, errContains: "a domain name must contain a dot"},
-		{name: "invalid inner space", input: "a.com b.com", wantErr: true, errContains: "a domain name cannot contain whitespace"},
-		{name: "invalid email address", input: "user@censys.com", wantErr: true, errContains: "a domain name cannot contain '@'"},
-		{name: "invalid empty label in the middle", input: "a..b.com", wantErr: true, errContains: "a domain name cannot contain an empty label"},
-		{name: "invalid empty label from a double trailing dot", input: "censys.com..", wantErr: true, errContains: "a domain name cannot contain an empty label"},
+		{
+			name:      "valid plain name",
+			input:     "censys.com",
+			wantValue: "censys.com",
+		},
+		{
+			name:      "valid with leading/trailing whitespace",
+			input:     "  censys.com  ",
+			wantValue: "censys.com",
+		},
+		{
+			name:      "valid uppercase is lowered",
+			input:     "WWW.Censys.COM",
+			wantValue: "www.censys.com",
+		},
+		{
+			name:      "valid trailing dot removed",
+			input:     "censys.com.",
+			wantValue: "censys.com",
+		},
+		{
+			name:      "valid https scheme removed",
+			input:     "https://censys.com",
+			wantValue: "censys.com",
+		},
+		{
+			name:      "valid uppercase scheme removed",
+			input:     "HTTPS://Censys.com",
+			wantValue: "censys.com",
+		},
+		{
+			name:      "valid path removed",
+			input:     "https://censys.com/some/path?q=1",
+			wantValue: "censys.com",
+		},
+		{
+			name:      "valid defanged",
+			input:     "censys[.]com",
+			wantValue: "censys.com",
+		},
+		{
+			// NewDomainName does not reject IP addresses: callers try NewHostID first.
+			name:      "valid ip-shaped input",
+			input:     "8.8.8.8",
+			wantValue: "8.8.8.8",
+		},
+		{
+			name:        "invalid empty",
+			input:       "   ",
+			wantErr:     true,
+			errContains: `invalid domain name: "   ": empty input`,
+		},
+		{
+			name:        "invalid port",
+			input:       "censys.com:443",
+			wantErr:     true,
+			errContains: "remove the port",
+		},
+		{
+			name:        "invalid url with port",
+			input:       "https://censys.com:8443/x",
+			wantErr:     true,
+			errContains: "remove the port",
+		},
+		{
+			name:        "invalid bracketed ipv6",
+			input:       "[2001:db8::1]",
+			wantErr:     true,
+			errContains: "remove the brackets from the IPv6 address",
+		},
+		{
+			name:        "invalid no dot",
+			input:       "localhost",
+			wantErr:     true,
+			errContains: "a domain name must contain a dot",
+		},
+		{
+			name:        "invalid inner space",
+			input:       "a.com b.com",
+			wantErr:     true,
+			errContains: "a domain name cannot contain whitespace",
+		},
+		{
+			name:        "invalid email address",
+			input:       "user@censys.com",
+			wantErr:     true,
+			errContains: "a domain name cannot contain '@'",
+		},
+		{
+			name:        "invalid empty label in the middle",
+			input:       "a..b.com",
+			wantErr:     true,
+			errContains: "a domain name cannot contain an empty label",
+		},
+		{
+			name:        "invalid empty label from a double trailing dot",
+			input:       "censys.com..",
+			wantErr:     true,
+			errContains: "a domain name cannot contain an empty label",
+		},
 	}
 
 	for _, tt := range tests {

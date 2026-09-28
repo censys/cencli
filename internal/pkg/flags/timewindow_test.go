@@ -24,9 +24,30 @@ func TestResolveTimeWindow(t *testing.T) {
 		wantErr     bool
 		errContains string
 	}{
-		{name: "start and end", startOpt: mo.Some(start), endOpt: mo.Some(end), duration: mo.Some(day), wantStart: start, wantEnd: end},
-		{name: "start only", startOpt: mo.Some(start), endOpt: mo.None[time.Time](), duration: mo.Some(2 * day), wantStart: start, wantEnd: start.Add(2 * day)},
-		{name: "end only", startOpt: mo.None[time.Time](), endOpt: mo.Some(end), duration: mo.Some(2 * day), wantStart: end.Add(-2 * day), wantEnd: end},
+		{
+			name:      "start and end",
+			startOpt:  mo.Some(start),
+			endOpt:    mo.Some(end),
+			duration:  mo.Some(day),
+			wantStart: start,
+			wantEnd:   end,
+		},
+		{
+			name:      "start only",
+			startOpt:  mo.Some(start),
+			endOpt:    mo.None[time.Time](),
+			duration:  mo.Some(2 * day),
+			wantStart: start,
+			wantEnd:   start.Add(2 * day),
+		},
+		{
+			name:      "end only",
+			startOpt:  mo.None[time.Time](),
+			endOpt:    mo.Some(end),
+			duration:  mo.Some(2 * day),
+			wantStart: end.Add(-2 * day),
+			wantEnd:   end,
+		},
 		{
 			name:        "end before start",
 			startOpt:    mo.Some(end),
