@@ -14,6 +14,7 @@ import (
 	completioncmd "github.com/censys/cencli/internal/command/completion"
 	configcmd "github.com/censys/cencli/internal/command/config"
 	creditscmd "github.com/censys/cencli/internal/command/credits"
+	dnscmd "github.com/censys/cencli/internal/command/dns"
 	enrichcmd "github.com/censys/cencli/internal/command/enrich"
 	historycmd "github.com/censys/cencli/internal/command/history"
 	orgcmd "github.com/censys/cencli/internal/command/org"
@@ -78,6 +79,7 @@ func (c *Command) Init() error {
 		creditscmd.NewCreditsCommand(c.Context),
 		orgcmd.NewOrgCommand(c.Context),
 		tagscmd.NewTagsCommand(c.Context),
+		dnscmd.NewDNSCommand(c.Context),
 	)
 }
 

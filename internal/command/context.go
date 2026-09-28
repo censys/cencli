@@ -14,6 +14,7 @@ import (
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
 	"github.com/censys/cencli/internal/app/credits"
+	"github.com/censys/cencli/internal/app/dns"
 	"github.com/censys/cencli/internal/app/enrich"
 	"github.com/censys/cencli/internal/app/history"
 	"github.com/censys/cencli/internal/app/organizations"
@@ -50,6 +51,7 @@ type Context struct {
 	creditsSvc   credits.Service
 	orgSvc       organizations.Service
 	tagsSvc      tags.Service
+	dnsSvc       dns.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -507,6 +509,26 @@ func (c *Context) HistoryService() (history.Service, cenclierrors.CencliError) {
 // This should only be used in tests; in the app the service is instantiated on demand.
 func WithHistoryService(svc history.Service) ContextOpts {
 	return func(c *Context) { c.historySvc = svc }
+}
+
+// DNSService attempts to provide a DNSService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) DNSService() (dns.Service, cenclierrors.CencliError) {
+	if c.dnsSvc != nil {
+		return c.dnsSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize
+	c.dnsSvc = dns.New(c.censysClient)
+	return c.dnsSvc, nil
+}
+
+// WithDNSService injects an instantiated DNSService to the Context.
+// This should only be used in tests; in the app the service is instantiated on demand.
+func WithDNSService(svc dns.Service) ContextOpts {
+	return func(c *Context) { c.dnsSvc = svc }
 }
 
 // AggregateService attempts to provide a AggregateService to the caller.
