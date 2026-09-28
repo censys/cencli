@@ -3,6 +3,8 @@ package dns
 import (
 	"context"
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/samber/mo"
@@ -218,6 +220,10 @@ func (c *Command) parseInput(raw string) cenclierrors.CencliError {
 	}
 	value := values[0]
 
+	if isCIDR(value) {
+		return assets.NewInvalidAssetIDError(value, "a CIDR range is not supported; give one IP address")
+	}
+
 	if ip, err := assets.NewHostID(value); err == nil {
 		c.ip = mo.Some(ip)
 		c.input = ip.String()
@@ -228,9 +234,42 @@ func (c *Command) parseInput(raw string) cenclierrors.CencliError {
 		// Keep the reason: it tells the user how to fix the input ("remove the port").
 		return assets.NewInvalidAssetIDError(value, err.Error())
 	}
+	// A pasted URL whose host is an IP (e.g. https://8.8.8.8/) parses as a domain
+	// name here, because NewDomainName strips the scheme and path and does not
+	// itself reject IP-shaped input. Recover the IP direction so it is not
+	// misrouted to the name lookup.
+	if ip, err := assets.NewHostID(name.String()); err == nil {
+		c.ip = mo.Some(ip)
+		c.input = ip.String()
+		return nil
+	}
 	c.name = mo.Some(name)
 	c.input = name.String()
 	return nil
+}
+
+// isCIDR reports whether raw is a bare CIDR range ("<ip>/<prefix-length>"),
+// which Active DNS lookups do not support: a range has no single IP to look
+// up. A URL path that happens to start with digits (e.g. "https://8.8.8.8/32")
+// is not a CIDR range, so a scheme rules it out.
+func isCIDR(raw string) bool {
+	if strings.Contains(raw, "://") {
+		return false
+	}
+	i := strings.LastIndex(raw, "/")
+	if i < 0 {
+		return false
+	}
+	ipPart, prefix := raw[:i], raw[i+1:]
+	if prefix == "" {
+		return false
+	}
+	for _, r := range prefix {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return net.ParseIP(strings.TrimSpace(ipPart)) != nil
 }
 
 // parsePaginationFlags reads --page-size and --max-pages. A --max-pages of -1

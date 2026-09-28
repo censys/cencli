@@ -82,10 +82,26 @@ func NewDomainName(raw string) (DomainName, error) {
 		return DomainName{}, fmt.Errorf("invalid domain name: %q: remove the port", raw)
 	case strings.ContainsAny(name, " \t"):
 		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name cannot contain whitespace", raw)
+	case strings.Contains(name, "@"):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name cannot contain '@'", raw)
 	case !strings.Contains(name, "."):
 		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name must contain a dot", raw)
+	case hasEmptyLabel(name):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name cannot contain an empty label", raw)
 	}
 	return DomainName{value: name}, nil
+}
+
+// hasEmptyLabel reports whether name (already stripped of at most one
+// trailing FQDN dot) contains an empty label, such as "a..b.com" or
+// "censys.com.." (an extra trailing dot beyond the one FQDNs allow).
+func hasEmptyLabel(name string) bool {
+	for _, label := range strings.Split(name, ".") {
+		if label == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // looksLikeIP returns true if the string appears to be an IP address (v4 or v6).

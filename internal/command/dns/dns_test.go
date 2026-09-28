@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -204,6 +205,64 @@ func TestDNSCommand(t *testing.T) {
 			},
 			args:   withWindow("https://Censys.com/some/path", "-O", "json"),
 			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - ip in a url is an ip",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				return ms
+			},
+			args:   withWindow("https://8.8.8.8/", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - defanged url with an ip is an ip",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "1.2.3.4"), defaultParams()).Return(ipResult(), nil)
+				return ms
+			},
+			args:   withWindow("hxxp://1.2.3[.]4/x", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - defanged name is a name",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				return ms
+			},
+			args:   withWindow("censys[.]com", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - a url with a numeric path is not mistaken for a cidr",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				return ms
+			},
+			args:   withWindow("https://8.8.8.8/32", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name:   "error - a cidr range is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("8.8.8.8/32"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "a CIDR range is not supported; give one IP address")
+			},
+		},
+		{
+			name:   "error - a cidr range with a smaller prefix is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("10.0.0.0/24"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "a CIDR range is not supported; give one IP address")
+			},
 		},
 		{
 			name: "success - record types and pagination flags pass through",
@@ -501,6 +560,61 @@ func TestDNSCommand_Short(t *testing.T) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "DNS records for censys.com (2 of 5321)")
 				require.Contains(t, stderr, "Showing 2 of 5321 records. Use --max-pages -1 to fetch all.")
+			},
+		},
+		{
+			name: "success - no note when --max-pages -1 already fetched everything",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				r := nameResult("1.1.1.1", "2.2.2.2")
+				r.TotalRecords = 5321
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(r, nil)
+				return ms
+			},
+			args: withWindow("censys.com", "-p", "-1"),
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "DNS records for censys.com (2 of 5321)")
+				require.NotContains(t, stderr, "Showing")
+			},
+		},
+		{
+			name: "success - no note when a partial error already explains the truncation",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				r := nameResult("1.1.1.1", "2.2.2.2")
+				r.TotalRecords = 5321
+				r.PartialError = cenclierrors.ToPartialError(cenclierrors.NewCencliError(errors.New("page 2 failed")))
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(r, nil)
+				return ms
+			},
+			args: withWindow("censys.com"),
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "DNS records for censys.com (2 of 5321)")
+				require.NotContains(t, stderr, "Showing")
+				require.Contains(t, stderr, "page 2 failed")
+			},
+		},
+		{
+			name: "success - a TXT value with control characters does not break the table row",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
+					Meta: testMeta(),
+					Records: []*components.DNSResolutionRecord{
+						{RecordType: components.DNSResolutionRecordRecordTypeTxt, Value: strPtr("a\nb\tc\rd"), FirstSeen: testFrom, LastSeen: testTo},
+					},
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				lines := fields(stdout)
+				require.Len(t, lines, 4, "the TXT value must not introduce extra lines")
+				require.Equal(t, []string{"TXT", "a", "b", "c", "d", "2026-09-21", "00:00", "2026-09-28", "00:00"}, lines[3])
 			},
 		},
 		{
