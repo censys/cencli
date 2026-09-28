@@ -55,6 +55,39 @@ type WebPropertyID struct {
 
 func (w WebPropertyID) String() string { return fmt.Sprintf("%s:%d", w.Hostname, w.Port) }
 
+// DomainName represents a validated, normalized DNS name.
+type DomainName struct{ value string }
+
+func (d DomainName) String() string { return d.value }
+
+// NewDomainName parses a DNS name. It accepts defanged names and pasted URLs:
+// the scheme, any path, and a trailing dot are removed, and the name is
+// lowercased. A port is rejected, because a DNS name has no port.
+// It does not reject IP addresses; callers that accept both try NewHostID first.
+func NewDomainName(raw string) (DomainName, error) {
+	refanged := refang.RefangURL(raw)
+	name := strings.ToLower(strings.TrimSpace(refanged))
+	name = strings.TrimPrefix(strings.TrimPrefix(name, "http://"), "https://")
+	if i := strings.IndexAny(name, "/?#"); i >= 0 {
+		name = name[:i]
+	}
+	name = strings.TrimSuffix(name, ".")
+
+	switch {
+	case name == "":
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: empty input", raw)
+	case strings.HasPrefix(name, "["):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: remove the brackets from the IPv6 address", raw)
+	case strings.Contains(name, ":"):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: remove the port", raw)
+	case strings.ContainsAny(name, " \t"):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name cannot contain whitespace", raw)
+	case !strings.Contains(name, "."):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name must contain a dot", raw)
+	}
+	return DomainName{value: name}, nil
+}
+
 // looksLikeIP returns true if the string appears to be an IP address (v4 or v6).
 func looksLikeIP(s string) bool {
 	// IPv6 contains colons
