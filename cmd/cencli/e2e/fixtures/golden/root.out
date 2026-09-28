@@ -13,6 +13,7 @@ Available Commands:
   completion  Generate shell completion scripts
   config      Manage configuration
   credits     Display credit details for your Censys account
+  dns         Look up Active DNS records for domain names and IP addresses
   enrich      Enrich host IPs with curated Censys data for high-volume SOC lookups
   history     Retrieve historical data for hosts, web properties, and certificates
   org         Manage and view organization details

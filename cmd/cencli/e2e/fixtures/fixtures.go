@@ -30,6 +30,7 @@ func Fixtures() map[string][]Fixture {
 		"search":    searchFixtures,
 		"censeye":   censeyeFixtures,
 		"history":   historyFixtures,
+		"dns":       dnsFixtures,
 		"credits":   creditsFixtures,
 		"org":       orgFixtures,
 		"tags":      tagsFixtures,
