@@ -125,22 +125,14 @@ func TestHistoryCommand(t *testing.T) {
 				ms := historymocks.NewMockHistoryService(ctrl)
 				webPropID, _ := assets.NewWebPropertyID("example.com:443", assets.DefaultWebPropertyPort)
 
-				snapshots := []*historyapp.WebPropertySnapshot{
-					{
-						Time:   startTime,
-						Data:   &components.Webproperty{},
-						Exists: true,
-					},
-					{
-						Time:   startTime.AddDate(0, 0, 1),
-						Data:   &components.Webproperty{},
-						Exists: true,
-					},
+				events := []*components.WebTimelineEvent{
+					{EventTime: strPtr("2025-01-02T10:00:00Z"), EndpointScanned: &components.EndpointScanned{}},
+					{EventTime: strPtr("2025-01-01T09:00:00Z"), JarmScanned: &components.JarmScanned{}},
 				}
 
 				result := historyapp.WebPropertyHistoryResult{
-					Meta:      &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
-					Snapshots: snapshots,
+					Meta:   &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
+					Events: events,
 				}
 
 				ms.EXPECT().GetWebPropertyHistory(
@@ -157,10 +149,13 @@ func TestHistoryCommand(t *testing.T) {
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 
-				var result historyapp.WebPropertyHistoryResult
-				jsonErr := json.Unmarshal([]byte(stdout), &result.Snapshots)
+				var events []components.WebTimelineEvent
+				jsonErr := json.Unmarshal([]byte(stdout), &events)
 				require.NoError(t, jsonErr)
-				require.Equal(t, 2, len(result.Snapshots))
+				require.Len(t, events, 2)
+				require.Equal(t, "2025-01-02T10:00:00Z", *events[0].EventTime)
+				require.NotNil(t, events[0].EndpointScanned)
+				require.NotNil(t, events[1].JarmScanned)
 			},
 		},
 		{
@@ -487,3 +482,5 @@ func newOrgLookupStore(ctrl *gomock.Controller) store.Store {
 		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
 	return ms
 }
+
+func strPtr(s string) *string { return &s }
