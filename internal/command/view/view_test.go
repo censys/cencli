@@ -98,6 +98,7 @@ func TestViewCommand(t *testing.T) {
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "8.8.8.8")
+				require.Contains(t, stderr, "Tip: Active DNS observations for this IP: censys dns 8.8.8.8")
 			},
 		},
 		{
@@ -120,6 +121,7 @@ func TestViewCommand(t *testing.T) {
 				require.NoError(t, err)
 				// Expect truncated format first16…last4
 				require.Contains(t, stdout, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+				require.NotContains(t, stderr, "censys dns")
 			},
 		},
 		{
@@ -140,6 +142,7 @@ func TestViewCommand(t *testing.T) {
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "platform.censys.io")
+				require.NotContains(t, stderr, "censys dns")
 			},
 		},
 		{
@@ -212,6 +215,30 @@ func TestViewCommand(t *testing.T) {
 				require.NoError(t, err)
 				require.Contains(t, stderr, "200")
 				require.Contains(t, stdout, "8.8.8.8")
+				require.NotContains(t, stderr, "censys dns")
+			},
+		},
+		{
+			name:  "host view - multiple hosts short output",
+			store: func() store.Store { s, _ := store.New(t.TempDir()); return s },
+			service: func(ctrl *gomock.Controller) view.Service {
+				ms := viewmocks.NewMockViewService(ctrl)
+				host1 := &assets.Host{Host: components.Host{IP: strPtr("8.8.8.8")}}
+				host2 := &assets.Host{Host: components.Host{IP: strPtr("1.1.1.1")}}
+				result := view.HostsResult{
+					Meta:  &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
+					Hosts: []*assets.Host{host1, host2},
+				}
+				// Use gomock.Any() for the hostIDs slice since order might vary
+				ms.EXPECT().GetHosts(gomock.Any(), mo.None[identifiers.OrganizationID](), gomock.Any(), mo.None[time.Time]()).Return(result, nil)
+				return ms
+			},
+			args: []string{"8.8.8.8,1.1.1.1", "--output-format", "short"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "8.8.8.8")
+				require.Contains(t, stdout, "1.1.1.1")
+				require.NotContains(t, stderr, "censys dns")
 			},
 		},
 		{
@@ -629,6 +656,58 @@ func TestViewCommand_PartialError(t *testing.T) {
 		assert.Contains(t, stderr.String(), "Batch 2 failed", "should print partial error to stderr")
 		assert.Contains(t, stderr.String(), "some data was successfully retrieved", "should include partial error message")
 	})
+}
+
+func TestViewCommand_DNSHintQuiet(t *testing.T) {
+	// runShortHostView views a single host in short format and returns what
+	// landed on each stream, optionally with --quiet set beforehand.
+	runShortHostView := func(t *testing.T, quiet bool) (stdout, stderr string) {
+		t.Helper()
+
+		tempDir := t.TempDir()
+		viper.Reset()
+		cfg, err := config.New(tempDir)
+		require.NoError(t, err)
+		if quiet {
+			// PreRun re-reads the config from viper, so setting the struct field
+			// would be overwritten; viper is also where the real --quiet flag lands.
+			viper.Set("quiet", true)
+		}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		ms := viewmocks.NewMockViewService(ctrl)
+		hostID, _ := assets.NewHostID("8.8.8.8")
+		host := &assets.Host{Host: components.Host{IP: strPtr("8.8.8.8")}}
+		result := view.HostsResult{
+			Meta:  &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
+			Hosts: []*assets.Host{host},
+		}
+		ms.EXPECT().GetHosts(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.HostID{hostID}, mo.None[time.Time]()).Return(result, nil)
+
+		cmdContext := command.NewCommandContext(cfg, mustStore(t), command.WithViewService(ms))
+		rootCmd, err := command.RootCommandToCobra(NewViewCommand(cmdContext))
+		require.NoError(t, err)
+		require.NoError(t, config.BindGlobalFlags(rootCmd.PersistentFlags(), cfg))
+
+		var outBuf, errBuf bytes.Buffer
+		formatter.Stdout = &outBuf
+		formatter.Stderr = &errBuf
+
+		rootCmd.SetArgs([]string{"8.8.8.8", "--output-format", "short"})
+		cmdErr := rootCmd.Execute()
+		require.NoError(t, cmdErr)
+
+		return outBuf.String(), errBuf.String()
+	}
+
+	stdoutLoud, stderrLoud := runShortHostView(t, false)
+	stdoutQuiet, stderrQuiet := runShortHostView(t, true)
+
+	require.Contains(t, stderrLoud, "Tip: Active DNS observations for this IP: censys dns 8.8.8.8")
+	require.NotContains(t, stderrQuiet, "censys dns")
+	require.Equal(t, stdoutLoud, stdoutQuiet, "the hint must never change stdout, quiet or not")
 }
 
 func strPtr(s string) *string { return &s }
