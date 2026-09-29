@@ -265,6 +265,24 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 		{
+			name:   "error - a defanged cidr range is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("8[.]8[.]8[.]8/32"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "a CIDR range is not supported; give one IP address")
+			},
+		},
+		{
+			name:   "error - a partially defanged cidr range is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("10.0.0[.]0/24"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "a CIDR range is not supported; give one IP address")
+			},
+		},
+		{
 			name: "success - record types and pagination flags pass through",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
@@ -476,6 +494,35 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestDNSCommand_RecordTypeValidatedBeforeClient covers an invalid --record-type
+// with neither a DNS service nor a client configured: PreRun must reject the
+// record type before it ever needs a service, so this fails with the
+// record-type error instead of "Censys Client Not Configured".
+func TestDNSCommand_RecordTypeValidatedBeforeClient(t *testing.T) {
+	tempDir := t.TempDir()
+	viper.Reset()
+	cfg, err := config.New(tempDir)
+	require.NoError(t, err)
+
+	var stdout, stderr bytes.Buffer
+	formatter.Stdout = &stdout
+	formatter.Stderr = &stderr
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	// No WithDNSService and no client: DNSService() would fail with "not
+	// configured" if it were ever called.
+	cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl))
+	rootCmd, err := command.RootCommandToCobra(NewDNSCommand(cmdContext))
+	require.NoError(t, err)
+
+	rootCmd.SetArgs(withWindow("104.18.10.84", "-r", "MX"))
+	cmdErr := rootCmd.Execute()
+	require.Error(t, cmdErr)
+	require.Contains(t, cmdErr.Error(), "invalid record type 'MX'")
+	require.NotContains(t, cmdErr.Error(), "not configured")
 }
 
 // newOrgLookupStore returns a store mock that reports no stored org-id, which is

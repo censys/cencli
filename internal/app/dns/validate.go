@@ -30,6 +30,20 @@ var ipRecordTypes = []string{
 	string(operations.RecordTypesAaaa),
 }
 
+// ValidateRecordTypes checks --record-type values against the set the lookup
+// direction supports (isIP selects the IP set over the name set). It is
+// exported so the command can reject an unsupported record type in PreRun,
+// before a service (and so the API client) is needed; the service runs the
+// same check again for callers that invoke it directly.
+func ValidateRecordTypes(recordTypes []string, isIP bool) cenclierrors.CencliError {
+	supported := nameRecordTypes
+	if isIP {
+		supported = ipRecordTypes
+	}
+	_, err := normalizeRecordTypes(recordTypes, supported)
+	return err
+}
+
 // normalizeRecordTypes uppercases, trims, and de-duplicates the given record
 // types, and rejects any that the lookup direction does not support. It
 // returns nil for no types, which the API reads as all supported types.

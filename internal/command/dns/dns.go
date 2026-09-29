@@ -18,6 +18,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	cmdutil "github.com/censys/cencli/internal/pkg/input"
+	"github.com/censys/cencli/internal/pkg/refang"
 	"github.com/censys/cencli/internal/pkg/styles"
 	"github.com/censys/cencli/internal/pkg/tape"
 )
@@ -142,6 +143,17 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return err
 	}
 
+	recordTypes, err := c.flags.recordTypes.Value()
+	if err != nil {
+		return err
+	}
+	// Validate --record-type before any service (and so the API client) is
+	// needed, so an invalid value is reported even with no client configured.
+	// The service validates again for callers that invoke it directly.
+	if err := dns.ValidateRecordTypes(recordTypes, c.ip.IsPresent()); err != nil {
+		return err
+	}
+
 	// resolve time window
 	startOpt, err := c.flags.start.Value(c.Config().DefaultTZ)
 	if err != nil {
@@ -163,10 +175,6 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	logger.Debug("Time window", "start", fromTime.Format(time.RFC3339), "end", toTime.Format(time.RFC3339))
 
 	c.timeline, err = c.flags.timeline.Value()
-	if err != nil {
-		return err
-	}
-	recordTypes, err := c.flags.recordTypes.Value()
 	if err != nil {
 		return err
 	}
@@ -262,7 +270,10 @@ func (c *Command) parseInput(raw string) cenclierrors.CencliError {
 // isCIDR reports whether raw is a bare CIDR range ("<ip>/<prefix-length>"),
 // which Active DNS lookups do not support: a range has no single IP to look
 // up. A URL path that happens to start with digits (e.g. "https://8.8.8.8/32")
-// is not a CIDR range, so a scheme rules it out.
+// is not a CIDR range, so a scheme rules it out. The IP part is refanged
+// (as NewHostID does) before the check, so a defanged CIDR such as
+// "8[.]8[.]8[.]8/32" is caught instead of falling through to a lookup of
+// the wrong, path-truncated name.
 func isCIDR(raw string) bool {
 	if strings.Contains(raw, "://") {
 		return false
@@ -280,7 +291,7 @@ func isCIDR(raw string) bool {
 			return false
 		}
 	}
-	return net.ParseIP(strings.TrimSpace(ipPart)) != nil
+	return net.ParseIP(strings.TrimSpace(refang.RefangIP(ipPart))) != nil
 }
 
 // parsePaginationFlags reads --page-size and --max-pages. A --max-pages of -1
