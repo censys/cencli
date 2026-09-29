@@ -484,6 +484,60 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "success - --domain narrows an ip timeline",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				p := defaultParams()
+				p.Domain = mo.Some(domainName(t, "censys.com"))
+				ms.EXPECT().IPResolutionRanges(gomock.Any(), hostID(t, "104.18.10.84"), p).
+					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*components.DNSIPResolutionRangeRecord{}}, nil)
+				return ms
+			},
+			args:   withWindow("104.18.10.84", "--timeline", "--domain", "censys.com", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - --domain normalizes a defanged name",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				p := defaultParams()
+				p.Domain = mo.Some(domainName(t, "censys.com"))
+				ms.EXPECT().IPResolutionRanges(gomock.Any(), hostID(t, "104.18.10.84"), p).
+					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*components.DNSIPResolutionRangeRecord{}}, nil)
+				return ms
+			},
+			args:   withWindow("104.18.10.84", "--timeline", "--domain", "censys[.]com", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name:   "error - --domain with a name input is rejected",
+			dnsSvc: noCalls,
+			args:   withWindow("censys.com", "--timeline", "--domain", "x.com"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--domain applies only to an IP lookup with --timeline")
+			},
+		},
+		{
+			name:   "error - --domain without --timeline is rejected",
+			dnsSvc: noCalls,
+			args:   withWindow("104.18.10.84", "--domain", "censys.com"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--domain applies only to an IP lookup with --timeline")
+			},
+		},
+		{
+			name:   "error - --domain with an invalid name is rejected",
+			dnsSvc: noCalls,
+			args:   withWindow("104.18.10.84", "--timeline", "--domain", "notadomain"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "invalid asset ID: notadomain")
+				require.Contains(t, err.Error(), "a domain name must contain a dot")
+			},
+		},
+		{
 			name:   "success - help",
 			dnsSvc: noCalls,
 			args:   []string{"--help"},
@@ -491,6 +545,7 @@ func TestDNSCommand(t *testing.T) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, `"censys view <ip>"`)
 				require.Contains(t, stdout, "--timeline")
+				require.Contains(t, stdout, "141.193.213.10 --timeline --domain censys.com")
 			},
 		},
 	})

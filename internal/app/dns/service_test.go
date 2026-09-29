@@ -284,25 +284,49 @@ func TestIPResolutions(t *testing.T) {
 }
 
 func TestIPResolutionRanges(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Run("success - domains for time ranges", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
 
-	mc := mocks.NewMockClient(ctrl)
-	mc.EXPECT().ListDNSIPResolutionRanges(gomock.Any(), mo.None[string](), "104.18.10.84", from, to, []string{"AAAA"}, mo.Some[int64](100), mo.None[string]()).
-		Return(client.Result[components.DNSIPResolutionRangeResponse]{
-			Metadata: okMeta(),
-			Data: &components.DNSIPResolutionRangeResponse{
-				IP:           "104.18.10.84",
-				Records:      []components.DNSIPResolutionRangeRecord{{Domain: "censys.com", RecordType: components.DNSIPResolutionRangeRecordRecordTypeAaaa, FirstSeen: from, LastSeen: to}},
-				TotalRecords: 1,
-			},
-		}, nil)
+		mc := mocks.NewMockClient(ctrl)
+		mc.EXPECT().ListDNSIPResolutionRanges(gomock.Any(), mo.None[string](), "104.18.10.84", from, to, []string{"AAAA"}, mo.None[string](), mo.Some[int64](100), mo.None[string]()).
+			Return(client.Result[components.DNSIPResolutionRangeResponse]{
+				Metadata: okMeta(),
+				Data: &components.DNSIPResolutionRangeResponse{
+					IP:           "104.18.10.84",
+					Records:      []components.DNSIPResolutionRangeRecord{{Domain: "censys.com", RecordType: components.DNSIPResolutionRangeRecordRecordTypeAaaa, FirstSeen: from, LastSeen: to}},
+					TotalRecords: 1,
+				},
+			}, nil)
 
-	p := baseParams()
-	p.RecordTypes = []string{"aaaa"}
-	res, err := New(mc).IPResolutionRanges(context.Background(), mustHost(t, "104.18.10.84"), p)
-	require.NoError(t, err)
-	require.Len(t, res.Records, 1)
+		p := baseParams()
+		p.RecordTypes = []string{"aaaa"}
+		res, err := New(mc).IPResolutionRanges(context.Background(), mustHost(t, "104.18.10.84"), p)
+		require.NoError(t, err)
+		require.Len(t, res.Records, 1)
+	})
+
+	t.Run("success - domain filter passes through to the client", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mc := mocks.NewMockClient(ctrl)
+		mc.EXPECT().ListDNSIPResolutionRanges(gomock.Any(), mo.None[string](), "104.18.10.84", from, to, []string(nil), mo.Some("censys.com"), mo.Some[int64](100), mo.None[string]()).
+			Return(client.Result[components.DNSIPResolutionRangeResponse]{
+				Metadata: okMeta(),
+				Data: &components.DNSIPResolutionRangeResponse{
+					IP:           "104.18.10.84",
+					Records:      []components.DNSIPResolutionRangeRecord{{Domain: "censys.com", RecordType: components.DNSIPResolutionRangeRecordRecordTypeA, FirstSeen: from, LastSeen: to}},
+					TotalRecords: 1,
+				},
+			}, nil)
+
+		p := baseParams()
+		p.Domain = mo.Some(mustDomain(t, "censys.com"))
+		res, err := New(mc).IPResolutionRanges(context.Background(), mustHost(t, "104.18.10.84"), p)
+		require.NoError(t, err)
+		require.Len(t, res.Records, 1)
+	})
 }
 
 func TestNameResolutions_Streaming(t *testing.T) {
@@ -373,7 +397,7 @@ func TestLookups_403MapsToPlanMessage(t *testing.T) {
 			name: "IPResolutionRanges",
 			run: func(ctrl *gomock.Controller) error {
 				mc := mocks.NewMockClient(ctrl)
-				mc.EXPECT().ListDNSIPResolutionRanges(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				mc.EXPECT().ListDNSIPResolutionRanges(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(client.Result[components.DNSIPResolutionRangeResponse]{}, apiError(403))
 				_, err := New(mc).IPResolutionRanges(context.Background(), mustHost(t, "104.18.10.84"), baseParams())
 				return err

@@ -92,7 +92,7 @@ func (s *dnsService) IPResolutionRanges(ctx context.Context, ip assets.HostID, p
 	orgID := utilconvert.OptionalString(params.OrgID)
 	page, err := lookup(ctx, params, ipRecordTypes,
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSIPResolutionRangeResponse], client.ClientError) {
-			return s.client.ListDNSIPResolutionRanges(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
+			return s.client.ListDNSIPResolutionRanges(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, utilconvert.OptionalString(params.Domain), optionalInt64(params.PageSize), pageToken)
 		},
 		func(r *components.DNSIPResolutionRangeResponse) pagination.PageData[*components.DNSIPResolutionRangeRecord] {
 			return pagination.PageData[*components.DNSIPResolutionRangeRecord]{Items: pointers(r.Records), TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
