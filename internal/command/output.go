@@ -222,7 +222,7 @@ func (e *unsupportedOutputFormatError) ShouldPrintUsage() bool {
 
 // validateStreamingMode checks for conflicts between streaming mode and output format flags.
 // Returns an error if:
-// - streaming is enabled (via config or flag) AND output format flag is explicitly set
+// - streaming is enabled (via the flag, or via config for a command that streams) AND output format flag is explicitly set
 // - streaming flag is explicitly set but command doesn't support streaming
 func validateStreamingMode(cobraCmd *cobra.Command, cmd Command, streamingFromConfig bool) cenclierrors.CencliError {
 	streamingFlag := cobraCmd.Flag(config.StreamingFlagName)
@@ -233,6 +233,8 @@ func validateStreamingMode(cobraCmd *cobra.Command, cmd Command, streamingFromCo
 	streamingFlagExplicit := streamingFlag != nil && streamingFlag.Changed
 	if streamingFlagExplicit {
 		streamingEnabled = streamingFlag.Value.String() == "true"
+	} else if !cmd.SupportsStreaming() {
+		streamingEnabled = false
 	}
 
 	// Check for conflict: streaming enabled + explicit output format

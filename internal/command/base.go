@@ -108,6 +108,9 @@ func (b *BaseCommand) init(cmd Command) {
 		if err := validateStreamingMode(cobraCmd, cmd, b.config.Streaming); err != nil {
 			return err
 		}
+		if !cmd.SupportsStreaming() {
+			b.config.Streaming = false
+		}
 
 		// special case for output format
 		// we need to manually inspect the command's flags to see if the user explicitly set the output format
