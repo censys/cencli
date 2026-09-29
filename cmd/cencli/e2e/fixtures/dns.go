@@ -40,6 +40,143 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "bracketed-ipv6",
+		Args:      []string{"[2001:db8::1]"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "remove the brackets")
+		},
+	},
+	{
+		Name:      "cidr",
+		Args:      []string{"8.8.8.8/32"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "a CIDR range is not supported")
+		},
+	},
+	{
+		Name:      "list-name-name",
+		Args:      []string{"a.com,b.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Too Many Assets]", lines[0])
+			assert.Contains(t, lines[1], "only 1 are supported")
+		},
+	},
+	{
+		Name:      "list-name-ip",
+		Args:      []string{"censys.com,8.8.8.8"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Too Many Assets]", lines[0])
+			assert.Contains(t, lines[1], "only 1 are supported")
+		},
+	},
+	{
+		Name:      "list-ip-name",
+		Args:      []string{"8.8.8.8,example.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Too Many Assets]", lines[0])
+			assert.Contains(t, lines[1], "only 1 are supported")
+		},
+	},
+	{
+		Name:      "list-name-name-2",
+		Args:      []string{"www.censys.com,api.censys.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Too Many Assets]", lines[0])
+			assert.Contains(t, lines[1], "only 1 are supported")
+		},
+	},
+	{
+		Name:      "email-in-name",
+		Args:      []string{"user@censys.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "cannot contain '@'")
+		},
+	},
+	{
+		Name:      "empty-label",
+		Args:      []string{"a..b.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "empty label")
+		},
+	},
+	{
+		Name:      "duration-negative",
+		Args:      []string{"censys.com", "--duration", "-1h"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Time Window]", lines[0])
+			assert.Contains(t, lines[1], "duration must be greater than 0")
+		},
+	},
+	{
+		Name:     "invalid-record-type",
+		Args:     []string{"104.18.10.84", "-r", "MX"},
+		ExitCode: 2,
+		Timeout:  1 * time.Second,
+		// NeedsAuth is true here even though this never reaches the API.
+		// PreRun constructs the DNS client unconditionally, before Run
+		// validates --record-type; with no client configured the command
+		// fails earlier with "Censys Client Not Configured" (exit 1)
+		// instead of this rejection. Configuring auth lets client
+		// construction succeed so the record-type check -- which runs
+		// before any list request is built -- is what actually gets hit.
+		NeedsAuth: true,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Record Type]", lines[0])
+			assert.Contains(t, lines[1], "invalid record type 'MX'")
+		},
+	},
+	{
 		Name:      "name-json",
 		Args:      []string{"censys.com", "--output-format", "json"},
 		ExitCode:  0,
