@@ -44,6 +44,11 @@ func runFixtureTest(
 	command string,
 	fixture fixtures.Fixture,
 ) {
+	if fixture.Skip != nil {
+		if reason := fixture.Skip(); reason != "" {
+			t.Skip(reason)
+		}
+	}
 	if fixture.NeedsAuth {
 		err := lib.ConfigureAuth(dataDir, binaryPath)
 		require.NoError(t, err, "Failed to configure auth for fixture %s", fixture.Name)
