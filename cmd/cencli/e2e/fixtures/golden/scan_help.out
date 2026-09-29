@@ -1,0 +1,25 @@
+Request a live rescan of a web property and follow scans until they complete.         
+                                                                                      
+Scanning requires an organization (Enterprise). A rescan costs 10 credits per accepted
+request; reading a scan's status is free.                                             
+
+Usage:
+  censys scan [flags]
+  censys scan [command]
+
+Available Commands:
+  get         Show the status of a tracked scan
+  rescan      Request a live rescan of a web property (10 credits)
+
+Flags:
+  -h, --help   help for scan
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

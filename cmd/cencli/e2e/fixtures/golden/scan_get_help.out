@@ -1,0 +1,30 @@
+Show the status of a tracked scan by its ID. Works for any tracked scan, including ones   
+started outside the CLI. Reading a scan is free.                                          
+                                                                                          
+Use --wait to poll until the scan completes. Waiting exits non-zero if no task produced   
+results; without --wait the command reports the current state and exits 0, even for a scan
+that was rejected.                                                                        
+
+Usage:
+  censys scan get <scan-id> [flags]
+
+Examples:
+  censys scan get <scan-id> # Show a scan's current status
+  censys scan get <scan-id> --wait # Poll until the scan completes
+  censys scan get <scan-id> --output-format json # Machine-readable output
+
+Flags:
+  -h, --help             help for get
+  -o, --org-id string    organization ID to target (personal access tokens only)
+      --timeout string   how long to wait before giving up (requires --wait) - use 0 for no limit (default "15m0s")
+  -w, --wait             poll until the scan completes
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+
