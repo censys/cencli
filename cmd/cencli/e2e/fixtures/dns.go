@@ -34,10 +34,10 @@ var dnsFixtures = []Fixture{
 			assert.Equal(t, "[Invalid Asset ID]", lines[0])
 			assert.Contains(t, lines[1], "remove the port")
 			rest := strings.Join(lines[2:], "\n")
-			// dns's Long description is 13 lines (unlike view's 2), so this
+			// dns's Long description is 17 lines (unlike view's 2), so this
 			// strips the same number of lines from the golden file to land on
 			// "Usage:" for comparison against the error's own Usage block.
-			assertGoldenFile(t, golden.DNSHelpStdout, []byte(rest), 13)
+			assertGoldenFile(t, golden.DNSHelpStdout, []byte(rest), 17)
 		},
 	},
 	{
@@ -156,6 +156,20 @@ var dnsFixtures = []Fixture{
 			assert.Greater(t, len(lines), 3)
 			assert.Equal(t, "[Invalid Record Type]", lines[0])
 			assert.Contains(t, lines[1], "invalid record type 'MX'")
+		},
+	},
+	{
+		Name:      "invalid-record-type-mixed-inputs",
+		Args:      []string{"censys.com,104.18.10.84", "-r", "MX"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Record Type]", lines[0])
+			assert.Contains(t, lines[1], "invalid record type 'MX'")
+			assert.Contains(t, lines[1], "an IP address is among the inputs")
 		},
 	},
 	{

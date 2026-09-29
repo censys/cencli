@@ -40,3 +40,27 @@ func (e *inputError) Title() string { return e.err.Title() }
 func (e *inputError) ShouldPrintUsage() bool { return e.err.ShouldPrintUsage() }
 
 func (e *inputError) Unwrap() error { return e.err }
+
+// recordTypeReasonError appends a reason to a record-type error's message,
+// explaining why the record type was rejected even though it is valid for
+// some of the inputs.
+type recordTypeReasonError struct {
+	err    cenclierrors.CencliError
+	reason string
+}
+
+// withRecordTypeReason wraps err (from dns.ValidateRecordTypes) with reason,
+// appended in parentheses after its message.
+func withRecordTypeReason(err cenclierrors.CencliError, reason string) cenclierrors.CencliError {
+	return &recordTypeReasonError{err: err, reason: reason}
+}
+
+func (e *recordTypeReasonError) Error() string {
+	return fmt.Sprintf("%s (%s)", e.err.Error(), e.reason)
+}
+
+func (e *recordTypeReasonError) Title() string { return e.err.Title() }
+
+func (e *recordTypeReasonError) ShouldPrintUsage() bool { return e.err.ShouldPrintUsage() }
+
+func (e *recordTypeReasonError) Unwrap() error { return e.err }
