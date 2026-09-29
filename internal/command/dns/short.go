@@ -231,7 +231,7 @@ func recordValue(recordType string, ip, mailServer, nameServer, mname, rname, va
 		}
 		return *mname + " " + *rname
 	case "TXT":
-		return truncateRunesEnd(deref(value), maxTXTWidth)
+		return truncateRunesEnd(sanitizeCell(deref(value)), maxTXTWidth)
 	default:
 		return ""
 	}

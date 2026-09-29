@@ -358,6 +358,24 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 		{
+			name:   "error - an ip and a name list is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("8.8.8.8,example.com"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "2 assets provided, only 1 are supported")
+			},
+		},
+		{
+			name:   "error - a list of subdomains is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("www.censys.com,api.censys.com"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "2 assets provided, only 1 are supported")
+			},
+		},
+		{
 			name: "success - a url with a comma in its path is one input",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
@@ -655,6 +673,26 @@ func TestDNSCommand_Short(t *testing.T) {
 				require.NoError(t, err)
 				require.NotContains(t, stdout, "\x1b")
 				require.Contains(t, stdout, "red")
+			},
+		},
+		{
+			name: "success - a TXT value padded with control characters still shows the visible text after truncation",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
+					Meta: testMeta(),
+					Records: []*components.DNSResolutionRecord{
+						{RecordType: components.DNSResolutionRecordRecordTypeTxt, Value: strPtr(strings.Repeat("\x1b", 60) + "hello"), FirstSeen: testFrom, LastSeen: testTo},
+					},
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.NotContains(t, stdout, "\x1b")
+				require.Contains(t, stdout, "hello")
 			},
 		},
 		{

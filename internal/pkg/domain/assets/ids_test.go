@@ -320,6 +320,17 @@ func TestNewDomainName(t *testing.T) {
 			wantErr:     true,
 			errContains: "a domain name cannot contain an empty label",
 		},
+		{
+			name:        "invalid comma in host",
+			input:       "a.com,b.com",
+			wantErr:     true,
+			errContains: "give one domain name only",
+		},
+		{
+			name:      "valid comma only in url path",
+			input:     "https://censys.com/a,b",
+			wantValue: "censys.com",
+		},
 	}
 
 	for _, tt := range tests {
