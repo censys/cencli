@@ -66,6 +66,19 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "reject-cidr-defanged",
+		Args:      []string{"8[.]8[.]8[.]8/32"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "a CIDR range is not supported")
+		},
+	},
+	{
 		Name:      "list-name-name",
 		Args:      []string{"a.com,b.com"},
 		ExitCode:  2,
@@ -157,18 +170,11 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
-		Name:     "invalid-record-type",
-		Args:     []string{"104.18.10.84", "-r", "MX"},
-		ExitCode: 2,
-		Timeout:  1 * time.Second,
-		// NeedsAuth is true here even though this never reaches the API.
-		// PreRun constructs the DNS client unconditionally, before Run
-		// validates --record-type; with no client configured the command
-		// fails earlier with "Censys Client Not Configured" (exit 1)
-		// instead of this rejection. Configuring auth lets client
-		// construction succeed so the record-type check -- which runs
-		// before any list request is built -- is what actually gets hit.
-		NeedsAuth: true,
+		Name:      "invalid-record-type",
+		Args:      []string{"104.18.10.84", "-r", "MX"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			lines := strings.Split(string(stderr), "\n")
 			assert.Greater(t, len(lines), 3)
