@@ -39,6 +39,9 @@ echo "Updating golden fixtures..."
 "$BINARY" tags operations list --help > tags_operations_list_help.out
 "$BINARY" tags operations get --help > tags_operations_get_help.out
 "$BINARY" tags operations cancel --help > tags_operations_cancel_help.out
+"$BINARY" scan --help > scan_help.out
+"$BINARY" scan rescan --help > scan_rescan_help.out
+"$BINARY" scan get --help > scan_get_help.out
 "$BINARY" > root.out
 
 echo "✅ All golden fixtures updated"

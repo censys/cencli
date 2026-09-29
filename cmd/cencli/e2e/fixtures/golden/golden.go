@@ -55,4 +55,10 @@ var (
 	TagsOperationsGetHelpStdout []byte
 	//go:embed tags_operations_cancel_help.out
 	TagsOperationsCancelHelpStdout []byte
+	//go:embed scan_help.out
+	ScanHelpStdout []byte
+	//go:embed scan_rescan_help.out
+	ScanRescanHelpStdout []byte
+	//go:embed scan_get_help.out
+	ScanGetHelpStdout []byte
 )

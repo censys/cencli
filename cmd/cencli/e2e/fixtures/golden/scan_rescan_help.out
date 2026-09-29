@@ -1,0 +1,36 @@
+Request a live rescan of a web property. Costs 10 credits per accepted request and       
+requires an organization.                                                                
+                                                                                         
+The request is sent once and never retried automatically. If it is interrupted or the API
+fails mid-request, the rescan may still have been accepted and charged, so check `censys 
+org credits` before trying again.                                                        
+                                                                                         
+Without --wait the command prints the new scan's ID and exits. Use --wait to poll until  
+the scan completes; waiting exits non-zero if no task produced results. Once a scan      
+completes, `censys view <hostname:port>` shows the fresh data.                           
+                                                                                         
+Only web properties can be rescanned; hosts and certificates are not supported.          
+
+Usage:
+  censys scan rescan <hostname:port> [flags]
+
+Examples:
+  censys scan rescan example.com:443 # Request a rescan and print the scan ID
+  censys scan rescan example.com:443 --wait # Request a rescan and poll until it completes
+  censys scan rescan example.com:443 --wait --timeout 5m # Give up waiting after 5 minutes
+
+Flags:
+  -h, --help             help for rescan
+  -o, --org-id string    organization ID to target (personal access tokens only)
+      --timeout string   how long to wait before giving up (requires --wait) - use 0 for no limit (default "15m0s")
+  -w, --wait             poll until the scan completes
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+
