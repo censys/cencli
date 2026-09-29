@@ -396,6 +396,36 @@ func TestDNSCommand(t *testing.T) {
 			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
 		},
 		{
+			name: "success - a bracketed-scheme defanged name is a name",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				return ms
+			},
+			args:   withWindow("hxxps[://]censys[.]com", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - a bracketed-scheme url with a comma is one input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				return ms
+			},
+			args:   withWindow("hxxps[://]censys.com/a,b", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - a bracketed-scheme defanged url with an ip is an ip",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				return ms
+			},
+			args:   withWindow("hxxp[://]8.8.8[.]8/x", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
 			name:   "error - end before start is rejected",
 			dnsSvc: noCalls,
 			args:   []string{"censys.com", "--start", "2026-09-28T00:00:00Z", "--end", "2026-09-21T00:00:00Z"},
