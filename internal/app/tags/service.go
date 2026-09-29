@@ -15,6 +15,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
+	"github.com/censys/cencli/internal/pkg/datetime"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 )
@@ -47,21 +48,7 @@ type tagsService struct {
 }
 
 func New(client client.Client) Service {
-	return &tagsService{client: client, sleep: sleepWithContext}
-}
-
-// sleepWithContext waits for d, returning early if the context is cancelled.
-// Mirrors the timer/select pattern the client's retry loop uses.
-func sleepWithContext(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return &tagsService{client: client, sleep: datetime.SleepContext}
 }
 
 func (s *tagsService) ListTags(
