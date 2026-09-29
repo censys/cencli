@@ -14,6 +14,10 @@ $ censys history example.com:443 --start 2025-01-01T00:00:00Z --duration 7d # we
 $ censys history 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf --end 2025-05-31T00:00:00Z --duration 72d # certificate history
 ```
 
+## Credits
+
+Web property history consumes credits, and longer windows cost more, so keep `--duration` as short as the question needs.
+
 ## Asset Type Detection
 
 The `history` command automatically detects the asset type based on the input format and fetches the corresponding historical data. See the [view command](VIEW.md#asset-type-detection) for more information on asset type detection.
@@ -160,41 +164,31 @@ Returns an array of observation ranges showing when and where the certificate wa
 
 ### Web Property History Output
 
-Returns an array of daily snapshots:
+Returns an array of timeline events, newest first. Each event is one endpoint or JARM scan of the web property, with the full scan and a field-by-field diff against the previous scan of the same kind:
 
 ```json
 [
   {
-    "Time": "2025-01-01T00:00:00Z",
-    "Exists": true,
-    "Data": {
-      "hostname": "example.com",
-      "port": 443,
-      "endpoints": [...],
-      "cert": {...},
-      ...
+    "event_time": "2025-01-16T08:22:10Z",
+    "endpoint_scanned": {
+      "scan": {"hostname": "example.com", "port": 443, "path": "/", "http": {...}, ...},
+      "diff": {"http.status_code": {...}, ...}
     }
   },
   {
-    "Time": "2025-01-02T00:00:00Z",
-    "Exists": true,
-    "Data": {...}
-  },
-  {
-    "Time": "2025-01-03T00:00:00Z",
-    "Exists": false,
-    "Data": null
+    "event_time": "2025-01-15T12:34:56Z",
+    "jarm_scanned": {
+      "scan": {"fingerprint": "...", ...},
+      "diff": {...}
+    }
   }
 ]
 ```
 
-**Note:** Web property snapshots include an `Exists` field indicating whether the property had meaningful data at that time. If `Exists` is `false`, the `Data` field will be `null`.
-
 ## Performance Notes
 
 Historical data fetching can be time-intensive, especially for:
-- **Web properties** with long time windows (fetches daily snapshots)
-- **Hosts** with many timeline events (requires pagination)
+- **Hosts** and **web properties** with many timeline events (requires pagination; longer web property windows also cost more credits)
 - **Certificates** with many observations across hosts
 
 The command has **no timeout** by default to accommodate long-running requests.
