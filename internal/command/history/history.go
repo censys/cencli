@@ -61,7 +61,8 @@ func (c *Command) Short() string {
 
 func (c *Command) Long() string {
 	return "Explore how hosts, web properties, and certificates have changed over time.\n\n" +
-		"Returns raw data showing events, observations, and snapshots for the specified time window.\n\n" +
+		"Returns timeline events for hosts and web properties, and observation ranges for certificates, within the specified time window.\n\n" +
+		"Web property history consumes credits; longer windows cost more.\n\n" +
 		"To retrieve certificate history, you must have access to the Threat Hunting module."
 }
 
@@ -170,7 +171,7 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		logger,
 		fmt.Sprintf("Fetching history for %s...", c.assetID),
 		func(pctx context.Context) cenclierrors.CencliError {
-			// Service will report detailed progress during fetch (pagination, day-by-day, etc.)
+			// Service will report detailed progress during fetch (pagination, etc.)
 			var fetchErr cenclierrors.CencliError
 			switch c.assetType {
 			case assets.AssetTypeHost:
@@ -210,7 +211,7 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	case assets.AssetTypeWebProperty:
 		webPropResult := result.(history.WebPropertyHistoryResult)
 		c.PrintAppResponseMeta(webPropResult.Meta)
-		if printErr := c.PrintData(c, webPropResult.Snapshots); printErr != nil {
+		if printErr := c.PrintData(c, webPropResult.Events); printErr != nil {
 			return printErr
 		}
 		partialError = webPropResult.PartialError
