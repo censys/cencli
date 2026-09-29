@@ -329,12 +329,7 @@ func TestViewCommand(t *testing.T) {
 				require.Error(t, err)
 				var cencliErr client.ClientStructuredError
 				require.ErrorAs(t, err, &cencliErr)
-				errStr := err.Error()
-				require.Contains(t, errStr, "test-detail")
-				require.Contains(t, errStr, "test-title")
-				require.Contains(t, errStr, "400")
-				require.Contains(t, errStr, "test-type")
-				require.Contains(t, errStr, "test-instance")
+				require.Equal(t, "test-title: test-detail (400 Bad Request)", err.Error())
 			},
 		},
 		{
