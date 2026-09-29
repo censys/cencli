@@ -34,7 +34,7 @@ Several names or IPs can be given in one command, up to 100:
 
 - As positional arguments. A comma-separated list within one argument (`censys.com,104.18.10.84`) is split into separate inputs. This splitting only applies to arguments — a comma inside a file line (see `--input-file` below) is kept as-is.
 - An argument containing `//` (a URL, defanged or not, such as `https://censys.com/a,b` or `hxxp://censys.com`) is always read as one input, even if it contains a comma in its path or query.
-- From a file, or from STDIN with `-`, using `--input-file`/`-i`. Each line is exactly one input.
+- From a file, or from STDIN with `-`, using `--input-file`/`-i`. Each line is exactly one input. Lines are trimmed of surrounding whitespace, and blank lines are skipped.
 - Duplicate inputs (after normalizing) are removed, keeping the first occurrence's position.
 - More than 100 inputs after de-duplication is rejected with a `Too Many Assets` error.
 - Every input is validated before any lookup runs. If one input is invalid, the whole command fails before any API call is made.
@@ -43,7 +43,7 @@ The following inputs are rejected:
 
 - A port (`censys.com:443`) — a DNS name has no port; the error says to remove it.
 - Brackets around an IPv6 address (`[2001:db8::1]`) — the error says to remove the brackets.
-- A bare CIDR range (for example `8.8.8.8/32`, or defanged, `8[.]8[.]8[.]8/32`) — give one IP address instead.
+- A bare CIDR range (for example `8.8.8.8/32`, or defanged, `8[.]8[.]8[.]8/32` or `8.8.8.8[/]32`) — give one IP address instead. A URL with a numeric path (`https://8.8.8.8/32`, `hxxp://8.8.8.8/32`) is not a CIDR range; it is looked up as the IP `8.8.8.8`.
 - An `@` in the name (for example `user@censys.com`).
 - An empty label (for example `a..b.com`, or a trailing dot beyond the one FQDNs allow).
 
@@ -53,7 +53,7 @@ This section describes the flags available for the `dns` command. To see global 
 
 ### `--input-file`, `-i`
 
-File to read the names or IPs from (or `-` for STDIN). **Overrides** positional arguments — if both are given, the file wins. Each line is one input, taken as-is: unlike a positional argument, a file line cannot be shell-quoted, so it is never comma-split.
+File to read the names or IPs from (or `-` for STDIN). **Overrides** positional arguments — if both are given, the file wins. Each line is one input: lines are trimmed of surrounding whitespace and blank lines are skipped, but a line is otherwise taken as-is. Unlike a positional argument, a file line cannot be shell-quoted, so it is never comma-split.
 
 **Type:** `string` (path, or `-`)  
 **Default:** none
@@ -205,7 +205,9 @@ The `dns` command defaults to **`short`** output format, which displays results 
 
 ### Template output
 
-Use `--output-format template` (or `-O template`) to render results with a custom Handlebars template. The `dns` command's template entity is `dns`, and its default template file is `dns.hbs`, copied into your templates directory (`~/.config/cencli/templates/dns.hbs`, or `$CENCLI_DATA_DIR/templates/dns.hbs`) with sensible defaults the first time it's used.
+Use `--output-format template` (or `-O template`) to render results with a custom Handlebars template. The `dns` command's template entity is `dns`, and its default template file is `dns.hbs`. When cencli loads its configuration and `templates.dns.path` is not set, it looks in your templates directory (`~/.config/cencli/templates/`, or `$CENCLI_DATA_DIR/templates/`) for a file named `dns.*`. If there is none, it writes the default `dns.hbs` there. An existing file is never overwritten, so a template written by an earlier version keeps its content; delete it to get the current default.
+
+The template receives the same flat list of records as JSON output, with the same field names. Each record also has every field the other record types have (empty when this record lacks it), so a field missing on one record never picks up another record's value, and a `timeline` field that is `true` for `--timeline` records. Every string value has its control characters removed before rendering; the default template then prints values as-is (with `{{{ }}}`, not HTML-escaped), so quotes and ampersands in TXT, SPF, and DKIM values appear unchanged.
 
 To use your own template, point `templates.dns.path` at it in `config.yaml`:
 
@@ -253,8 +255,8 @@ $ censys dns censys.com -O template
 - **Timeline mode** (`--timeline`) shows `First Observed` and `Last Observed` for each separate time range in which a record was seen.
 - **Values:** MX shows `priority server`. SOA shows `mname rname`. The table shortens long TXT values; JSON output keeps the full value.
 - **A count like `(1000 of 5321)`** means not all matching records were fetched. The note printed under the table (suppressed by `--quiet`) says when `--max-pages` is the reason (use `--max-pages -1` to fetch all records); a fetch that failed partway through instead prints the error that stopped it.
-- **With several inputs, a failing input does not stop the others.** Its error is printed to stderr after the output, in input order. The command still exits `0` if at least one input succeeded.
-- **A plan error (403) stops further lookups**, since a plan restriction applies to every input the same way — but it keeps and prints whatever was already fetched for earlier inputs before reporting the error.
+- **With several inputs, a failing input does not stop the others.** Errors are printed to stderr after the output: first the errors of fetches that failed partway through (partial pages), then the failed inputs, each group in input order. The command exits `0` if at least one input succeeded, except after a plan error (403), which prints what was already fetched and then exits non-zero. If every input fails, every error is printed in input order and the command exits non-zero.
+- **A plan error (403) stops further lookups**, since a plan restriction applies to every input the same way — but it keeps and prints whatever was already fetched for earlier inputs, and the errors of earlier failed inputs, before reporting the 403 last.
 - **An interrupt** (Ctrl-C) reports how many inputs were not looked up (for example, `interrupted; 3 inputs not looked up`).
 - **With several inputs, response metadata is combined into one line** (instead of one block per input) reporting the last request's method, URL, and status, plus the latency and page count summed across every lookup.
 

@@ -2,15 +2,19 @@ package dns
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/samber/mo"
 	"github.com/spf13/cobra"
+
+	"github.com/censys/censys-sdk-go/models/components"
 
 	"github.com/censys/cencli/internal/app/dns"
 	"github.com/censys/cencli/internal/command"
@@ -363,11 +367,13 @@ func (c *Command) hasInput(isIP bool) bool {
 // is not a CIDR range, so a scheme rules it out. The IP part is refanged
 // (as NewHostID does) before the check, so a defanged CIDR such as
 // "8[.]8[.]8[.]8/32" is caught instead of falling through to a lookup of
-// the wrong, path-truncated name.
+// the wrong, path-truncated name. A defanged slash ("8.8.8.8[/]32") is
+// refanged first, as refang.RefangURL does.
 func isCIDR(raw string) bool {
 	if strings.Contains(raw, "://") {
 		return false
 	}
+	raw = strings.ReplaceAll(raw, "[/]", "/")
 	i := strings.LastIndex(raw, "/")
 	if i < 0 {
 		return false
@@ -485,8 +491,12 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 			if dns.IsAccessDeniedError(err) {
 				// A plan restriction fails every lookup the same way, so stop
 				// here. With nothing collected yet, there is no output to
-				// keep: fail exactly as an unrecoverable error would.
+				// keep: print the earlier failures in input order, then fail
+				// exactly as an unrecoverable error would.
 				if len(c.results) == 0 {
+					for _, failure := range failures {
+						formatter.PrintError(failure, cmd)
+					}
 					return err
 				}
 				// Otherwise keep what was already collected: print it (below,
@@ -558,7 +568,11 @@ func (c *Command) reportInterrupted(remaining int) {
 	if remaining <= 0 || len(c.inputs) <= 1 {
 		return
 	}
-	formatter.Println(formatter.Stderr, fmt.Sprintf("interrupted; %d inputs not looked up", remaining))
+	noun := "inputs"
+	if remaining == 1 {
+		noun = "input"
+	}
+	formatter.Println(formatter.Stderr, fmt.Sprintf("interrupted; %d %s not looked up", remaining, noun))
 }
 
 // combinedResponseMeta reports one metadata block for several inputs: the
@@ -630,10 +644,69 @@ func (c *Command) data() []any {
 }
 
 // RenderTemplate renders every input's records using a handlebars template.
-// It passes the same flat record slice Data output prints, so the template
-// sees exactly the JSON field names.
+// See templateData for what each record holds.
 func (c *Command) RenderTemplate() cenclierrors.CencliError {
-	return c.PrintDataWithTemplate(config.TemplateEntityDNS, c.data())
+	data, err := c.templateData()
+	if err != nil {
+		return cenclierrors.NewCencliError(err)
+	}
+	return c.PrintDataWithTemplate(config.TemplateEntityDNS, data)
+}
+
+// templateKeys is every key a template may read on a record: the JSON field
+// names of the four SDK record types, plus "input".
+var templateKeys = append(jsonFieldNames(
+	components.DNSResolutionRecord{},
+	components.DNSResolutionRangeRecord{},
+	components.DNSIPResolutionRecord{},
+	components.DNSIPResolutionRangeRecord{},
+), "input")
+
+// jsonFieldNames returns the JSON names of the fields of each struct value.
+func jsonFieldNames(values ...any) []string {
+	var names []string
+	for _, v := range values {
+		t := reflect.TypeOf(v)
+		for i := range t.NumField() {
+			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+			if name != "" && name != "-" && !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// templateData returns the records Data output prints, as maps keyed by the
+// JSON field names, for the template engine. Handlebars looks up a key that a
+// record lacks in the parent context (the list of records), which would print
+// that field collected from every other record; so each map holds every key in
+// templateKeys, nil when the record lacks it. Every string is stripped of
+// control characters, so a template can print it unescaped. "timeline" tells
+// a template whether the records are observed time ranges (--timeline).
+func (c *Command) templateData() ([]map[string]any, error) {
+	encoded, err := json.Marshal(c.data())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode records for the template: %w", err)
+	}
+	var records []map[string]any
+	if err := json.Unmarshal(encoded, &records); err != nil {
+		return nil, fmt.Errorf("failed to decode records for the template: %w", err)
+	}
+	for _, record := range records {
+		for key, value := range record {
+			if s, ok := value.(string); ok {
+				record[key] = sanitizeCell(s)
+			}
+		}
+		for _, key := range templateKeys {
+			if _, ok := record[key]; !ok {
+				record[key] = nil
+			}
+		}
+		record["timeline"] = c.timeline
+	}
+	return records, nil
 }
 
 func appendAll[T any](dst []any, items []T) []any {
