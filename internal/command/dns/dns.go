@@ -14,6 +14,7 @@ import (
 
 	"github.com/censys/cencli/internal/app/dns"
 	"github.com/censys/cencli/internal/command"
+	"github.com/censys/cencli/internal/config"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
@@ -152,7 +153,7 @@ func (c *Command) DefaultOutputType() command.OutputType {
 }
 
 func (c *Command) SupportedOutputTypes() []command.OutputType {
-	return []command.OutputType{command.OutputTypeShort, command.OutputTypeData}
+	return []command.OutputType{command.OutputTypeShort, command.OutputTypeData, command.OutputTypeTemplate}
 }
 
 func (c *Command) SupportsStreaming() bool {
@@ -544,6 +545,13 @@ func (c *Command) data() []any {
 		}
 	}
 	return data
+}
+
+// RenderTemplate renders every input's records using a handlebars template.
+// It passes the same flat record slice Data output prints, so the template
+// sees exactly the JSON field names.
+func (c *Command) RenderTemplate() cenclierrors.CencliError {
+	return c.PrintDataWithTemplate(config.TemplateEntityDNS, c.data())
 }
 
 func appendAll[T any](dst []any, items []T) []any {
