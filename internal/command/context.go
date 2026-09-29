@@ -17,6 +17,7 @@ import (
 	"github.com/censys/cencli/internal/app/enrich"
 	"github.com/censys/cencli/internal/app/history"
 	"github.com/censys/cencli/internal/app/organizations"
+	"github.com/censys/cencli/internal/app/scan"
 	"github.com/censys/cencli/internal/app/search"
 	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/app/tags"
@@ -50,6 +51,7 @@ type Context struct {
 	creditsSvc   credits.Service
 	orgSvc       organizations.Service
 	tagsSvc      tags.Service
+	scanSvc      scan.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -446,6 +448,27 @@ func (c *Context) TagsService() (tags.Service, cenclierrors.CencliError) {
 // the TagsService will be instantiated on demand.
 func WithTagsService(svc tags.Service) ContextOpts {
 	return func(c *Context) { c.tagsSvc = svc }
+}
+
+// ScanService attempts to provide a ScanService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) ScanService() (scan.Service, cenclierrors.CencliError) {
+	if c.scanSvc != nil {
+		return c.scanSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.scanSvc = scan.New(c.censysClient)
+	return c.scanSvc, nil
+}
+
+// WithScanService injects an instantiated ScanService to the Context.
+// This should only be used in tests, as in the application,
+// the ScanService will be instantiated on demand.
+func WithScanService(svc scan.Service) ContextOpts {
+	return func(c *Context) { c.scanSvc = svc }
 }
 
 // SearchService attempts to provide a SearchService to the caller.
