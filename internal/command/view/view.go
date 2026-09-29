@@ -244,12 +244,17 @@ func (c *Command) printDNSHint() {
 	if c.Config().OutputFormat != formatter.OutputFormatShort {
 		return
 	}
-	if c.result.Type != assets.AssetTypeHost || len(c.result.Hosts) != 1 {
+	// Require one host input and one host returned, and name the returned
+	// host: the input list and the result list need not line up.
+	if c.result.Type != assets.AssetTypeHost || len(c.assets.HostIDs()) != 1 || len(c.result.Hosts) != 1 {
 		return
 	}
-	ip := c.assets.HostIDs()[0].String()
+	ip := c.result.Hosts[0].IP
+	if ip == nil || *ip == "" {
+		return
+	}
 	formatter.Println(formatter.Stderr, fmt.Sprintf(
-		"Tip: Active DNS observations for this IP: censys dns %s", ip))
+		"Tip: Active DNS observations for this IP: censys dns %s", *ip))
 }
 
 // assetResult is a tagged union that carries meta and the concrete asset list.

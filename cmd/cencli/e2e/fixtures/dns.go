@@ -80,6 +80,19 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "reject-cidr-defanged-slash",
+		Args:      []string{"8.8.8.8[/]32"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "a CIDR range is not supported")
+		},
+	},
+	{
 		Name:      "reject-too-many-inputs",
 		Args:      []string{tooManyDNSInputs()},
 		ExitCode:  2,

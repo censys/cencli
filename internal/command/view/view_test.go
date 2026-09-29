@@ -102,6 +102,30 @@ func TestViewCommand(t *testing.T) {
 			},
 		},
 		{
+			// The hint names the one host that was asked for and returned; with
+			// two host inputs and one host returned, it could name the wrong IP.
+			name:  "success - host view of two inputs with one host returned prints no dns hint",
+			store: func() store.Store { s, _ := store.New(t.TempDir()); return s },
+			service: func(ctrl *gomock.Controller) view.Service {
+				ms := viewmocks.NewMockViewService(ctrl)
+				first, _ := assets.NewHostID("8.8.8.8")
+				second, _ := assets.NewHostID("1.1.1.1")
+				host := &assets.Host{Host: components.Host{IP: strPtr("1.1.1.1")}}
+				result := view.HostsResult{
+					Meta:  &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
+					Hosts: []*assets.Host{host},
+				}
+				ms.EXPECT().GetHosts(gomock.Any(), mo.None[identifiers.OrganizationID](), []assets.HostID{first, second}, mo.None[time.Time]()).Return(result, nil)
+				return ms
+			},
+			args: []string{"8.8.8.8,1.1.1.1", "--output-format", "short"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "1.1.1.1")
+				require.NotContains(t, stderr, "censys dns")
+			},
+		},
+		{
 			name:  "certificate view - short output",
 			store: func() store.Store { s, _ := store.New(t.TempDir()); return s },
 			service: func(ctrl *gomock.Controller) view.Service {
