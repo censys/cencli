@@ -18,7 +18,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	cmdutil "github.com/censys/cencli/internal/pkg/input"
-	"github.com/censys/cencli/internal/pkg/refang"
 	"github.com/censys/cencli/internal/pkg/styles"
 	"github.com/censys/cencli/internal/pkg/tape"
 )
@@ -214,9 +213,13 @@ func (c *Command) parseInput(raw string) cenclierrors.CencliError {
 	value := raw
 	// A pasted URL (defanged or not) may contain a comma in its path or query
 	// (e.g. "https://censys.com/a,b"), which is not a list of assets. Detect
-	// that case by refanging for a scheme before splitting on commas, so a URL
-	// is treated as one input instead of being split apart.
-	if !strings.Contains(refang.RefangURL(raw), "://") {
+	// that case on the raw argument: a scheme, defanged or not, always leaves
+	// a literal "//" behind ("https://", "hxxp://", "hxxps://", "https[:]//"),
+	// while a comma-separated list of names or IPs never does. Checking the
+	// raw argument (instead of refang.RefangURL's output) matters because
+	// RefangURL prepends "http://" to some bare inputs, which would make a
+	// list like "8.8.8.8,example.com" look like a URL and skip the split.
+	if !strings.Contains(raw, "//") {
 		values := cmdutil.SplitString(raw)
 		switch len(values) {
 		case 0:

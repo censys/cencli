@@ -84,6 +84,8 @@ func NewDomainName(raw string) (DomainName, error) {
 		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name cannot contain whitespace", raw)
 	case strings.Contains(name, "@"):
 		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name cannot contain '@'", raw)
+	case strings.Contains(name, ","):
+		return DomainName{}, fmt.Errorf("invalid domain name: %q: give one domain name only", raw)
 	case !strings.Contains(name, "."):
 		return DomainName{}, fmt.Errorf("invalid domain name: %q: a domain name must contain a dot", raw)
 	case hasEmptyLabel(name):
