@@ -33,5 +33,6 @@ func Fixtures() map[string][]Fixture {
 		"credits":   creditsFixtures,
 		"org":       orgFixtures,
 		"tags":      tagsFixtures,
+		"scan":      scanFixtures,
 	}
 }
