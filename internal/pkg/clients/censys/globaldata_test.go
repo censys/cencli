@@ -3,6 +3,7 @@ package censys
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -100,6 +101,134 @@ func TestGlobalDataSDK_WebPropertyTimeline(t *testing.T) {
 			require.Len(t, res.Data.Events, tc.expectEvents)
 			assert.Equal(t, "2026-09-27T10:00:00Z", *res.Data.Events[0].Resource.EventTime)
 			assert.True(t, res.Data.ScannedTo.Equal(fromTime))
+			assert.Equal(t, uint64(tc.expectCalls), res.Metadata.Attempts)
+		})
+	}
+}
+
+const (
+	testOrgID  = "11111111-1111-1111-1111-111111111111"
+	testScanID = "3f2b9c1e-0000-4000-8000-000000000001"
+)
+
+func TestGlobalDataSDK_CreateWebPropertyRescan(t *testing.T) {
+	testCases := []struct {
+		name        string
+		status      int
+		expectErr   bool
+		expectCalls int32
+	}{
+		{
+			name:        "success",
+			status:      http.StatusOK,
+			expectCalls: 1,
+		},
+		{
+			name:        "5xx is not retried",
+			status:      http.StatusInternalServerError,
+			expectErr:   true,
+			expectCalls: 1,
+		},
+		{
+			name:        "429 is not retried",
+			status:      http.StatusTooManyRequests,
+			expectErr:   true,
+			expectCalls: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			sdk := newTestGlobalDataSDK(t, func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				assert.Equal(t, http.MethodPost, r.Method)
+				assert.Equal(t, "/v3/global/scans/rescan", r.URL.Path)
+				assert.Equal(t, testOrgID, r.URL.Query().Get("organization_id"))
+				body, err := io.ReadAll(r.Body)
+				assert.NoError(t, err)
+				assert.JSONEq(t, `{"target":{"web_origin":{"hostname":"example.com","port":8443}}}`, string(body))
+
+				if tc.status != http.StatusOK {
+					writeProblem(w, tc.status)
+					return
+				}
+				writeJSON(w, "application/json", http.StatusOK,
+					`{"result":{"tracked_scan_id":"`+testScanID+`","completed":false,"tasks":[]}}`)
+			})
+
+			res, err := sdk.CreateWebPropertyRescan(context.Background(), testOrgID, "example.com", 8443)
+
+			assert.Equal(t, tc.expectCalls, calls.Load())
+			if tc.expectErr {
+				require.Error(t, err)
+				assert.Equal(t, int64(tc.status), err.StatusCode().OrEmpty())
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, res.Data)
+			assert.Equal(t, testScanID, *res.Data.TrackedScanID)
+			assert.False(t, *res.Data.Completed)
+			assert.Equal(t, uint64(1), res.Metadata.Attempts)
+		})
+	}
+}
+
+func TestGlobalDataSDK_GetTrackedScan(t *testing.T) {
+	testCases := []struct {
+		name        string
+		statuses    []int
+		expectErr   bool
+		expectCalls int32
+	}{
+		{
+			name:        "success",
+			statuses:    []int{http.StatusOK},
+			expectCalls: 1,
+		},
+		{
+			name:        "retries a 5xx",
+			statuses:    []int{http.StatusInternalServerError, http.StatusOK},
+			expectCalls: 2,
+		},
+		{
+			name:        "not found is not retried",
+			statuses:    []int{http.StatusNotFound},
+			expectErr:   true,
+			expectCalls: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			sdk := newTestGlobalDataSDK(t, func(w http.ResponseWriter, r *http.Request) {
+				n := calls.Add(1)
+				assert.Equal(t, http.MethodGet, r.Method)
+				assert.Equal(t, "/v3/global/scans/"+testScanID, r.URL.Path)
+				assert.Equal(t, testOrgID, r.URL.Query().Get("organization_id"))
+
+				status := tc.statuses[n-1]
+				if status != http.StatusOK {
+					writeProblem(w, status)
+					return
+				}
+				writeJSON(w, "application/vnd.censys.api.v3.trackedscan.v1+json", http.StatusOK,
+					`{"result":{"tracked_scan_id":"`+testScanID+`","completed":true,"tasks":[{"status":"completed"}]}}`)
+			})
+
+			res, err := sdk.GetTrackedScan(context.Background(), testOrgID, testScanID)
+
+			assert.Equal(t, tc.expectCalls, calls.Load())
+			if tc.expectErr {
+				require.Error(t, err)
+				assert.Equal(t, int64(http.StatusNotFound), err.StatusCode().OrEmpty())
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, res.Data)
+			assert.True(t, *res.Data.Completed)
+			require.Len(t, res.Data.Tasks, 1)
 			assert.Equal(t, uint64(tc.expectCalls), res.Metadata.Attempts)
 		})
 	}
