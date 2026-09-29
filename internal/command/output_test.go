@@ -285,6 +285,14 @@ func TestValidateStreamingMode(t *testing.T) {
 			expectError:         false,
 		},
 		{
+			name:                "streaming config + explicit output format on non-streaming command - no error",
+			streamingFromConfig: true,
+			streamingFlag:       mo.None[bool](),
+			outputFormatFlag:    mo.Some(true),
+			supportsStreaming:   false,
+			expectError:         false,
+		},
+		{
 			name:                "streaming flag on non-streaming command - error",
 			streamingFromConfig: false,
 			streamingFlag:       mo.Some(true),
