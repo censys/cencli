@@ -1,9 +1,14 @@
-Explore how hosts, web properties, and certificates have changed over time.        
-                                                                                   
-Returns raw data showing events, observations, and snapshots for the specified time
-window.                                                                            
-                                                                                   
-To retrieve certificate history, you must have access to the Threat Hunting module.
+Explore how hosts, web properties, and certificates have changed over time.               
+                                                                                          
+Returns timeline events for hosts, observation ranges for certificates, and daily         
+snapshots for web properties, within the specified time window.                           
+                                                                                          
+For web properties, --mode events returns scan timeline events instead of daily snapshots.
+It requires web property event history to be enabled for your organization.               
+                                                                                          
+Web property history consumes credits, and longer windows cost more.                      
+                                                                                          
+To retrieve certificate history, you must have access to the Threat Hunting module.       
 
 Usage:
   censys history <asset> [flags]
@@ -13,12 +18,14 @@ Examples:
   censys history example.com:443 --end 2025-05-31T00:00:00Z --duration 72d
   censys history 56a06a23... --start 2025-01-01T00:00:00Z --end 2025-01-31T00:00:00Z
   censys history example.com:443 --duration 7d
+  censys history example.com:443 --mode events --duration 30d
   censys history 8.8.8.8 --duration 14d
 
 Flags:
   -d, --duration string   time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d (default "168h0m0s")
   -e, --end string        end time
   -h, --help              help for history
+      --mode string       web property history source: snapshots (one lookup per day) or events (scan timeline) (default "snapshots")
   -o, --org-id string     organization ID to target (personal access tokens only)
   -s, --start string      start time
 

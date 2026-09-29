@@ -36,6 +36,26 @@ var historyFixtures = []Fixture{
 			assert.Greater(t, len(v), 1)
 		},
 	},
+	{
+		Name:      "mode-on-host",
+		Args:      []string{"8.8.8.8", "--mode", "events"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), "--mode only applies to web properties")
+		},
+	},
+	{
+		Name:      "mode-invalid",
+		Args:      []string{"platform.censys.io:80", "--mode", "daily"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assert.Contains(t, string(stderr), `invalid --mode "daily"`)
+		},
+	},
 	// Output format tests
 	{
 		Name:      "output-json-default",

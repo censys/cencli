@@ -39,6 +39,14 @@ type Service interface {
 		fromTime time.Time,
 		toTime time.Time,
 	) (WebPropertyHistoryResult, cenclierrors.CencliError)
+
+	GetWebPropertySnapshots(
+		ctx context.Context,
+		orgID mo.Option[identifiers.OrganizationID],
+		webPropertyID assets.WebPropertyID,
+		fromTime time.Time,
+		toTime time.Time,
+	) (WebPropertySnapshotsResult, cenclierrors.CencliError)
 }
 
 type historyService struct {

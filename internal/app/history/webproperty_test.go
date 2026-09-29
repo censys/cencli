@@ -16,378 +16,446 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/censys/cencli/gen/client/mocks"
+	"github.com/censys/cencli/internal/app/streaming"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	"github.com/censys/cencli/internal/pkg/domain/assets"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 )
 
+const testWebPropertyID = "example.com:443"
+
+func endpointEvent(eventTime, path string) components.WebTimelineEventAsset {
+	return components.WebTimelineEventAsset{Resource: components.WebTimelineEvent{
+		EventTime:       strPtr(eventTime),
+		EndpointScanned: &components.EndpointScanned{Scan: &components.EndpointScan{Path: strPtr(path)}},
+	}}
+}
+
+func withBanner(e components.WebTimelineEventAsset, banner string) components.WebTimelineEventAsset {
+	e.Resource.EndpointScanned.Scan.Banner = strPtr(banner)
+	return e
+}
+
+func jarmEvent(eventTime string) components.WebTimelineEventAsset {
+	return components.WebTimelineEventAsset{Resource: components.WebTimelineEvent{
+		EventTime:   strPtr(eventTime),
+		JarmScanned: &components.JarmScanned{},
+	}}
+}
+
+func webTimelinePage(scannedTo time.Time, latency time.Duration, events ...components.WebTimelineEventAsset) client.Result[components.WebpropertyTimeline] {
+	return client.Result[components.WebpropertyTimeline]{
+		Data: &components.WebpropertyTimeline{Events: events, ScannedTo: scannedTo},
+		Metadata: client.Metadata{
+			Request:  &http.Request{Method: "GET", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
+			Response: &http.Response{StatusCode: 200},
+			Latency:  latency,
+			Attempts: 1,
+		},
+	}
+}
+
+func eventTimes(events []*components.WebTimelineEvent) []string {
+	out := make([]string, 0, len(events))
+	for _, e := range events {
+		out = append(out, *e.EventTime)
+	}
+	return out
+}
+
 func TestGetWebPropertyHistory(t *testing.T) {
-	// Test time boundaries - short range for day-by-day iteration
 	fromTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	toTime := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC) // 3 days total
-	day1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	day2 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
-	day3 := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
+	toTime := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+	midTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	earlyTime := time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)
+	orgUUID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 	testCases := []struct {
-		name          string
-		client        func(ctrl *gomock.Controller) client.Client
-		orgID         mo.Option[identifiers.OrganizationID]
-		webPropertyID assets.WebPropertyID
-		fromTime      time.Time
-		toTime        time.Time
-		ctx           func() context.Context
-		assert        func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError)
+		name   string
+		client func(ctrl *gomock.Controller) client.Client
+		orgID  mo.Option[identifiers.OrganizationID]
+		ctx    func() context.Context
+		stream bool
+		assert func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, streamed []*components.WebTimelineEvent)
 	}{
 		{
-			name: "success - all days have data",
+			name: "success - single page ending at the fromTime bound",
 			client: func(ctrl *gomock.Controller) client.Client {
-				mockClient := mocks.NewMockClient(ctrl)
-
-				// Day 1
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"example.com:443"},
-					mo.Some(day1),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname:  strPtr("example.com"),
-							Port:      intPtr(443),
-							Endpoints: []components.EndpointScanState{{}},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				// Day 2
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"example.com:443"},
-					mo.Some(day2),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("example.com"),
-							Port:     intPtr(443),
-							Cert:     &components.Certificate{},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				// Day 3
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"example.com:443"},
-					mo.Some(day3),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("example.com"),
-							Port:     intPtr(443),
-							TLS:      &components.TLS{},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				return mockClient
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(fromTime, 100*time.Millisecond,
+						endpointEvent("2024-01-20T12:00:00Z", "/"),
+						jarmEvent("2024-01-10T10:00:00Z"),
+					), nil)
+				return m
 			},
-			webPropertyID: mustWebPropertyID("example.com:443"),
-			fromTime:      fromTime,
-			toTime:        toTime,
-			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError) {
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
 				require.NoError(t, err)
 				require.NotNil(t, res.Meta)
-				require.Len(t, res.Snapshots, 3)
-
-				// All snapshots should exist
-				assert.True(t, res.Snapshots[0].Exists)
-				assert.True(t, res.Snapshots[1].Exists)
-				assert.True(t, res.Snapshots[2].Exists)
-
-				// Check times
-				assert.Equal(t, day1, res.Snapshots[0].Time)
-				assert.Equal(t, day2, res.Snapshots[1].Time)
-				assert.Equal(t, day3, res.Snapshots[2].Time)
-
-				assert.Equal(t, uint64(3), res.Meta.PageCount)
+				assert.Equal(t, []string{"2024-01-20T12:00:00Z", "2024-01-10T10:00:00Z"}, eventTimes(res.Events))
+				assert.NotNil(t, res.Events[0].EndpointScanned)
+				assert.NotNil(t, res.Events[1].JarmScanned)
+				assert.Equal(t, "GET", res.Meta.Method)
+				assert.Equal(t, 200, res.Meta.Status)
+				assert.Equal(t, uint64(1), res.Meta.PageCount)
+				assert.Nil(t, res.PartialError)
 			},
 		},
 		{
-			name: "success - some days have no data",
+			name: "success - no events in the window",
 			client: func(ctrl *gomock.Controller) client.Client {
-				mockClient := mocks.NewMockClient(ctrl)
-
-				// Day 1 - has data
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"test.com:80"},
-					mo.Some(day1),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("test.com"),
-							Port:     intPtr(80),
-							Software: []components.Attribute{{}},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				// Day 2 - only hostname/port (no meaningful data)
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"test.com:80"},
-					mo.Some(day2),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("test.com"),
-							Port:     intPtr(80),
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				// Day 3 - error (doesn't exist)
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"test.com:80"},
-					mo.Some(day3),
-				).Return(client.Result[[]components.Webproperty]{}, client.NewCensysClientGenericError(&sdkerrors.SDKError{
-					Message:    "Not found",
-					StatusCode: 404,
-				}))
-
-				return mockClient
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(fromTime, 50*time.Millisecond), nil)
+				return m
 			},
-			webPropertyID: mustWebPropertyID("test.com:80"),
-			fromTime:      fromTime,
-			toTime:        toTime,
-			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError) {
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
 				require.NoError(t, err)
-				require.Len(t, res.Snapshots, 3)
-
-				// Day 1 exists
-				assert.True(t, res.Snapshots[0].Exists)
-				assert.NotNil(t, res.Snapshots[0].Data)
-
-				// Day 2 doesn't exist (only hostname/port)
-				assert.False(t, res.Snapshots[1].Exists)
-				assert.NotNil(t, res.Snapshots[1].Data)
-
-				// Day 3 doesn't exist (error)
-				assert.False(t, res.Snapshots[2].Exists)
-				assert.Nil(t, res.Snapshots[2].Data)
-			},
-		},
-		{
-			name: "success - single day",
-			client: func(ctrl *gomock.Controller) client.Client {
-				mockClient := mocks.NewMockClient(ctrl)
-
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"single.com:443"},
-					mo.Some(day1),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("single.com"),
-							Port:     intPtr(443),
-							Jarm:     &components.JarmScan{},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  50 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				return mockClient
-			},
-			webPropertyID: mustWebPropertyID("single.com:443"),
-			fromTime:      day1,
-			toTime:        day1,
-			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError) {
-				require.NoError(t, err)
-				require.Len(t, res.Snapshots, 1)
-				assert.True(t, res.Snapshots[0].Exists)
-				assert.Equal(t, day1, res.Snapshots[0].Time)
+				require.NotNil(t, res.Meta)
+				assert.Empty(t, res.Events)
 				assert.Equal(t, uint64(1), res.Meta.PageCount)
 			},
 		},
 		{
-			name: "success - with orgID",
+			name: "success - a short page does not end pagination while the cursor is inside the window",
 			client: func(ctrl *gomock.Controller) client.Client {
-				mockClient := mocks.NewMockClient(ctrl)
-
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.Some("f47ac10b-58cc-4372-a567-0e02b2c3d479"),
-					[]string{"org.com:443"},
-					mo.Some(day1),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("org.com"),
-							Port:     intPtr(443),
-							Hardware: []components.Attribute{{}},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				return mockClient
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(fromTime, 10*time.Millisecond, endpointEvent("2024-01-10T00:00:00Z", "/")), nil),
+				)
+				return m
 			},
-			orgID:         mo.Some(identifiers.NewOrganizationID(uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479"))),
-			webPropertyID: mustWebPropertyID("org.com:443"),
-			fromTime:      day1,
-			toTime:        day1,
-			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError) {
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
 				require.NoError(t, err)
-				require.Len(t, res.Snapshots, 1)
-				assert.True(t, res.Snapshots[0].Exists)
+				assert.Equal(t, []string{"2024-01-20T00:00:00Z", "2024-01-10T00:00:00Z"}, eventTimes(res.Events))
+				assert.Equal(t, uint64(2), res.Meta.PageCount)
 			},
 		},
 		{
-			name: "success - empty results",
+			name: "success - an empty page with the cursor inside the window keeps paging",
 			client: func(ctrl *gomock.Controller) client.Client {
-				mockClient := mocks.NewMockClient(ctrl)
-
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"empty.com:443"},
-					mo.Some(day1),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  50 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil)
-
-				return mockClient
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(fromTime, 10*time.Millisecond, endpointEvent("2024-01-10T00:00:00Z", "/")), nil),
+				)
+				return m
 			},
-			webPropertyID: mustWebPropertyID("empty.com:443"),
-			fromTime:      day1,
-			toTime:        day1,
-			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError) {
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
 				require.NoError(t, err)
-				require.Len(t, res.Snapshots, 1)
-				assert.False(t, res.Snapshots[0].Exists)
-				assert.Nil(t, res.Snapshots[0].Data)
+				assert.Equal(t, []string{"2024-01-10T00:00:00Z"}, eventTimes(res.Events))
+				assert.Equal(t, uint64(2), res.Meta.PageCount)
 			},
 		},
 		{
-			name: "success - metadata reflects total latency",
+			name: "success - an event repeated across an empty page is returned once",
 			client: func(ctrl *gomock.Controller) client.Client {
-				mockClient := mocks.NewMockClient(ctrl)
-
-				// Day 1
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"latency.com:443"},
-					mo.Some(day1),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname: strPtr("latency.com"),
-							Port:     intPtr(443),
-							Vulns:    []components.Vuln{{}},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil).Do(func(ctx context.Context, orgID mo.Option[string], webPropertyIDs []string, atTime mo.Option[time.Time]) {
-					time.Sleep(30 * time.Millisecond)
-				})
-
-				// Day 2
-				mockClient.EXPECT().GetWebProperties(
-					gomock.Any(),
-					mo.None[string](),
-					[]string{"latency.com:443"},
-					mo.Some(day2),
-				).Return(client.Result[[]components.Webproperty]{
-					Data: &[]components.Webproperty{
-						{
-							Hostname:  strPtr("latency.com"),
-							Port:      intPtr(443),
-							Exposures: []components.Risk{{}},
-						},
-					},
-					Metadata: client.Metadata{
-						Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-						Response: &http.Response{StatusCode: 200},
-						Latency:  100 * time.Millisecond,
-						Attempts: 1,
-					},
-				}, nil).Do(func(ctx context.Context, orgID mo.Option[string], webPropertyIDs []string, atTime mo.Option[time.Time]) {
-					time.Sleep(30 * time.Millisecond)
-				})
-
-				return mockClient
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-15T12:00:00Z", "/")), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(earlyTime, 10*time.Millisecond), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, earlyTime).
+						Return(webTimelinePage(fromTime, 10*time.Millisecond,
+							endpointEvent("2024-01-15T12:00:00Z", "/"),
+							endpointEvent("2024-01-02T00:00:00Z", "/"),
+						), nil),
+				)
+				return m
 			},
-			webPropertyID: mustWebPropertyID("latency.com:443"),
-			fromTime:      day1,
-			toTime:        day2,
-			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError) {
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
 				require.NoError(t, err)
-				require.NotNil(t, res.Meta)
-				require.Len(t, res.Snapshots, 2)
-				// Latency should reflect total time
-				assert.GreaterOrEqual(t, res.Meta.Latency, 60*time.Millisecond)
+				assert.Equal(t, []string{"2024-01-15T12:00:00Z", "2024-01-02T00:00:00Z"}, eventTimes(res.Events))
+				assert.Equal(t, uint64(3), res.Meta.PageCount)
+			},
+		},
+		{
+			name: "success - stops when scannedTo is before the fromTime bound",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(fromTime.Add(-time.Hour), 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Len(t, res.Events, 1)
+				assert.Equal(t, uint64(1), res.Meta.PageCount)
+			},
+		},
+		{
+			name: "success - stops on the zero-time sentinel",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(time.Time{}, 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Len(t, res.Events, 1)
+				assert.Equal(t, uint64(1), res.Meta.PageCount)
+			},
+		},
+		{
+			name: "success - stops when the cursor does not move",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-15T12:00:00Z", "/")), nil),
+				)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Len(t, res.Events, 2)
+				assert.Equal(t, uint64(2), res.Meta.PageCount)
+				require.NotNil(t, res.PartialError)
+				assert.Equal(t, "Incomplete History", res.PartialError.Title())
+				assert.Contains(t, res.PartialError.Error(), "stopped advancing at 2024-01-15T12:00:00Z")
+			},
+		},
+		{
+			name: "partial - an empty first page whose cursor is newer than the start is reported, not repeated",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(toTime.Add(24*time.Hour), 10*time.Millisecond), nil).Times(1)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Empty(t, res.Events)
+				assert.Equal(t, uint64(1), res.Meta.PageCount)
+				require.NotNil(t, res.PartialError)
+				assert.Equal(t, "Incomplete History", res.PartialError.Title())
+				assert.NotContains(t, res.PartialError.Error(), "successfully retrieved")
+			},
+		},
+		{
+			name: "success - an event repeated within a page is returned once",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(fromTime, 10*time.Millisecond,
+						endpointEvent("2024-01-20T00:00:00Z", "/"),
+						endpointEvent("2024-01-20T00:00:00Z", "/"),
+						endpointEvent("2024-01-10T00:00:00Z", "/"),
+					), nil)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Equal(t, []string{"2024-01-20T00:00:00Z", "2024-01-10T00:00:00Z"}, eventTimes(res.Events))
+			},
+		},
+		{
+			name: "success - three pages",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-25T00:00:00Z", "/")), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(earlyTime, 10*time.Millisecond, endpointEvent("2024-01-10T00:00:00Z", "/")), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, earlyTime).
+						Return(webTimelinePage(time.Time{}, 10*time.Millisecond, jarmEvent("2024-01-02T00:00:00Z")), nil),
+				)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Equal(t, []string{"2024-01-25T00:00:00Z", "2024-01-10T00:00:00Z", "2024-01-02T00:00:00Z"}, eventTimes(res.Events))
+				assert.Equal(t, uint64(3), res.Meta.PageCount)
+			},
+		},
+		{
+			name: "success - an event repeated at the page seam is returned once",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond,
+							endpointEvent("2024-01-20T00:00:00Z", "/"),
+							endpointEvent("2024-01-15T12:00:00Z", "/"),
+						), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(fromTime, 10*time.Millisecond,
+							endpointEvent("2024-01-15T12:00:00Z", "/"),                        // seam duplicate
+							endpointEvent("2024-01-15T12:00:00Z", "/login"),                   // same second, different endpoint
+							jarmEvent("2024-01-15T12:00:00Z"),                                 // same second, different kind
+							withBanner(endpointEvent("2024-01-15T12:00:00Z", "/"), "changed"), // same second and endpoint, different content
+							endpointEvent("2024-01-10T00:00:00Z", "/"),
+						), nil),
+				)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				require.Len(t, res.Events, 6)
+				assert.Equal(t, []string{
+					"2024-01-20T00:00:00Z",
+					"2024-01-15T12:00:00Z",
+					"2024-01-15T12:00:00Z",
+					"2024-01-15T12:00:00Z",
+					"2024-01-15T12:00:00Z",
+					"2024-01-10T00:00:00Z",
+				}, eventTimes(res.Events))
+				assert.Equal(t, "/login", *res.Events[2].EndpointScanned.Scan.Path)
+				assert.NotNil(t, res.Events[3].JarmScanned)
+				assert.Equal(t, "changed", *res.Events[4].EndpointScanned.Scan.Banner)
+			},
+		},
+		{
+			name:   "streaming - an event repeated at the page seam is emitted once",
+			stream: true,
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond,
+							endpointEvent("2024-01-20T00:00:00Z", "/"),
+							endpointEvent("2024-01-15T12:00:00Z", "/"),
+						), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(fromTime, 10*time.Millisecond,
+							endpointEvent("2024-01-15T12:00:00Z", "/"),
+							endpointEvent("2024-01-10T00:00:00Z", "/"),
+						), nil),
+				)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, streamed []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Empty(t, res.Events) // streamed, not collected
+				assert.Equal(t, []string{"2024-01-20T00:00:00Z", "2024-01-15T12:00:00Z", "2024-01-10T00:00:00Z"}, eventTimes(streamed))
+			},
+		},
+		{
+			name:  "success - with orgID",
+			orgID: mo.Some(identifiers.NewOrganizationID(orgUUID)),
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.Some(orgUUID.String()), testWebPropertyID, fromTime, toTime).
+					Return(webTimelinePage(fromTime, 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Len(t, res.Events, 1)
+			},
+		},
+		{
+			name: "client structured error on first page",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				detail := "Web property not found"
+				status := int64(404)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(client.Result[components.WebpropertyTimeline]{}, client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status}))
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.Error(t, err)
+				var structuredErr client.ClientStructuredError
+				require.ErrorAs(t, err, &structuredErr)
+				assert.Equal(t, int64(404), structuredErr.StatusCode().MustGet())
+				assert.Nil(t, res.Meta)
+			},
+		},
+		{
+			name: "feature flag off is reported as not enabled",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				detail := "feature is not enabled"
+				status := int64(409)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(client.Result[components.WebpropertyTimeline]{}, client.NewCensysClientStructuredError(&sdkerrors.ErrorModel{Detail: &detail, Status: &status})).Times(1)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.Error(t, err)
+				assert.Equal(t, "Feature Not Enabled", err.Title())
+				assert.Contains(t, err.Error(), "drop --mode events")
+				assert.False(t, err.ShouldPrintUsage())
+			},
+		},
+		{
+			name: "client generic error on first page",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				m.EXPECT().WebPropertyTimeline(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(client.Result[components.WebpropertyTimeline]{}, client.NewCensysClientGenericError(&sdkerrors.SDKError{Message: "Internal server error", StatusCode: 500}))
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "Internal server error")
+			},
+		},
+		{
+			name: "context cancelled before the first page",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			client: func(ctrl *gomock.Controller) client.Client {
+				return mocks.NewMockClient(ctrl)
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.Error(t, err)
+				require.ErrorIs(t, err, context.Canceled)
+			},
+		},
+		{
+			name: "error on second page - returns partial results",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(client.Result[components.WebpropertyTimeline]{}, client.NewCensysClientGenericError(&sdkerrors.SDKError{Message: "Internal server error", StatusCode: 500})),
+				)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.Len(t, res.Events, 1, "first page is kept")
+				require.NotNil(t, res.PartialError)
+				assert.Contains(t, res.PartialError.Error(), "Internal server error")
+				assert.Equal(t, uint64(2), res.Meta.PageCount)
+			},
+		},
+		{
+			name: "metadata reflects total latency across all pages",
+			client: func(ctrl *gomock.Controller) client.Client {
+				m := mocks.NewMockClient(ctrl)
+				sleep := func(context.Context, mo.Option[string], string, time.Time, time.Time) {
+					time.Sleep(50 * time.Millisecond)
+				}
+				gomock.InOrder(
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+						Return(webTimelinePage(midTime, 200*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil).Do(sleep),
+					m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, midTime).
+						Return(webTimelinePage(fromTime, 150*time.Millisecond, endpointEvent("2024-01-10T00:00:00Z", "/")), nil).Do(sleep),
+				)
+				return m
+			},
+			assert: func(t *testing.T, res WebPropertyHistoryResult, err cenclierrors.CencliError, _ []*components.WebTimelineEvent) {
+				require.NoError(t, err)
+				assert.GreaterOrEqual(t, res.Meta.Latency, 100*time.Millisecond, "total latency should be at least the sleep time")
 				assert.Equal(t, uint64(2), res.Meta.PageCount)
 			},
 		},
@@ -398,124 +466,115 @@ func TestGetWebPropertyHistory(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockClient := tc.client(ctrl)
-			svc := New(mockClient)
+			svc := New(tc.client(ctrl))
 
 			ctx := context.Background()
 			if tc.ctx != nil {
 				ctx = tc.ctx()
 			}
 
-			res, err := svc.GetWebPropertyHistory(ctx, tc.orgID, tc.webPropertyID, tc.fromTime, tc.toTime)
-			tc.assert(t, res, err)
+			var emitter streaming.Emitter
+			var items <-chan streaming.Item
+			if tc.stream {
+				emitter, items = streaming.NewChannelEmitter(64)
+				ctx = streaming.WithEmitter(ctx, emitter)
+			}
+
+			res, err := svc.GetWebPropertyHistory(ctx, tc.orgID, mustWebPropertyID(testWebPropertyID), fromTime, toTime)
+
+			var streamed []*components.WebTimelineEvent
+			if emitter != nil {
+				emitter.Close(nil)
+				for item := range items {
+					if item.Done {
+						continue
+					}
+					streamed = append(streamed, item.Data.(*components.WebTimelineEvent))
+				}
+			}
+			tc.assert(t, res, err, streamed)
 		})
 	}
 }
 
-// Helper function for web property IDs
+func TestGetWebPropertyHistory_CancelledAfterFirstPage(t *testing.T) {
+	fromTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	toTime := time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)
+	midTime := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+
+	ctrl := gomock.NewController(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	m := mocks.NewMockClient(ctrl)
+	m.EXPECT().WebPropertyTimeline(gomock.Any(), mo.None[string](), testWebPropertyID, fromTime, toTime).
+		DoAndReturn(func(context.Context, mo.Option[string], string, time.Time, time.Time) (client.Result[components.WebpropertyTimeline], client.ClientError) {
+			cancel()
+			return webTimelinePage(midTime, 10*time.Millisecond, endpointEvent("2024-01-20T00:00:00Z", "/")), nil
+		})
+
+	res, err := New(m).GetWebPropertyHistory(ctx, mo.None[identifiers.OrganizationID](), mustWebPropertyID(testWebPropertyID), fromTime, toTime)
+
+	require.NoError(t, err)
+	assert.Len(t, res.Events, 1)
+	require.NotNil(t, res.PartialError)
+	require.ErrorIs(t, res.PartialError, context.Canceled)
+}
+
+func TestWebTimelineEventKey(t *testing.T) {
+	testCases := []struct {
+		name       string
+		a, b       components.WebTimelineEvent
+		expectSame bool
+	}{
+		{
+			name:       "same endpoint event",
+			a:          endpointEvent("2024-01-01T00:00:00Z", "/").Resource,
+			b:          endpointEvent("2024-01-01T00:00:00Z", "/").Resource,
+			expectSame: true,
+		},
+		{
+			name: "different time",
+			a:    endpointEvent("2024-01-01T00:00:00Z", "/").Resource,
+			b:    endpointEvent("2024-01-01T00:00:01Z", "/").Resource,
+		},
+		{
+			name: "different endpoint path",
+			a:    endpointEvent("2024-01-01T00:00:00Z", "/").Resource,
+			b:    endpointEvent("2024-01-01T00:00:00Z", "/admin").Resource,
+		},
+		{
+			name: "endpoint vs jarm at the same time",
+			a:    endpointEvent("2024-01-01T00:00:00Z", "/").Resource,
+			b:    jarmEvent("2024-01-01T00:00:00Z").Resource,
+		},
+		{
+			name: "same time, kind, and endpoint but different content",
+			a:    endpointEvent("2024-01-01T00:00:00Z", "/").Resource,
+			b:    withBanner(endpointEvent("2024-01-01T00:00:00Z", "/"), "changed").Resource,
+		},
+		{
+			name:       "empty events",
+			expectSame: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ka, kb := webTimelineEventKey(&tc.a), webTimelineEventKey(&tc.b)
+			if tc.expectSame {
+				assert.Equal(t, ka, kb)
+			} else {
+				assert.NotEqual(t, ka, kb)
+			}
+		})
+	}
+}
+
 func mustWebPropertyID(id string) assets.WebPropertyID {
 	webPropID, err := assets.NewWebPropertyID(id, assets.DefaultWebPropertyPort)
 	if err != nil {
 		panic(err)
 	}
 	return webPropID
-}
-
-func intPtr(i int) *int {
-	return &i
-}
-
-// TestGetWebPropertyHistory_PartialError tests partial error handling
-func TestGetWebPropertyHistory_PartialError(t *testing.T) {
-	fromTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	toTime := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
-	day1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	day2 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
-
-	t.Run("error on second day returns partial results", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := mocks.NewMockClient(ctrl)
-		webPropID := mustWebPropertyID("example.com:443")
-
-		// Web property history iterates day by day from fromTime to toTime
-		// First day succeeds - include meaningful data (endpoints) so Exists is true
-		mockClient.EXPECT().GetWebProperties(
-			gomock.Any(),
-			mo.None[string](),
-			[]string{"example.com:443"},
-			mo.Some(day1),
-		).Return(client.Result[[]components.Webproperty]{
-			Data: &[]components.Webproperty{{
-				Hostname:  strPtr("example.com"),
-				Port:      intPtr(443),
-				Endpoints: []components.EndpointScanState{{}},
-			}},
-			Metadata: client.Metadata{
-				Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-				Response: &http.Response{StatusCode: 200},
-				Latency:  100 * time.Millisecond,
-			},
-		}, nil)
-
-		// Second day fails
-		mockClient.EXPECT().GetWebProperties(
-			gomock.Any(),
-			mo.None[string](),
-			[]string{"example.com:443"},
-			mo.Some(day2),
-		).Return(client.Result[[]components.Webproperty]{}, client.NewClientError(
-			&sdkerrors.SDKError{Message: "Internal server error", StatusCode: 500, Body: "Server error"},
-		))
-
-		svc := New(mockClient)
-		res, err := svc.GetWebPropertyHistory(context.Background(), mo.None[identifiers.OrganizationID](), webPropID, fromTime, toTime)
-
-		require.NoError(t, err)
-		require.NotNil(t, res.PartialError, "should have partial error")
-		require.Contains(t, res.PartialError.Error(), "Internal server error")
-		require.GreaterOrEqual(t, len(res.Snapshots), 1, "should return at least first day's snapshot")
-		assert.True(t, res.Snapshots[0].Exists)
-	})
-
-	t.Run("context cancelled after first day returns partial results", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := mocks.NewMockClient(ctrl)
-		webPropID := mustWebPropertyID("example.com:443")
-
-		ctx, cancel := context.WithCancel(context.Background())
-
-		// First day succeeds, then cancel - include meaningful data (endpoints) so Exists is true
-		mockClient.EXPECT().GetWebProperties(
-			gomock.Any(),
-			mo.None[string](),
-			[]string{"example.com:443"},
-			mo.Some(day1),
-		).DoAndReturn(func(ctx context.Context, orgID mo.Option[string], ids []string, atTime mo.Option[time.Time]) (client.Result[[]components.Webproperty], client.ClientError) {
-			defer cancel() // Cancel after first day
-			return client.Result[[]components.Webproperty]{
-				Data: &[]components.Webproperty{{
-					Hostname:  strPtr("example.com"),
-					Port:      intPtr(443),
-					Endpoints: []components.EndpointScanState{{}},
-				}},
-				Metadata: client.Metadata{
-					Request:  &http.Request{Method: "POST", URL: &url.URL{Scheme: "https", Host: "api.censys.io"}},
-					Response: &http.Response{StatusCode: 200},
-					Latency:  100 * time.Millisecond,
-				},
-			}, nil
-		})
-
-		svc := New(mockClient)
-		res, err := svc.GetWebPropertyHistory(ctx, mo.None[identifiers.OrganizationID](), webPropID, fromTime, toTime)
-
-		require.NoError(t, err)
-		require.NotNil(t, res.PartialError)
-		require.ErrorIs(t, res.PartialError, context.Canceled)
-		require.GreaterOrEqual(t, len(res.Snapshots), 1, "should return at least first day's snapshot")
-	})
 }

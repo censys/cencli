@@ -24,6 +24,14 @@ type CertificateHistoryResult struct {
 	PartialError cenclierrors.CencliError
 }
 
+type WebPropertyHistoryResult struct {
+	Meta   *responsemeta.ResponseMeta
+	Events []*components.WebTimelineEvent
+	// PartialError contains any error encountered after the first successful page.
+	// When present, the result contains partial data and the error should be reported to the user.
+	PartialError cenclierrors.CencliError
+}
+
 // WebPropertySnapshot represents a web property at a specific point in time
 type WebPropertySnapshot struct {
 	Time   time.Time               `json:"time"`
@@ -31,7 +39,7 @@ type WebPropertySnapshot struct {
 	Exists bool                    `json:"exists"`
 }
 
-type WebPropertyHistoryResult struct {
+type WebPropertySnapshotsResult struct {
 	Meta      *responsemeta.ResponseMeta
 	Snapshots []*WebPropertySnapshot
 	// PartialError contains any error encountered after the first successful page.
