@@ -16,6 +16,9 @@ type Fixture struct {
 	Timeout time.Duration
 	// NeedsAuth is set to configure a PAT and org ID before running the fixture.
 	NeedsAuth bool
+	// Skip, when set and returning a non-empty reason, skips the fixture. Used
+	// for fixtures that need extra input or cost credits.
+	Skip func() string
 	// AssertSchema is the function that asserts the expected output.
 	Assert func(t *testing.T, stdout, stderr []byte)
 }

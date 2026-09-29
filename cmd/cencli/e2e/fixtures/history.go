@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -8,6 +9,10 @@ import (
 
 	"github.com/censys/cencli/cmd/cencli/e2e/fixtures/golden"
 )
+
+// enableWebPropertyEventsEnvVar must be "true" to run the live --mode events
+// fixture, which needs web property event history enabled for the org.
+const enableWebPropertyEventsEnvVar = "CENCLI_E2E_ENABLE_WEBPROPERTY_EVENTS"
 
 var historyFixtures = []Fixture{
 	{
@@ -34,6 +39,23 @@ var historyFixtures = []Fixture{
 				Exists bool      `json:"exists"`
 			}](t, stdout)
 			assert.Greater(t, len(v), 1)
+		},
+	},
+	{
+		Name:      "webproperty-events",
+		Args:      []string{"platform.censys.io:80", "--mode", "events", "--duration", "30d"},
+		ExitCode:  0,
+		Timeout:   20 * time.Second,
+		NeedsAuth: true,
+		Skip: func() string {
+			if os.Getenv(enableWebPropertyEventsEnvVar) != "true" {
+				return "needs web property event history enabled for the org; set " + enableWebPropertyEventsEnvVar + "=true to run"
+			}
+			return ""
+		},
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			assertHas200(t, stderr)
+			assertWebTimelineEvents(t, unmarshalJSONAny[[]webTimelineEvent](t, stdout))
 		},
 	},
 	{
@@ -99,4 +121,19 @@ var historyFixtures = []Fixture{
 		},
 	},
 	// TODO: certificate and host history
+}
+
+type webTimelineEvent struct {
+	EventTime       string `json:"event_time"`
+	EndpointScanned any    `json:"endpoint_scanned"`
+	JarmScanned     any    `json:"jarm_scanned"`
+}
+
+func assertWebTimelineEvents(t *testing.T, events []webTimelineEvent) {
+	t.Helper()
+	assert.NotEmpty(t, events)
+	for _, e := range events {
+		assert.NotEmpty(t, e.EventTime)
+		assert.True(t, e.EndpointScanned != nil || e.JarmScanned != nil, "event carries no scan: %+v", e)
+	}
 }
