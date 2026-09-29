@@ -18,6 +18,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	cmdutil "github.com/censys/cencli/internal/pkg/input"
+	"github.com/censys/cencli/internal/pkg/refang"
 	"github.com/censys/cencli/internal/pkg/styles"
 	"github.com/censys/cencli/internal/pkg/tape"
 )
@@ -210,15 +211,22 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 // assets.AssetClassifier, which has no domain-name type and reads a bare name
 // as a web property on port 443.
 func (c *Command) parseInput(raw string) cenclierrors.CencliError {
-	values := cmdutil.SplitString(raw)
-	switch len(values) {
-	case 0:
-		return assets.NewNoAssetsError()
-	case 1:
-	default:
-		return assets.NewTooManyAssetsError(len(values), 1)
+	value := raw
+	// A pasted URL (defanged or not) may contain a comma in its path or query
+	// (e.g. "https://censys.com/a,b"), which is not a list of assets. Detect
+	// that case by refanging for a scheme before splitting on commas, so a URL
+	// is treated as one input instead of being split apart.
+	if !strings.Contains(refang.RefangURL(raw), "://") {
+		values := cmdutil.SplitString(raw)
+		switch len(values) {
+		case 0:
+			return assets.NewNoAssetsError()
+		case 1:
+		default:
+			return assets.NewTooManyAssetsError(len(values), 1)
+		}
+		value = values[0]
 	}
-	value := values[0]
 
 	if isCIDR(value) {
 		return assets.NewInvalidAssetIDError(value, "a CIDR range is not supported; give one IP address")

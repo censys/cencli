@@ -358,6 +358,26 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "success - a url with a comma in its path is one input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				return ms
+			},
+			args:   withWindow("https://censys.com/a,b", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - a defanged url with a comma is one input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				return ms
+			},
+			args:   withWindow("hxxps://censys[.]com/a,b", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
 			name:   "error - end before start is rejected",
 			dnsSvc: noCalls,
 			args:   []string{"censys.com", "--start", "2026-09-28T00:00:00Z", "--end", "2026-09-21T00:00:00Z"},
@@ -615,6 +635,46 @@ func TestDNSCommand_Short(t *testing.T) {
 				lines := fields(stdout)
 				require.Len(t, lines, 4, "the TXT value must not introduce extra lines")
 				require.Equal(t, []string{"TXT", "a", "b", "c", "d", "2026-09-21", "00:00", "2026-09-28", "00:00"}, lines[3])
+			},
+		},
+		{
+			name: "success - a TXT value with an ESC byte renders without it",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
+					Meta: testMeta(),
+					Records: []*components.DNSResolutionRecord{
+						{RecordType: components.DNSResolutionRecordRecordTypeTxt, Value: strPtr("\x1b[31mred\x1b[0m"), FirstSeen: testFrom, LastSeen: testTo},
+					},
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.NotContains(t, stdout, "\x1b")
+				require.Contains(t, stdout, "red")
+			},
+		},
+		{
+			name: "success - a domain with ESC and BEL bytes renders without them",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().IPResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.IPResolutionsResult{
+					Meta: testMeta(),
+					Records: []*components.DNSIPResolutionRecord{
+						{Domain: "\x1b]8;;http://x\x07", RecordType: components.DNSIPResolutionRecordRecordTypeA, FirstSeen: testFrom, LastSeen: testTo},
+					},
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("104.18.10.84"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.NotContains(t, stdout, "\x1b")
+				require.NotContains(t, stdout, "\x07")
 			},
 		},
 		{
