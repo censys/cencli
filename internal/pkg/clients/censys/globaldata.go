@@ -59,6 +59,14 @@ type GlobalDataClient interface {
 		fromTime time.Time,
 		toTime time.Time,
 	) (Result[components.HostTimeline], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#getwebpropertytimeline
+	WebPropertyTimeline(
+		ctx context.Context,
+		orgID mo.Option[string],
+		webPropertyID string,
+		fromTime time.Time,
+		toTime time.Time,
+	) (Result[components.WebpropertyTimeline], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#gethostenrichment
 	EnrichHost(
 		ctx context.Context,
@@ -290,6 +298,44 @@ func (g *globalDataSDK) HostTimeline(
 	}
 	timeline := res.GetResponseEnvelopeHostTimeline().GetResult()
 	return Result[components.HostTimeline]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     timeline,
+	}, nil
+}
+
+func (g *globalDataSDK) WebPropertyTimeline(
+	ctx context.Context,
+	orgID mo.Option[string],
+	webPropertyID string,
+	fromTime time.Time,
+	toTime time.Time,
+) (Result[components.WebpropertyTimeline], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataAssetWebpropertyTimelineResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		var err error
+		req := operations.V3GlobaldataAssetWebpropertyTimelineRequest{
+			OrganizationID: orgID.ToPointer(),
+			// url.PathEscape leaves ':' unescaped, which the API accepts although its
+			// spec shows %3A. Pre-escaping would double-encode it to %253A.
+			WebpropertyID: webPropertyID,
+			// inverted in the API, as with HostTimeline
+			StartTime: toTime,
+			EndTime:   fromTime,
+		}
+		res, err = g.censysSDK.client.GlobalData.GetWebPropertyTimeline(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.WebpropertyTimeline]{}
+		return zero, err
+	}
+	timeline := res.GetResponseEnvelopeWebpropertyTimeline().GetResult()
+	return Result[components.WebpropertyTimeline]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     timeline,
 	}, nil

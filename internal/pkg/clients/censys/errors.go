@@ -337,3 +337,14 @@ func (e *censysClientNotConfiguredError) Title() string {
 func (e *censysClientNotConfiguredError) ShouldPrintUsage() bool {
 	return false
 }
+
+// IsFeatureNotEnabled reports whether the API refused a request because a
+// feature flag gating that endpoint is off for the caller.
+func IsFeatureNotEnabled(err error) bool {
+	var structured *censysClientError
+	if !errors.As(err, &structured) {
+		return false
+	}
+	return structured.status.OrEmpty() == http.StatusConflict &&
+		structured.detail.OrEmpty() == "feature is not enabled"
+}

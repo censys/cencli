@@ -492,3 +492,18 @@ func (mr *MockClientMockRecorder) UpdateTag(ctx, req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTag", reflect.TypeOf((*MockClient)(nil).UpdateTag), ctx, req)
 }
+
+// WebPropertyTimeline mocks base method.
+func (m *MockClient) WebPropertyTimeline(ctx context.Context, orgID mo.Option[string], webPropertyID string, fromTime, toTime time.Time) (censys.Result[components.WebpropertyTimeline], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WebPropertyTimeline", ctx, orgID, webPropertyID, fromTime, toTime)
+	ret0, _ := ret[0].(censys.Result[components.WebpropertyTimeline])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// WebPropertyTimeline indicates an expected call of WebPropertyTimeline.
+func (mr *MockClientMockRecorder) WebPropertyTimeline(ctx, orgID, webPropertyID, fromTime, toTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WebPropertyTimeline", reflect.TypeOf((*MockClient)(nil).WebPropertyTimeline), ctx, orgID, webPropertyID, fromTime, toTime)
+}

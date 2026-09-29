@@ -274,3 +274,25 @@ func int64Ptr(i int64) *int64 {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestIsFeatureNotEnabled(t *testing.T) {
+	problem := func(status int64, detail string) error {
+		return NewCensysClientStructuredError(&sdkerrors.ErrorModel{Status: int64Ptr(status), Detail: strPtr(detail)})
+	}
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{name: "feature flag 409", err: problem(409, "feature is not enabled"), expected: true},
+		{name: "other 409", err: problem(409, "resource already exists")},
+		{name: "same detail, other status", err: problem(403, "feature is not enabled")},
+		{name: "generic error", err: errors.New("feature is not enabled")},
+		{name: "nil", err: nil},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsFeatureNotEnabled(tc.err))
+		})
+	}
+}
