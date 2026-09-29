@@ -91,6 +91,9 @@ func (c *Command) Long() string {
 	return "Look up Active DNS observations for a domain name or an IP address.\n\n" +
 		"For a domain name, shows the records the name resolved to (A, AAAA, MX, NS, SOA, TXT). " +
 		"For an IP address, shows the domain names that resolved to it.\n\n" +
+		"Several names or IPs can be given, up to 100: as positional arguments, comma-separated lists, " +
+		"or read from a file (or STDIN) with --input-file. Each input is looked up independently: " +
+		"if one fails, the rest still proceed.\n\n" +
 		"Results cover a time window (default: the last 7 days). Use --timeline to show each observed " +
 		"time range instead of one row per record.\n\n" +
 		"For the DNS names in a host's current record, use \"censys view <ip>\".\n\n" +
@@ -113,7 +116,7 @@ func (c *Command) Examples() []string {
 }
 
 func (c *Command) Init() error {
-	c.flags.inputFile = flags.NewFileFlag(c.Flags(), false, "input-file", "i", "file to read the assets from. Overrides the positional argument.")
+	c.flags.inputFile = flags.NewFileFlag(c.Flags(), false, "input-file", "i", "file to read the names or IPs from (or - for STDIN). Overrides positional arguments.")
 	c.flags.start = flags.NewTimestampFlag(c.Flags(), false, "start", "s", mo.None[time.Time](), "start time")
 	c.flags.end = flags.NewTimestampFlag(c.Flags(), false, "end", "e", mo.None[time.Time](), "end time")
 	c.flags.duration = flags.NewHumanDurationFlag(c.Flags(), false, "duration", "d", mo.Some(7*24*time.Hour), "time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d")
@@ -182,6 +185,12 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	}
 	if c.hasInput(true) {
 		if err := dns.ValidateRecordTypes(recordTypes, true); err != nil {
+			// A name among the inputs would otherwise support this record
+			// type; say so, since the generic message alone reads as if the
+			// type were rejected outright.
+			if c.hasInput(false) {
+				return withRecordTypeReason(err, "an IP address is among the inputs")
+			}
 			return err
 		}
 	}
@@ -250,35 +259,27 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	return nil
 }
 
-// gatherInputs reads the inputs from --input-file (which overrides the
-// positional arguments, as in view) or the positional arguments, splits comma
-// lists, and parses each input. It fails on the first invalid input, before
-// any lookup runs, and de-duplicates by the normalized input, keeping the
-// first occurrence's position.
+// gatherInputs reads the raw inputs, then parses each one. It fails on the
+// first invalid input, before any lookup runs, and de-duplicates by the
+// normalized input, keeping the first occurrence's position.
 func (c *Command) gatherInputs(cmd *cobra.Command, args []string) ([]lookupInput, cenclierrors.CencliError) {
-	raws := args
-	if c.flags.inputFile.IsSet() {
-		lines, err := c.flags.inputFile.Lines(cmd)
-		if err != nil {
-			return nil, err
-		}
-		raws = lines
+	raws, err := c.gatherRawInputs(cmd, args)
+	if err != nil {
+		return nil, err
 	}
 
 	var inputs []lookupInput
 	seen := make(map[string]bool)
 	for _, raw := range raws {
-		for _, value := range splitInput(raw) {
-			input, err := parseInput(value)
-			if err != nil {
-				return nil, err
-			}
-			if seen[input.value] {
-				continue
-			}
-			seen[input.value] = true
-			inputs = append(inputs, input)
+		input, err := parseInput(raw)
+		if err != nil {
+			return nil, err
 		}
+		if seen[input.value] {
+			continue
+		}
+		seen[input.value] = true
+		inputs = append(inputs, input)
 	}
 
 	switch {
@@ -288,6 +289,24 @@ func (c *Command) gatherInputs(cmd *cobra.Command, args []string) ([]lookupInput
 		return nil, assets.NewTooManyAssetsError(len(inputs), maxInputs)
 	}
 	return inputs, nil
+}
+
+// gatherRawInputs returns the raw input strings: --input-file's lines
+// (overriding the positional arguments, as in view), taken as-is, one input
+// per line; or the positional arguments, with each argument's comma list
+// split (as view splits its positional argument). A file line is never
+// comma-split: unlike an argument, it cannot be quoted apart from a shell's
+// own list-separating commas, so splitting it would misread a name or a URL
+// that legitimately contains a comma.
+func (c *Command) gatherRawInputs(cmd *cobra.Command, args []string) ([]string, cenclierrors.CencliError) {
+	if c.flags.inputFile.IsSet() {
+		return c.flags.inputFile.Lines(cmd)
+	}
+	var raws []string
+	for _, arg := range args {
+		raws = append(raws, splitInput(arg)...)
+	}
+	return raws, nil
 }
 
 // splitInput splits one argument or file line into its comma-separated inputs.
@@ -458,30 +477,53 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	// Look up each input in turn. A failed input does not stop the others; its
 	// error is printed after the output.
 	var failures []cenclierrors.CencliError
+	var accessDeniedErr cenclierrors.CencliError
 	for i, input := range c.inputs {
 		result, err := c.fetchWithProgress(ctx, logger, input, i)
 		if err != nil {
 			logger.Debug("dns fetch failed", "input", input.value, "error", err)
-			// A plan restriction fails every lookup the same way, so stop here.
 			if dns.IsAccessDeniedError(err) {
-				return err
+				// A plan restriction fails every lookup the same way, so stop
+				// here. With nothing collected yet, there is no output to
+				// keep: fail exactly as an unrecoverable error would.
+				if len(c.results) == 0 {
+					return err
+				}
+				// Otherwise keep what was already collected: print it (below,
+				// the same way a normal run would), then report the error.
+				accessDeniedErr = err
+				break
 			}
 			failures = append(failures, c.withInput(input, err))
 			// After an interrupt, every remaining lookup would fail the same way.
 			if ctx.Err() != nil {
+				c.reportInterrupted(len(c.inputs) - i - 1)
 				break
 			}
 			continue
 		}
-		c.PrintAppResponseMeta(result.meta)
+		if len(c.inputs) == 1 {
+			c.PrintAppResponseMeta(result.meta)
+		}
 		c.results = append(c.results, result)
 	}
 
 	if len(c.results) == 0 {
-		for _, failure := range failures[1:] {
+		// Print every failure but the last in input order, then return the
+		// last: the caller prints a returned error right after Run's own
+		// stderr output, so this is the only ordering that puts every
+		// failure on stderr in input order. With one failure, nothing is
+		// printed here and that failure is returned, unchanged from before.
+		for _, failure := range failures[:len(failures)-1] {
 			formatter.PrintError(failure, cmd)
 		}
-		return failures[0]
+		return failures[len(failures)-1]
+	}
+
+	// With several inputs, one metadata block per input would be noise (100
+	// inputs, 100 blocks); print one combined block instead.
+	if len(c.inputs) > 1 {
+		c.PrintAppResponseMeta(combinedResponseMeta(c.results))
 	}
 
 	// PrintData handles streaming vs buffered automatically
@@ -500,7 +542,47 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	for _, failure := range failures {
 		formatter.PrintError(failure, cmd)
 	}
+
+	if accessDeniedErr != nil {
+		return accessDeniedErr
+	}
 	return nil
+}
+
+// reportInterrupted tells the user how many inputs an interrupt (context
+// cancellation) left unlooked-up. remaining is everything after the input
+// whose lookup was cancelled; the cancelled input itself was attempted (and
+// so already counted as a failure), so it is not included. This is an
+// outcome, not an advisory note, so it prints regardless of --quiet.
+func (c *Command) reportInterrupted(remaining int) {
+	if remaining <= 0 || len(c.inputs) <= 1 {
+		return
+	}
+	formatter.Println(formatter.Stderr, fmt.Sprintf("interrupted; %d inputs not looked up", remaining))
+}
+
+// combinedResponseMeta reports one metadata block for several inputs: the
+// last successful lookup's method, URL, and status, plus the latency and
+// page count summed across every lookup that returned one.
+func combinedResponseMeta(results []fetched) *responsemeta.ResponseMeta {
+	var last *responsemeta.ResponseMeta
+	var latency time.Duration
+	var pages uint64
+	for _, result := range results {
+		if result.meta == nil {
+			continue
+		}
+		last = result.meta
+		latency += result.meta.Latency
+		pages += result.meta.PageCount
+	}
+	if last == nil {
+		return nil
+	}
+	combined := *last
+	combined.Latency = latency
+	combined.PageCount = pages
+	return &combined
 }
 
 // fetchWithProgress looks up one input, showing its progress; i is the

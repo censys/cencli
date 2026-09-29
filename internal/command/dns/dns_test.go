@@ -603,6 +603,9 @@ func TestDNSCommand_RecordTypeValidatedBeforeClient(t *testing.T) {
 	require.Error(t, cmdErr)
 	require.Contains(t, cmdErr.Error(), "invalid record type 'MX'")
 	require.NotContains(t, cmdErr.Error(), "not configured")
+	// A single-direction input (no name in the list) gets the plain message:
+	// nothing here explains it away by pointing at another input.
+	require.NotContains(t, cmdErr.Error(), "an IP address is among the inputs")
 }
 
 // newOrgLookupStore returns a store mock that reports no stored org-id, which is
@@ -903,6 +906,47 @@ func TestDNSCommand_Short(t *testing.T) {
 				require.Contains(t, stdout, "No DNS records found in this window. Widen it with --duration (e.g. -d 90d).")
 			},
 		},
+		{
+			// Pins the exact one-input layout (title, window, blank line,
+			// table) so any change to it shows up here instead of only in the
+			// looser Contains checks above.
+			name: "success - one input's full output is pinned",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
+					Meta: testMeta(),
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
+						{RecordType: components.DNSResolutionRecordRecordTypeA, IP: strPtr("104.18.10.84"), FirstSeen: testFrom, LastSeen: testTo},
+					}),
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, "\nDNS records for censys.com (1)\nActive 2026-09-21 00:00 → 2026-09-28 00:00 UTC\n\n"+
+					"Type   Value          First Seen         Last Seen       \n\n"+
+					"A    | 104.18.10.84 | 2026-09-21 00:00 | 2026-09-28 00:00\n\n", stdout)
+			},
+		},
+		{
+			// Pins the exact one-input, no-records layout: the window, then
+			// the empty message (no table).
+			name: "success - one input's no-records output is pinned",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*dnsapp.NameRecord{}}, nil)
+				return ms
+			},
+			args: withWindow("censys.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, "\nActive 2026-09-21 00:00 → 2026-09-28 00:00 UTC\n\n"+
+					"No DNS records found in this window. Widen it with --duration (e.g. -d 90d).\n", stdout)
+			},
+		},
 	})
 }
 
@@ -933,6 +977,28 @@ func TestDNSCommand_Template(t *testing.T) {
 				require.Contains(t, stdout, "Value: 10 aspmx.l.google.com")
 				require.Contains(t, stdout, "First Seen: "+testFrom.Format(time.RFC3339))
 				require.Contains(t, stdout, "Last Seen: "+testTo.Format(time.RFC3339))
+			},
+		},
+		{
+			// Handlebars treats 0 as falsy, so a template guard on priority itself
+			// would hide an MX record whose priority is the (valid, common) value 0.
+			name: "success - an MX priority of 0 still renders",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				zero := int64(0)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
+					Meta: testMeta(),
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
+						{RecordType: components.DNSResolutionRecordRecordTypeMx, MailServer: strPtr("aspmx.l.google.com"), Priority: &zero, FirstSeen: testFrom, LastSeen: testTo},
+					}),
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com", "-O", "template"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "Value: 0 aspmx.l.google.com")
 			},
 		},
 		{
@@ -1010,7 +1076,8 @@ func apiError(msg string) cenclierrors.CencliError {
 }
 
 func TestDNSCommand_MultipleInputs(t *testing.T) {
-	twoLines := writeInputFile(t, "a.com\nb.com,104.18.10.84\n")
+	threeLines := writeInputFile(t, "a.com\nb.com\n104.18.10.84\n")
+	commaLine := writeInputFile(t, "b.com,104.18.10.84\n")
 	tooMany := make([]string, 0, maxInputs+1)
 	for i := 0; i <= maxInputs; i++ {
 		tooMany = append(tooMany, fmt.Sprintf("host%d.example.com", i))
@@ -1066,7 +1133,7 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 			},
 		},
 		{
-			name: "success - --input-file reads one input or a comma list per line",
+			name: "success - --input-file reads one input per line",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				gomock.InOrder(
@@ -1076,10 +1143,23 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 				)
 				return ms
 			},
-			args: withWindow("--input-file", twoLines, "-O", "json"),
+			args: withWindow("--input-file", threeLines, "-O", "json"),
 			assert: func(t *testing.T, stdout, _ string, err error) {
 				require.NoError(t, err)
 				require.Equal(t, []string{"a.com", "b.com", "104.18.10.84"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			// Unlike a positional argument, a file line is never comma-split:
+			// it is used exactly as given, so a comma in it is invalid input
+			// (view and tags follow the same rule).
+			name:   "error - a file line with a comma is one invalid input",
+			dnsSvc: noCalls,
+			args:   withWindow("--input-file", commaLine),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "invalid asset ID: b.com,104.18.10.84")
+				require.Contains(t, err.Error(), "give one domain name only")
 			},
 		},
 		{
@@ -1093,7 +1173,7 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 				)
 				return ms
 			},
-			args:   withWindow("ignored.com", "-i", twoLines, "-O", "json"),
+			args:   withWindow("ignored.com", "-i", threeLines, "-O", "json"),
 			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
 		},
 		{
@@ -1155,12 +1235,12 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 			},
 		},
 		{
-			name:   "error - an MX filter with an ip in the list is rejected before any API call",
+			name:   "error - an MX filter with an ip in the list names the reason",
 			dnsSvc: noCalls,
 			args:   withWindow("censys.com,104.18.10.84", "-r", "MX"),
 			assert: func(t *testing.T, _, _ string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "invalid record type 'MX'")
+				require.Contains(t, err.Error(), "invalid record type 'MX'; supported values: A, AAAA (an IP address is among the inputs)")
 			},
 		},
 		{
@@ -1190,7 +1270,11 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 			},
 		},
 		{
-			name: "error - every input failing returns the first error",
+			// The command returns its error to the caller, which prints it right
+			// after Run's own stderr output (see cmd/cencli/main.go); the only
+			// way every failure ends up on stderr in input order is to print
+			// every failure but the last during the run, then return the last.
+			name: "error - every input failing prints every failure but the last, and returns the last",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				gomock.InOrder(
@@ -1202,8 +1286,9 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 			args: withWindow("a.com,b.com", "-O", "json"),
 			assert: func(t *testing.T, _, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "a.com: first failed")
-				require.Contains(t, stderr, "b.com: second failed")
+				require.Contains(t, err.Error(), "b.com: second failed")
+				require.Contains(t, stderr, "a.com: first failed")
+				require.NotContains(t, stderr, "second failed", "the returned error is not also printed inline")
 			},
 		},
 		{
@@ -1220,7 +1305,31 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 			},
 		},
 		{
-			name: "success - a 403 after a success still stops the remaining lookups",
+			// A 403 stops further lookups (the plan restriction applies to all
+			// of them), but the data already collected is not discarded: it is
+			// printed the same as a normal run's output, and the 403 is still
+			// returned (a non-zero exit), unlike enrich's own precedent, whose
+			// callers treat a partial result as success.
+			name: "error - a 403 after a success prints what was collected and stops the rest",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, dnsapp.NewAccessDeniedError()),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com,c.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "Search and Core plans")
+				require.Contains(t, stdout, "DNS records for a.com", "the first input's records are still printed")
+				require.NotContains(t, stdout, "b.com")
+				require.NotContains(t, stdout, "c.com")
+			},
+		},
+		{
+			name: "error - a 403 after a success prints what was collected and stops the rest (json)",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				gomock.InOrder(
@@ -1230,9 +1339,10 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 				return ms
 			},
 			args: withWindow("a.com,b.com,c.com", "-O", "json"),
-			assert: func(t *testing.T, _, _ string, err error) {
+			assert: func(t *testing.T, stdout, _ string, err error) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "Search and Core plans")
+				require.Equal(t, []string{"a.com"}, jsonInputs(t, stdout), "the first input's records are still printed")
 			},
 		},
 		{
@@ -1325,7 +1435,75 @@ func TestDNSCommand_MultipleInputs(t *testing.T) {
 				require.Contains(t, stderr, "fetching all pages (--max-pages=-1) for each of 2 inputs")
 			},
 		},
+		{
+			// One block per input (100 inputs, 100 blocks) is noise; several
+			// inputs get one combined block instead: the last response's
+			// method/URL/status, and the latency and page count summed across
+			// every lookup.
+			name: "success - several inputs print one combined response metadata block",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				first := nameResult("a.com", "1.1.1.1")
+				first.Meta = &responsemeta.ResponseMeta{Method: "GET", URL: "https://a", Status: 200, Latency: 100 * time.Millisecond, PageCount: 1}
+				second := nameResult("b.com", "2.2.2.2")
+				second.Meta = &responsemeta.ResponseMeta{Method: "GET", URL: "https://b", Status: 200, Latency: 200 * time.Millisecond, PageCount: 2}
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(first, nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(second, nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, _, stderr string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, 1, strings.Count(stderr, "(OK)"), "exactly one metadata block for two inputs")
+				require.Contains(t, stderr, "300ms", "the summed latency")
+				require.Contains(t, stderr, "pages: 3", "the summed page count")
+			},
+		},
 	})
+}
+
+// TestDNSCommand_Interrupted covers a context cancelled mid-loop (e.g. a
+// signal during a bulk lookup): the loop must stop at the cancelled input
+// (not run the rest), and report how many inputs it never got to. The table
+// harness runs the command through plain Execute(), so this test drives cobra
+// through ExecuteContext directly to control the context the command sees.
+func TestDNSCommand_Interrupted(t *testing.T) {
+	tempDir := t.TempDir()
+	viper.Reset()
+	cfg, err := config.New(tempDir)
+	require.NoError(t, err)
+
+	var stdout, stderr bytes.Buffer
+	formatter.Stdout = &stdout
+	formatter.Stderr = &stderr
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ms := dnsmocks.NewMockDNSService(ctrl)
+	gomock.InOrder(
+		ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(nameResult("a.com", "1.1.1.1"), nil),
+		ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, _ assets.DomainName, _ dnsapp.Params) (dnsapp.NameResolutionsResult, cenclierrors.CencliError) {
+				cancel()
+				return dnsapp.NameResolutionsResult{}, cenclierrors.ParseContextError(ctx.Err())
+			}),
+	)
+
+	cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl), command.WithDNSService(ms))
+	rootCmd, err := command.RootCommandToCobra(NewDNSCommand(cmdContext))
+	require.NoError(t, err)
+	rootCmd.SetArgs(withWindow("a.com,b.com,c.com", "-O", "json"))
+
+	cmdErr := rootCmd.ExecuteContext(ctx)
+	require.NoError(t, cmdErr, "a.com already succeeded, so the run is not itself a failure")
+	require.Equal(t, []string{"a.com"}, jsonInputs(t, stdout.String()))
+	require.Contains(t, stderr.String(), "interrupted; 1 inputs not looked up")
 }
 
 func TestDNSCommand_ShortMultipleInputs(t *testing.T) {
