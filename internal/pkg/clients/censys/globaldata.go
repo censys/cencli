@@ -106,6 +106,7 @@ type GlobalDataClient interface {
 		fromTime time.Time,
 		toTime time.Time,
 		recordTypes []string,
+		domain mo.Option[string],
 		pageSize mo.Option[int64],
 		pageToken mo.Option[string],
 	) (Result[components.DNSIPResolutionRangeResponse], ClientError)
@@ -516,6 +517,7 @@ func (g *globalDataSDK) ListDNSIPResolutionRanges(
 	fromTime time.Time,
 	toTime time.Time,
 	recordTypes []string,
+	domain mo.Option[string],
 	pageSize mo.Option[int64],
 	pageToken mo.Option[string],
 ) (Result[components.DNSIPResolutionRangeResponse], ClientError) {
@@ -531,6 +533,7 @@ func (g *globalDataSDK) ListDNSIPResolutionRanges(
 			EndTime:        &endStr,
 			PageToken:      pageToken.ToPointer(),
 			RecordTypes:    dnsRecordTypes[operations.QueryParamRecordTypes](recordTypes),
+			Domain:         domain.ToPointer(),
 		}
 		if pageSize.IsPresent() {
 			ps := int(pageSize.MustGet())

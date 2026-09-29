@@ -20,9 +20,11 @@ Examples:
   censys dns censys.com --timeline --duration 90d
   censys dns 104.18.10.84
   censys dns 104.18.10.84 --start 2026-06-01T00:00:00Z --duration 30d
+  censys dns 141.193.213.10 --timeline --domain censys.com
   censys dns censys.com --output-format json
 
 Flags:
+      --domain string         limit an IP timeline to one domain name (IP input with --timeline only)
   -d, --duration string       time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d (default "168h0m0s")
   -e, --end string            end time
   -h, --help                  help for dns

@@ -58,6 +58,7 @@ type dnsCommandFlags struct {
 	pageSize    flags.IntegerFlag
 	maxPages    flags.IntegerFlag
 	orgID       flags.OrgIDFlag
+	domain      flags.StringFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -90,6 +91,7 @@ func (c *Command) Examples() []string {
 		"censys.com --timeline --duration 90d",
 		"104.18.10.84",
 		"104.18.10.84 --start 2026-06-01T00:00:00Z --duration 30d",
+		"141.193.213.10 --timeline --domain censys.com",
 		"censys.com --output-format json",
 	}
 }
@@ -121,6 +123,7 @@ func (c *Command) Init() error {
 		mo.None[int64](), // no maximum
 	)
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
+	c.flags.domain = flags.NewStringFlag(c.Flags(), false, "domain", "", "", "limit an IP timeline to one domain name (IP input with --timeline only)")
 	return nil
 }
 
@@ -178,6 +181,10 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
+	domain, err := c.parseDomainFlag()
+	if err != nil {
+		return err
+	}
 	pageSize, maxPages, err := c.parsePaginationFlags()
 	if err != nil {
 		return err
@@ -203,6 +210,7 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		RecordTypes: recordTypes,
 		PageSize:    pageSize,
 		MaxPages:    maxPages,
+		Domain:      domain,
 	}
 
 	// resolve required services
@@ -292,6 +300,29 @@ func isCIDR(raw string) bool {
 		}
 	}
 	return net.ParseIP(strings.TrimSpace(refang.RefangIP(ipPart))) != nil
+}
+
+// parseDomainFlag reads --domain. It only applies to an IP lookup with
+// --timeline (the API supports the filter only on IP ranges), so any other
+// use is a usage error before a service (and so the API client) is needed.
+// The value is parsed with assets.NewDomainName, so defanged input normalizes
+// and an invalid name is rejected with the usual Invalid Asset ID error.
+func (c *Command) parseDomainFlag() (mo.Option[assets.DomainName], cenclierrors.CencliError) {
+	raw, err := c.flags.domain.Value()
+	if err != nil {
+		return mo.None[assets.DomainName](), err
+	}
+	if raw == "" {
+		return mo.None[assets.DomainName](), nil
+	}
+	if c.name.IsPresent() || !c.timeline {
+		return mo.None[assets.DomainName](), NewDomainFlagMisuseError()
+	}
+	domain, derr := assets.NewDomainName(raw)
+	if derr != nil {
+		return mo.None[assets.DomainName](), assets.NewInvalidAssetIDError(raw, derr.Error())
+	}
+	return mo.Some(domain), nil
 }
 
 // parsePaginationFlags reads --page-size and --max-pages. A --max-pages of -1

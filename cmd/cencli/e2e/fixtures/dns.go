@@ -183,6 +183,32 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "domain-with-name-input",
+		Args:      []string{"censys.com", "--timeline", "--domain", "x.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Conflicting Flags]", lines[0])
+			assert.Contains(t, lines[1], "--domain applies only to an IP lookup with --timeline")
+		},
+	},
+	{
+		Name:      "domain-without-timeline",
+		Args:      []string{"104.18.10.84", "--domain", "censys.com"},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Conflicting Flags]", lines[0])
+			assert.Contains(t, lines[1], "--domain applies only to an IP lookup with --timeline")
+		},
+	},
+	{
 		Name:      "name-json",
 		Args:      []string{"censys.com", "--output-format", "json"},
 		ExitCode:  0,

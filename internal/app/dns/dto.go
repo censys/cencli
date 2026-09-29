@@ -8,6 +8,7 @@ import (
 	"github.com/censys/censys-sdk-go/models/components"
 
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
+	"github.com/censys/cencli/internal/pkg/domain/assets"
 	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 )
@@ -23,6 +24,9 @@ type Params struct {
 	RecordTypes []string
 	PageSize    mo.Option[uint64]
 	MaxPages    mo.Option[uint64]
+	// Domain narrows an IP timeline lookup (IPResolutionRanges) to one domain
+	// name that resolved to the IP. The other three lookups ignore it.
+	Domain mo.Option[assets.DomainName]
 }
 
 // NameResolutionsResult holds one aggregated row per record of a name.

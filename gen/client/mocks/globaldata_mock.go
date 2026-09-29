@@ -150,18 +150,18 @@ func (mr *MockGlobalDataClientMockRecorder) ListDNSIPResolutionBounds(ctx, orgID
 }
 
 // ListDNSIPResolutionRanges mocks base method.
-func (m *MockGlobalDataClient) ListDNSIPResolutionRanges(ctx context.Context, orgID mo.Option[string], ip string, fromTime, toTime time.Time, recordTypes []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.DNSIPResolutionRangeResponse], censys.ClientError) {
+func (m *MockGlobalDataClient) ListDNSIPResolutionRanges(ctx context.Context, orgID mo.Option[string], ip string, fromTime, toTime time.Time, recordTypes []string, domain mo.Option[string], pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.DNSIPResolutionRangeResponse], censys.ClientError) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListDNSIPResolutionRanges", ctx, orgID, ip, fromTime, toTime, recordTypes, pageSize, pageToken)
+	ret := m.ctrl.Call(m, "ListDNSIPResolutionRanges", ctx, orgID, ip, fromTime, toTime, recordTypes, domain, pageSize, pageToken)
 	ret0, _ := ret[0].(censys.Result[components.DNSIPResolutionRangeResponse])
 	ret1, _ := ret[1].(censys.ClientError)
 	return ret0, ret1
 }
 
 // ListDNSIPResolutionRanges indicates an expected call of ListDNSIPResolutionRanges.
-func (mr *MockGlobalDataClientMockRecorder) ListDNSIPResolutionRanges(ctx, orgID, ip, fromTime, toTime, recordTypes, pageSize, pageToken any) *gomock.Call {
+func (mr *MockGlobalDataClientMockRecorder) ListDNSIPResolutionRanges(ctx, orgID, ip, fromTime, toTime, recordTypes, domain, pageSize, pageToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDNSIPResolutionRanges", reflect.TypeOf((*MockGlobalDataClient)(nil).ListDNSIPResolutionRanges), ctx, orgID, ip, fromTime, toTime, recordTypes, pageSize, pageToken)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDNSIPResolutionRanges", reflect.TypeOf((*MockGlobalDataClient)(nil).ListDNSIPResolutionRanges), ctx, orgID, ip, fromTime, toTime, recordTypes, domain, pageSize, pageToken)
 }
 
 // ListDNSNameResolutionBounds mocks base method.
