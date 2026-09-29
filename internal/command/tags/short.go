@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/censys/cencli/internal/app/tags"
+	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
@@ -391,28 +392,28 @@ func renderOperationDetail(op tags.TagOperation) cenclierrors.CencliError {
 	out.WriteRune('\n')
 	out.WriteRune('\n')
 
-	writeField(&out, "ID", op.ID)
-	writeField(&out, "Tag", op.TagName)
-	writeField(&out, "Tag ID", op.TagID)
-	writeField(&out, "Type", op.Type)
-	writeField(&out, "Status", styleOperationStatus(op.Status, op.Status))
-	writeField(&out, "Progress", operationProgress(op))
-	writeField(&out, "Succeeded", strconv.FormatInt(op.SuccessfulCount, 10))
+	command.WriteDetailField(&out, "ID", op.ID)
+	command.WriteDetailField(&out, "Tag", op.TagName)
+	command.WriteDetailField(&out, "Tag ID", op.TagID)
+	command.WriteDetailField(&out, "Type", op.Type)
+	command.WriteDetailField(&out, "Status", styleOperationStatus(op.Status, op.Status))
+	command.WriteDetailField(&out, "Progress", operationProgress(op))
+	command.WriteDetailField(&out, "Succeeded", strconv.FormatInt(op.SuccessfulCount, 10))
 
 	// Only bulk_create operations carry the query that produced them.
 	if op.Query != nil && *op.Query != "" {
-		writeField(&out, "Query", *op.Query)
+		command.WriteDetailField(&out, "Query", *op.Query)
 	}
 
-	writeField(&out, "Created At", op.CreatedAt.Format(detailTimeLayout))
+	command.WriteDetailField(&out, "Created At", op.CreatedAt.Format(detailTimeLayout))
 	if op.EndedAt != nil {
-		writeField(&out, "Ended At", op.EndedAt.Format(detailTimeLayout))
+		command.WriteDetailField(&out, "Ended At", op.EndedAt.Format(detailTimeLayout))
 	}
 	if op.StatusMessage != nil && *op.StatusMessage != "" {
-		writeField(&out, "Message", *op.StatusMessage)
+		command.WriteDetailField(&out, "Message", *op.StatusMessage)
 	}
 	if op.ErrorMessage != nil && *op.ErrorMessage != "" {
-		writeField(&out, "Error", *op.ErrorMessage)
+		command.WriteDetailField(&out, "Error", *op.ErrorMessage)
 	}
 
 	formatter.Println(formatter.Stdout, out.String())
@@ -451,32 +452,25 @@ func renderTagDetail(header string, t tags.Tag) cenclierrors.CencliError {
 	out.WriteRune('\n')
 	out.WriteRune('\n')
 
-	writeField(&out, "Name", t.Name)
-	writeField(&out, "ID", t.ID)
-	writeField(&out, "Privacy", t.Privacy)
+	command.WriteDetailField(&out, "Name", t.Name)
+	command.WriteDetailField(&out, "ID", t.ID)
+	command.WriteDetailField(&out, "Privacy", t.Privacy)
 
 	description := "-"
 	if t.Description != nil && *t.Description != "" {
 		description = *t.Description
 	}
-	writeField(&out, "Description", description)
+	command.WriteDetailField(&out, "Description", description)
 
-	writeField(&out, "Created By", t.CreatedBy)
-	writeField(&out, "Created At", t.CreatedAt.Format(detailTimeLayout))
-	writeField(&out, "Updated At", t.UpdatedAt.Format(detailTimeLayout))
+	command.WriteDetailField(&out, "Created By", t.CreatedBy)
+	command.WriteDetailField(&out, "Created At", t.CreatedAt.Format(detailTimeLayout))
+	command.WriteDetailField(&out, "Updated At", t.UpdatedAt.Format(detailTimeLayout))
 
 	// Only `get --asset-count` populates the count.
 	if t.AssetCount != nil {
-		writeField(&out, "Assets", strconv.FormatInt(*t.AssetCount, 10))
+		command.WriteDetailField(&out, "Assets", strconv.FormatInt(*t.AssetCount, 10))
 	}
 
 	formatter.Println(formatter.Stdout, out.String())
 	return nil
-}
-
-// writeField appends a padded label / value line to a detail view.
-func writeField(out *strings.Builder, label, value string) {
-	labelStyled := styles.GlobalStyles.Primary.Render(fmt.Sprintf("%-13s", label+":"))
-	valueStyled := styles.GlobalStyles.Comment.Render(value)
-	fmt.Fprintf(out, "  %s %s\n", labelStyled, valueStyled)
 }

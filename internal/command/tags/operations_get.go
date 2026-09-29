@@ -108,7 +108,7 @@ func (c *OperationsGetCommand) PreRun(cmd *cobra.Command, args []string) cenclie
 		return err
 	}
 
-	c.wait, c.timeout, err = parseWaitFlags(cmd, c.flags.wait, c.flags.timeout)
+	c.wait, c.timeout, err = command.ParseWaitFlags(cmd, c.flags.wait, c.flags.timeout)
 	if err != nil {
 		return err
 	}
