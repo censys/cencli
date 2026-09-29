@@ -59,6 +59,21 @@ func (mr *MockGlobalDataClientMockRecorder) Aggregate(ctx, orgID, query, field, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Aggregate", reflect.TypeOf((*MockGlobalDataClient)(nil).Aggregate), ctx, orgID, query, field, numBuckets, countByLevel, filterByQuery)
 }
 
+// CreateWebPropertyRescan mocks base method.
+func (m *MockGlobalDataClient) CreateWebPropertyRescan(ctx context.Context, orgID, hostname string, port int) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateWebPropertyRescan", ctx, orgID, hostname, port)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateWebPropertyRescan indicates an expected call of CreateWebPropertyRescan.
+func (mr *MockGlobalDataClientMockRecorder) CreateWebPropertyRescan(ctx, orgID, hostname, port any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWebPropertyRescan", reflect.TypeOf((*MockGlobalDataClient)(nil).CreateWebPropertyRescan), ctx, orgID, hostname, port)
+}
+
 // EnrichHost mocks base method.
 func (m *MockGlobalDataClient) EnrichHost(ctx context.Context, orgID mo.Option[string], hostIP string) (censys.Result[components.HostEnrichment], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -104,6 +119,21 @@ func (mr *MockGlobalDataClientMockRecorder) GetHosts(ctx, orgID, hostIDs, atTime
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHosts", reflect.TypeOf((*MockGlobalDataClient)(nil).GetHosts), ctx, orgID, hostIDs, atTime)
 }
 
+// GetTrackedScan mocks base method.
+func (m *MockGlobalDataClient) GetTrackedScan(ctx context.Context, orgID, scanID string) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrackedScan", ctx, orgID, scanID)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTrackedScan indicates an expected call of GetTrackedScan.
+func (mr *MockGlobalDataClientMockRecorder) GetTrackedScan(ctx, orgID, scanID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackedScan", reflect.TypeOf((*MockGlobalDataClient)(nil).GetTrackedScan), ctx, orgID, scanID)
+}
+
 // GetWebProperties mocks base method.
 func (m *MockGlobalDataClient) GetWebProperties(ctx context.Context, orgID mo.Option[string], webPropertyIDs []string, atTime mo.Option[time.Time]) (censys.Result[[]components.Webproperty], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -147,4 +177,19 @@ func (m *MockGlobalDataClient) Search(ctx context.Context, orgID mo.Option[strin
 func (mr *MockGlobalDataClientMockRecorder) Search(ctx, orgID, query, fields, pageSize, pageToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockGlobalDataClient)(nil).Search), ctx, orgID, query, fields, pageSize, pageToken)
+}
+
+// WebPropertyTimeline mocks base method.
+func (m *MockGlobalDataClient) WebPropertyTimeline(ctx context.Context, orgID mo.Option[string], webPropertyID string, fromTime, toTime time.Time) (censys.Result[components.WebpropertyTimeline], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WebPropertyTimeline", ctx, orgID, webPropertyID, fromTime, toTime)
+	ret0, _ := ret[0].(censys.Result[components.WebpropertyTimeline])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// WebPropertyTimeline indicates an expected call of WebPropertyTimeline.
+func (mr *MockGlobalDataClientMockRecorder) WebPropertyTimeline(ctx, orgID, webPropertyID, fromTime, toTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WebPropertyTimeline", reflect.TypeOf((*MockGlobalDataClient)(nil).WebPropertyTimeline), ctx, orgID, webPropertyID, fromTime, toTime)
 }

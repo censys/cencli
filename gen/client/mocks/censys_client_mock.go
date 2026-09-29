@@ -150,6 +150,21 @@ func (mr *MockClientMockRecorder) CreateTagAssignment(ctx, req any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTagAssignment", reflect.TypeOf((*MockClient)(nil).CreateTagAssignment), ctx, req)
 }
 
+// CreateWebPropertyRescan mocks base method.
+func (m *MockClient) CreateWebPropertyRescan(ctx context.Context, orgID, hostname string, port int) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateWebPropertyRescan", ctx, orgID, hostname, port)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateWebPropertyRescan indicates an expected call of CreateWebPropertyRescan.
+func (mr *MockClientMockRecorder) CreateWebPropertyRescan(ctx, orgID, hostname, port any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWebPropertyRescan", reflect.TypeOf((*MockClient)(nil).CreateWebPropertyRescan), ctx, orgID, hostname, port)
+}
+
 // CredentialInfo mocks base method.
 func (m *MockClient) CredentialInfo() credential.Info {
 	m.ctrl.T.Helper()
@@ -312,6 +327,21 @@ func (m *MockClient) GetTagOperation(ctx context.Context, orgID mo.Option[string
 func (mr *MockClientMockRecorder) GetTagOperation(ctx, orgID, tagID, operationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTagOperation", reflect.TypeOf((*MockClient)(nil).GetTagOperation), ctx, orgID, tagID, operationID)
+}
+
+// GetTrackedScan mocks base method.
+func (m *MockClient) GetTrackedScan(ctx context.Context, orgID, scanID string) (censys.Result[components.TrackedScan], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrackedScan", ctx, orgID, scanID)
+	ret0, _ := ret[0].(censys.Result[components.TrackedScan])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetTrackedScan indicates an expected call of GetTrackedScan.
+func (mr *MockClientMockRecorder) GetTrackedScan(ctx, orgID, scanID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrackedScan", reflect.TypeOf((*MockClient)(nil).GetTrackedScan), ctx, orgID, scanID)
 }
 
 // GetUserCreditDetails mocks base method.
@@ -491,4 +521,19 @@ func (m *MockClient) UpdateTag(ctx context.Context, req censys.UpdateTagRequest)
 func (mr *MockClientMockRecorder) UpdateTag(ctx, req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTag", reflect.TypeOf((*MockClient)(nil).UpdateTag), ctx, req)
+}
+
+// WebPropertyTimeline mocks base method.
+func (m *MockClient) WebPropertyTimeline(ctx context.Context, orgID mo.Option[string], webPropertyID string, fromTime, toTime time.Time) (censys.Result[components.WebpropertyTimeline], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WebPropertyTimeline", ctx, orgID, webPropertyID, fromTime, toTime)
+	ret0, _ := ret[0].(censys.Result[components.WebpropertyTimeline])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// WebPropertyTimeline indicates an expected call of WebPropertyTimeline.
+func (mr *MockClientMockRecorder) WebPropertyTimeline(ctx, orgID, webPropertyID, fromTime, toTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WebPropertyTimeline", reflect.TypeOf((*MockClient)(nil).WebPropertyTimeline), ctx, orgID, webPropertyID, fromTime, toTime)
 }

@@ -59,6 +59,27 @@ type GlobalDataClient interface {
 		fromTime time.Time,
 		toTime time.Time,
 	) (Result[components.HostTimeline], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#getwebpropertytimeline
+	WebPropertyTimeline(
+		ctx context.Context,
+		orgID mo.Option[string],
+		webPropertyID string,
+		fromTime time.Time,
+		toTime time.Time,
+	) (Result[components.WebpropertyTimeline], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#createtrackedscan
+	CreateWebPropertyRescan(
+		ctx context.Context,
+		orgID string,
+		hostname string,
+		port int,
+	) (Result[components.TrackedScan], ClientError)
+	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#gettrackedscan
+	GetTrackedScan(
+		ctx context.Context,
+		orgID string,
+		scanID string,
+	) (Result[components.TrackedScan], ClientError)
 	// https://github.com/censys/censys-sdk-go/tree/main/docs/sdks/globaldata#gethostenrichment
 	EnrichHost(
 		ctx context.Context,
@@ -292,6 +313,106 @@ func (g *globalDataSDK) HostTimeline(
 	return Result[components.HostTimeline]{
 		Metadata: buildResponseMetadata(res, latency, attempts),
 		Data:     timeline,
+	}, nil
+}
+
+func (g *globalDataSDK) WebPropertyTimeline(
+	ctx context.Context,
+	orgID mo.Option[string],
+	webPropertyID string,
+	fromTime time.Time,
+	toTime time.Time,
+) (Result[components.WebpropertyTimeline], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataAssetWebpropertyTimelineResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		var err error
+		req := operations.V3GlobaldataAssetWebpropertyTimelineRequest{
+			OrganizationID: orgID.ToPointer(),
+			// url.PathEscape leaves ':' unescaped, which the API accepts although its
+			// spec shows %3A. Pre-escaping would double-encode it to %253A.
+			WebpropertyID: webPropertyID,
+			// inverted in the API, as with HostTimeline
+			StartTime: toTime,
+			EndTime:   fromTime,
+		}
+		res, err = g.censysSDK.client.GlobalData.GetWebPropertyTimeline(ctx, req)
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.WebpropertyTimeline]{}
+		return zero, err
+	}
+	timeline := res.GetResponseEnvelopeWebpropertyTimeline().GetResult()
+	return Result[components.WebpropertyTimeline]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     timeline,
+	}, nil
+}
+
+func (g *globalDataSDK) CreateWebPropertyRescan(
+	ctx context.Context,
+	orgID string,
+	hostname string,
+	port int,
+) (Result[components.TrackedScan], ClientError) {
+	// Not retried: a 5xx or transport error can follow an accepted, charged
+	// rescan, so a retry could charge twice.
+	start := time.Now()
+	res, err := g.censysSDK.client.GlobalData.CreateTrackedScan(ctx, operations.V3GlobaldataScansRescanRequest{
+		OrganizationID: &orgID,
+		ScansRescanInputBody: components.ScansRescanInputBody{
+			Target: components.CreateScansRescanInputBodyTargetTwo(components.Two{
+				WebOrigin: components.TargetWebOrigin{
+					Hostname: hostname,
+					Port:     port,
+				},
+			}),
+		},
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TrackedScan]{}
+		return zero, NewClientError(err)
+	}
+	scan := res.GetResponseEnvelopeTrackedScan().GetResult()
+	return Result[components.TrackedScan]{
+		Metadata: buildResponseMetadata(res, latency, 1),
+		Data:     scan,
+	}, nil
+}
+
+func (g *globalDataSDK) GetTrackedScan(
+	ctx context.Context,
+	orgID string,
+	scanID string,
+) (Result[components.TrackedScan], ClientError) {
+	start := time.Now()
+	var res *operations.V3GlobaldataScansGetResponse
+	err, attempts := g.executeWithRetry(ctx, func() ClientError {
+		var err error
+		res, err = g.censysSDK.client.GlobalData.GetTrackedScan(ctx, operations.V3GlobaldataScansGetRequest{
+			OrganizationID: &orgID,
+			ScanID:         scanID,
+		})
+		if err != nil {
+			return NewClientError(err)
+		}
+		return nil
+	})
+	latency := time.Since(start)
+	if err != nil {
+		zero := Result[components.TrackedScan]{}
+		return zero, err
+	}
+	scan := res.GetResponseEnvelopeTrackedScan().GetResult()
+	return Result[components.TrackedScan]{
+		Metadata: buildResponseMetadata(res, latency, attempts),
+		Data:     scan,
 	}, nil
 }
 
