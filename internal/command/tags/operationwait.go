@@ -7,13 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samber/mo"
-	"github.com/spf13/cobra"
-
 	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
-	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
 )
@@ -21,45 +17,6 @@ import (
 // defaultWaitTimeout bounds --wait so a stalled job cannot hang a script
 // indefinitely. The operation keeps running server-side either way.
 const defaultWaitTimeout = 30 * time.Minute
-
-// parseWaitFlags reads the --wait/--timeout pair every command that can follow an
-// operation shares. A zero timeout means "no limit", matching the global
-// --timeout-http, and a negative one is rejected rather than expiring before the
-// first poll.
-func parseWaitFlags(
-	cmd *cobra.Command,
-	waitFlag flags.BoolFlag,
-	timeoutFlag flags.HumanDurationFlag,
-) (bool, mo.Option[time.Duration], cenclierrors.CencliError) {
-	none := mo.None[time.Duration]()
-
-	wait, err := waitFlag.Value()
-	if err != nil {
-		return false, none, err
-	}
-
-	timeout, err := timeoutFlag.Value()
-	if err != nil {
-		return false, none, err
-	}
-
-	// A timeout only means something while polling; silently ignoring it would
-	// make the flag look like it worked.
-	if !wait && cmd.Flags().Changed("timeout") {
-		return false, none, NewTimeoutWithoutWaitError()
-	}
-
-	if timeout.IsPresent() {
-		switch d := timeout.MustGet(); {
-		case d < 0:
-			return false, none, NewInvalidWaitTimeoutError(d)
-		case d == 0:
-			timeout = none
-		}
-	}
-
-	return wait, timeout, nil
-}
 
 // waitForOperation polls an operation to completion behind a spinner. Shared by
 // every command that can wait on a bulk job.
