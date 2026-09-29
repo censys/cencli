@@ -10,6 +10,7 @@ import (
 
 	"github.com/censys/censys-sdk-go/models/components"
 
+	"github.com/censys/cencli/internal/app/dns"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
@@ -70,20 +71,47 @@ type recordRow struct {
 	priority *int64
 }
 
-// RenderShort renders the DNS lookup as a styled table (TTY-aware).
+// emptyMessage is shown in place of the table for an input with no records.
+const emptyMessage = "No DNS records found in this window. Widen it with --duration (e.g. -d 90d)."
+
+// RenderShort renders the DNS lookups as styled tables (TTY-aware). One input
+// prints its title, the window, and its table. Several inputs print the
+// window once, then one section (title and table) per input, in input order.
 func (c *Command) RenderShort() cenclierrors.CencliError {
 	window := styles.NewStyle(styles.ColorGray).Render(fmt.Sprintf("Active %s → %s UTC",
 		formatter.FormatShortTime(c.params.FromTime.UTC()), formatter.FormatShortTime(c.params.ToTime.UTC())))
 
-	rows := c.rows()
-	if len(rows) == 0 {
-		fmt.Fprintf(formatter.Stdout, "\n%s\n\nNo DNS records found in this window. Widen it with --duration (e.g. -d 90d).\n", window)
+	if len(c.inputs) == 1 {
+		c.renderSection(c.results[0], window)
 		return nil
 	}
-	sortRows(rows, c.ip.IsPresent(), c.timeline)
+	fmt.Fprintf(formatter.Stdout, "\n%s\n", window)
+	for _, result := range c.results {
+		c.renderSection(result, "")
+	}
+	fmt.Fprintf(formatter.Stdout, "\n")
+	return nil
+}
+
+// renderSection prints one input's title and table. A non-empty window is
+// printed under the title (the one-input layout), and that layout also keeps
+// the empty result to the window and the empty message.
+func (c *Command) renderSection(result fetched, window string) {
+	isIP := result.input.ip.IsPresent()
+	rows := rowsOf(result.records)
+	if len(rows) == 0 {
+		if window != "" {
+			fmt.Fprintf(formatter.Stdout, "\n%s\n\n%s\n", window, emptyMessage)
+			return
+		}
+		title := styles.GlobalStyles.Signature.Bold(true).Render(fmt.Sprintf("%s (0)", c.title(result.input)))
+		fmt.Fprintf(formatter.Stdout, "\n%s\n\n%s\n", title, emptyMessage)
+		return
+	}
+	sortRows(rows, isIP, c.timeline)
 
 	tbl := rawtable.New(
-		c.columns(),
+		c.columns(isIP),
 		rawtable.WithHeaderStyle[recordRow](styles.NewStyle(styles.ColorOffWhite).Bold(true)),
 		rawtable.WithStylesDisabled[recordRow](!formatter.StdoutIsTTY()),
 	)
@@ -91,51 +119,59 @@ func (c *Command) RenderShort() cenclierrors.CencliError {
 	// Surface the API's total when it exceeds what was fetched (e.g. paginated
 	// with --max-pages), so users know the listing is truncated.
 	count := fmt.Sprintf("%d", len(rows))
-	if c.result.total > int64(len(rows)) {
-		count = fmt.Sprintf("%d of %d", len(rows), c.result.total)
+	if result.total > int64(len(rows)) {
+		count = fmt.Sprintf("%d of %d", len(rows), result.total)
 		// Only advise --max-pages -1 when it is the reason the fetch stopped: a
 		// finite --max-pages was set (an absent value means -1, already fetching
 		// everything), and no later page failed (a partial error already explains
 		// the truncation, printed after the table).
-		if !c.Config().Quiet && c.params.MaxPages.IsPresent() && c.result.partialError == nil {
-			formatter.Println(formatter.Stderr, fmt.Sprintf("Showing %s records. Use --max-pages -1 to fetch all.", count))
+		if !c.Config().Quiet && c.params.MaxPages.IsPresent() && result.partialError == nil {
+			records := "records"
+			if len(c.inputs) > 1 {
+				records = "records for " + result.input.value
+			}
+			formatter.Println(formatter.Stderr, fmt.Sprintf("Showing %s %s. Use --max-pages -1 to fetch all.", count, records))
 		}
 	}
-	title := styles.GlobalStyles.Signature.Bold(true).Render(fmt.Sprintf("%s (%s)", c.title(), count))
-	fmt.Fprintf(formatter.Stdout, "\n%s\n%s\n\n", title, window)
+	title := styles.GlobalStyles.Signature.Bold(true).Render(fmt.Sprintf("%s (%s)", c.title(result.input), count))
+	if window != "" {
+		fmt.Fprintf(formatter.Stdout, "\n%s\n%s\n\n", title, window)
+		fmt.Fprint(formatter.Stdout, tbl.Render(rows))
+		fmt.Fprintf(formatter.Stdout, "\n")
+		return
+	}
+	fmt.Fprintf(formatter.Stdout, "\n%s\n\n", title)
 	fmt.Fprint(formatter.Stdout, tbl.Render(rows))
-	fmt.Fprintf(formatter.Stdout, "\n")
-	return nil
 }
 
-// rows converts the stored lookup result to table rows.
-func (c *Command) rows() []recordRow {
-	switch records := c.result.records.(type) {
-	case []*components.DNSResolutionRecord:
+// rowsOf converts one input's stored records to table rows.
+func rowsOf(records any) []recordRow {
+	switch records := records.(type) {
+	case []*dns.NameRecord:
 		return rowsFromNameRecords(records)
-	case []*components.DNSResolutionRangeRecord:
+	case []*dns.NameRangeRecord:
 		return rowsFromNameRanges(records)
-	case []*components.DNSIPResolutionRecord:
+	case []*dns.IPRecord:
 		return rowsFromIPRecords(records)
-	case []*components.DNSIPResolutionRangeRecord:
+	case []*dns.IPRangeRecord:
 		return rowsFromIPRanges(records)
 	default:
 		return nil
 	}
 }
 
-func (c *Command) title() string {
+func (c *Command) title(input lookupInput) string {
 	switch {
 	case c.timeline:
-		return fmt.Sprintf("DNS timeline for %s", c.input)
-	case c.ip.IsPresent():
-		return fmt.Sprintf("Domains resolving to %s", c.input)
+		return fmt.Sprintf("DNS timeline for %s", input.value)
+	case input.ip.IsPresent():
+		return fmt.Sprintf("Domains resolving to %s", input.value)
 	default:
-		return fmt.Sprintf("DNS records for %s", c.input)
+		return fmt.Sprintf("DNS records for %s", input.value)
 	}
 }
 
-func (c *Command) columns() []rawtable.Column[recordRow] {
+func (c *Command) columns(isIP bool) []rawtable.Column[recordRow] {
 	firstTitle, lastTitle := "First Seen", "Last Seen"
 	if c.timeline {
 		firstTitle, lastTitle = "First Observed", "Last Observed"
@@ -151,7 +187,7 @@ func (c *Command) columns() []rawtable.Column[recordRow] {
 		{Title: lastTitle, String: func(r recordRow) string { return formatter.FormatShortTime(r.Last.UTC()) }, Style: gray},
 	}
 
-	if c.ip.IsPresent() {
+	if isIP {
 		domainCol := rawtable.Column[recordRow]{
 			Title:  "Domain",
 			String: func(r recordRow) string { return sanitizeCell(r.Domain) },
@@ -237,7 +273,7 @@ func recordValue(recordType string, ip, mailServer, nameServer, mname, rname, va
 	}
 }
 
-func rowsFromNameRecords(records []*components.DNSResolutionRecord) []recordRow {
+func rowsFromNameRecords(records []*dns.NameRecord) []recordRow {
 	rows := make([]recordRow, 0, len(records))
 	for _, r := range records {
 		t := string(r.RecordType)
@@ -249,7 +285,7 @@ func rowsFromNameRecords(records []*components.DNSResolutionRecord) []recordRow 
 	return rows
 }
 
-func rowsFromNameRanges(records []*components.DNSResolutionRangeRecord) []recordRow {
+func rowsFromNameRanges(records []*dns.NameRangeRecord) []recordRow {
 	rows := make([]recordRow, 0, len(records))
 	for _, r := range records {
 		t := string(r.RecordType)
@@ -261,7 +297,7 @@ func rowsFromNameRanges(records []*components.DNSResolutionRangeRecord) []record
 	return rows
 }
 
-func rowsFromIPRecords(records []*components.DNSIPResolutionRecord) []recordRow {
+func rowsFromIPRecords(records []*dns.IPRecord) []recordRow {
 	rows := make([]recordRow, 0, len(records))
 	for _, r := range records {
 		rows = append(rows, recordRow{Domain: r.Domain, Type: string(r.RecordType), First: r.FirstSeen, Last: r.LastSeen})
@@ -269,7 +305,7 @@ func rowsFromIPRecords(records []*components.DNSIPResolutionRecord) []recordRow 
 	return rows
 }
 
-func rowsFromIPRanges(records []*components.DNSIPResolutionRangeRecord) []recordRow {
+func rowsFromIPRanges(records []*dns.IPRangeRecord) []recordRow {
 	rows := make([]recordRow, 0, len(records))
 	for _, r := range records {
 		rows = append(rows, recordRow{Domain: r.Domain, Type: string(r.RecordType), First: r.FirstSeen, Last: r.LastSeen})
