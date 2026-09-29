@@ -906,6 +906,90 @@ func TestDNSCommand_Short(t *testing.T) {
 	})
 }
 
+func TestDNSCommand_Template(t *testing.T) {
+	mx := int64(10)
+	runDNSTestCases(t, []dnsTestCase{
+		{
+			name: "success - name records render input, type, value, and seen dates",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
+					Meta: testMeta(),
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
+						{RecordType: components.DNSResolutionRecordRecordTypeA, IP: strPtr("104.18.10.84"), FirstSeen: testFrom, LastSeen: testTo},
+						{RecordType: components.DNSResolutionRecordRecordTypeMx, MailServer: strPtr("aspmx.l.google.com"), Priority: &mx, FirstSeen: testFrom, LastSeen: testTo},
+					}),
+					TotalRecords: 2,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com", "-O", "template"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "censys.com")
+				require.Contains(t, stdout, "[A]")
+				require.Contains(t, stdout, "Value: 104.18.10.84")
+				require.Contains(t, stdout, "[MX]")
+				require.Contains(t, stdout, "Value: 10 aspmx.l.google.com")
+				require.Contains(t, stdout, "First Seen: "+testFrom.Format(time.RFC3339))
+				require.Contains(t, stdout, "Last Seen: "+testTo.Format(time.RFC3339))
+			},
+		},
+		{
+			name: "success - ip records render input, type, domain, and seen dates",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().IPResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(ipResult("104.18.10.84", "censys.com"), nil)
+				return ms
+			},
+			args: withWindow("104.18.10.84", "-O", "template"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "104.18.10.84")
+				require.Contains(t, stdout, "[A]")
+				require.Contains(t, stdout, "Value: censys.com")
+				require.Contains(t, stdout, "First Seen: "+testFrom.Format(time.RFC3339))
+				require.Contains(t, stdout, "Last Seen: "+testTo.Format(time.RFC3339))
+			},
+		},
+		{
+			name: "success - name timeline records use first/last observed",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutionRanges(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionRangesResult{
+					Meta: testMeta(),
+					Records: wrapNameRanges("censys.com", []*components.DNSResolutionRangeRecord{
+						{RecordType: components.DNSResolutionRangeRecordRecordTypeA, IP: strPtr("1.1.1.1"), FirstObserved: testFrom, LastObserved: testTo},
+					}),
+					TotalRecords: 1,
+				}, nil)
+				return ms
+			},
+			args: withWindow("censys.com", "--timeline", "-O", "template"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "First Observed: "+testFrom.Format(time.RFC3339))
+				require.Contains(t, stdout, "Last Observed: "+testTo.Format(time.RFC3339))
+				require.NotContains(t, stdout, "First Seen:")
+			},
+		},
+		{
+			name: "success - no records renders nothing",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*dnsapp.NameRecord{}}, nil)
+				return ms
+			},
+			args: withWindow("censys.com", "-O", "template"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Empty(t, strings.TrimSpace(stdout))
+			},
+		},
+	})
+}
+
 // jsonInputs decodes a JSON array of records and returns each record's input.
 func jsonInputs(t *testing.T, stdout string) []string {
 	t.Helper()
