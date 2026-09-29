@@ -231,7 +231,7 @@ func (c *AssignCommand) parseModeFlags(cmd *cobra.Command, args []string) cencli
 		return err
 	}
 
-	c.wait, c.timeout, err = parseWaitFlags(cmd, c.flags.wait, c.flags.timeout)
+	c.wait, c.timeout, err = command.ParseWaitFlags(cmd, c.flags.wait, c.flags.timeout)
 	return err
 }
 

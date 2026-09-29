@@ -2,7 +2,6 @@ package tags
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/censys/cencli/internal/app/tags"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -16,38 +15,6 @@ const (
 	statusFailed       = "failed"
 	statusCancelled    = "cancelled"
 )
-
-// timeoutWithoutWaitError signals that --timeout was set without --wait, where
-// it would have no effect.
-type timeoutWithoutWaitError struct{}
-
-func NewTimeoutWithoutWaitError() cenclierrors.CencliError { return &timeoutWithoutWaitError{} }
-
-func (e *timeoutWithoutWaitError) Error() string {
-	return "--timeout only applies while polling; add --wait or drop --timeout"
-}
-
-func (e *timeoutWithoutWaitError) Title() string { return "Conflicting Flags" }
-
-func (e *timeoutWithoutWaitError) ShouldPrintUsage() bool { return true }
-
-// invalidWaitTimeoutError signals a negative --timeout, which would give up
-// before the first poll ever ran.
-type invalidWaitTimeoutError struct {
-	value time.Duration
-}
-
-func NewInvalidWaitTimeoutError(value time.Duration) cenclierrors.CencliError {
-	return &invalidWaitTimeoutError{value: value}
-}
-
-func (e *invalidWaitTimeoutError) Error() string {
-	return fmt.Sprintf("--timeout must not be negative (got %s); use 0 to wait without a time limit", e.value)
-}
-
-func (e *invalidWaitTimeoutError) Title() string { return "Invalid Timeout" }
-
-func (e *invalidWaitTimeoutError) ShouldPrintUsage() bool { return true }
 
 // assignModeConflictError signals that explicit assets and --query were given
 // together. Bulk is never inferred, so the two input modes cannot be mixed.
