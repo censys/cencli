@@ -56,6 +56,38 @@ func TestResolveTimeWindow(t *testing.T) {
 			wantErr:     true,
 			errContains: "invalid time window: end time must be after start time",
 		},
+		{
+			name:        "negative duration with neither endpoint",
+			startOpt:    mo.None[time.Time](),
+			endOpt:      mo.None[time.Time](),
+			duration:    mo.Some(-time.Hour),
+			wantErr:     true,
+			errContains: "duration must be greater than 0",
+		},
+		{
+			name:        "zero duration with start only",
+			startOpt:    mo.Some(start),
+			endOpt:      mo.None[time.Time](),
+			duration:    mo.Some[time.Duration](0),
+			wantErr:     true,
+			errContains: "duration must be greater than 0",
+		},
+		{
+			name:        "negative duration with end only",
+			startOpt:    mo.None[time.Time](),
+			endOpt:      mo.Some(end),
+			duration:    mo.Some(-time.Hour),
+			wantErr:     true,
+			errContains: "duration must be greater than 0",
+		},
+		{
+			name:      "negative duration with both start and end set",
+			startOpt:  mo.Some(start),
+			endOpt:    mo.Some(end),
+			duration:  mo.Some(-time.Hour),
+			wantStart: start,
+			wantEnd:   end,
+		},
 	}
 
 	for _, tt := range tests {

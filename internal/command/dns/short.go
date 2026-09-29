@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/censys/censys-sdk-go/models/components"
 
@@ -29,14 +30,23 @@ var recordTypeOrder = []string{
 // maxTXTWidth limits TXT values in the table; data output keeps the full value.
 const maxTXTWidth = 60
 
-// txtNewlineReplacer collapses newline, carriage return, and tab characters in
-// a TXT value to a single space, so an embedded control character cannot break
-// a table row onto multiple lines.
-var txtNewlineReplacer = strings.NewReplacer("\n", " ", "\r", " ", "\t", " ")
-
-// sanitizeTXTValue removes characters from a TXT value that would break the
-// table's one-row-per-record layout.
-func sanitizeTXTValue(v string) string { return txtNewlineReplacer.Replace(v) }
+// sanitizeCell removes characters from a table cell that would break the
+// table's one-row-per-record layout or reach the terminal unescaped: newline,
+// carriage return, and tab become a single space, and any other control
+// character (e.g. ESC 0x1b, BEL 0x07, or a C1 control such as U+009B) is
+// dropped.
+func sanitizeCell(v string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\n', '\r', '\t':
+			return ' '
+		}
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, v)
+}
 
 // truncateRunesEnd is formatter.TruncateEnd's byte-oriented truncation done by
 // rune instead, so a multi-byte character in a TXT value is never split.
@@ -144,14 +154,14 @@ func (c *Command) columns() []rawtable.Column[recordRow] {
 	if c.ip.IsPresent() {
 		domainCol := rawtable.Column[recordRow]{
 			Title:  "Domain",
-			String: func(r recordRow) string { return r.Domain },
+			String: func(r recordRow) string { return sanitizeCell(r.Domain) },
 			Style:  func(s string, _ recordRow) string { return styles.NewStyle(styles.ColorOffWhite).Render(s) },
 		}
 		return append([]rawtable.Column[recordRow]{domainCol, typeCol}, timeCols...)
 	}
 	valueCol := rawtable.Column[recordRow]{
 		Title:  "Value",
-		String: func(r recordRow) string { return r.Value },
+		String: func(r recordRow) string { return sanitizeCell(r.Value) },
 		Style:  func(s string, _ recordRow) string { return styles.NewStyle(styles.ColorOffWhite).Render(s) },
 	}
 	return append([]rawtable.Column[recordRow]{typeCol, valueCol}, timeCols...)
@@ -221,7 +231,7 @@ func recordValue(recordType string, ip, mailServer, nameServer, mname, rname, va
 		}
 		return *mname + " " + *rname
 	case "TXT":
-		return truncateRunesEnd(sanitizeTXTValue(deref(value)), maxTXTWidth)
+		return truncateRunesEnd(deref(value), maxTXTWidth)
 	default:
 		return ""
 	}
