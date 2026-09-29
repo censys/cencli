@@ -138,12 +138,12 @@ func TestHistoryCommand(t *testing.T) {
 					},
 				}
 
-				result := historyapp.WebPropertyHistoryResult{
+				result := historyapp.WebPropertySnapshotsResult{
 					Meta:      &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
 					Snapshots: snapshots,
 				}
 
-				ms.EXPECT().GetWebPropertyHistory(
+				ms.EXPECT().GetWebPropertySnapshots(
 					gomock.Any(),
 					mo.None[identifiers.OrganizationID](),
 					webPropID,
@@ -157,10 +157,50 @@ func TestHistoryCommand(t *testing.T) {
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.NoError(t, err)
 
-				var result historyapp.WebPropertyHistoryResult
-				jsonErr := json.Unmarshal([]byte(stdout), &result.Snapshots)
+				var snapshots []historyapp.WebPropertySnapshot
+				jsonErr := json.Unmarshal([]byte(stdout), &snapshots)
 				require.NoError(t, jsonErr)
-				require.Equal(t, 2, len(result.Snapshots))
+				require.Len(t, snapshots, 2)
+				require.True(t, snapshots[0].Exists)
+			},
+		},
+		{
+			name: "success - web property event history output",
+			historySvc: func(ctrl *gomock.Controller) historyapp.Service {
+				ms := historymocks.NewMockHistoryService(ctrl)
+				webPropID, _ := assets.NewWebPropertyID("example.com:443", assets.DefaultWebPropertyPort)
+
+				events := []*components.WebTimelineEvent{
+					{EventTime: strPtr("2025-01-02T10:00:00Z"), EndpointScanned: &components.EndpointScanned{}},
+					{EventTime: strPtr("2025-01-01T09:00:00Z"), JarmScanned: &components.JarmScanned{}},
+				}
+
+				result := historyapp.WebPropertyHistoryResult{
+					Meta:   &responsemeta.ResponseMeta{Method: "GET", URL: "https://127.0.0.1", Status: 200},
+					Events: events,
+				}
+
+				ms.EXPECT().GetWebPropertyHistory(
+					gomock.Any(),
+					mo.None[identifiers.OrganizationID](),
+					webPropID,
+					gomock.Any(),
+					gomock.Any(),
+				).Return(result, nil)
+
+				return ms
+			},
+			args: []string{"example.com:443", "--start", "2025-01-01T00:00:00Z", "--end", "2025-01-08T00:00:00Z", "--mode", "events"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+
+				var events []components.WebTimelineEvent
+				jsonErr := json.Unmarshal([]byte(stdout), &events)
+				require.NoError(t, jsonErr)
+				require.Len(t, events, 2)
+				require.Equal(t, "2025-01-02T10:00:00Z", *events[0].EventTime)
+				require.NotNil(t, events[0].EndpointScanned)
+				require.NotNil(t, events[1].JarmScanned)
 			},
 		},
 		{
@@ -380,6 +420,30 @@ func TestHistoryCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "error - invalid mode",
+			historySvc: func(ctrl *gomock.Controller) historyapp.Service {
+				return historymocks.NewMockHistoryService(ctrl)
+			},
+			args: []string{"example.com:443", "--mode", "daily"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), `invalid --mode "daily"`)
+				require.Equal(t, 2, formatter.ExitCode(err))
+			},
+		},
+		{
+			name: "error - mode on a host",
+			historySvc: func(ctrl *gomock.Controller) historyapp.Service {
+				return historymocks.NewMockHistoryService(ctrl)
+			},
+			args: []string{"8.8.8.8", "--mode", "events"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--mode only applies to web properties")
+				require.Equal(t, 2, formatter.ExitCode(err))
+			},
+		},
+		{
 			name: "help message",
 			historySvc: func(ctrl *gomock.Controller) historyapp.Service {
 				return historymocks.NewMockHistoryService(ctrl)
@@ -487,3 +551,5 @@ func newOrgLookupStore(ctrl *gomock.Controller) store.Store {
 		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
 	return ms
 }
+
+func strPtr(s string) *string { return &s }

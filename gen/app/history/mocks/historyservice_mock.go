@@ -90,3 +90,18 @@ func (mr *MockHistoryServiceMockRecorder) GetWebPropertyHistory(ctx, orgID, webP
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWebPropertyHistory", reflect.TypeOf((*MockHistoryService)(nil).GetWebPropertyHistory), ctx, orgID, webPropertyID, fromTime, toTime)
 }
+
+// GetWebPropertySnapshots mocks base method.
+func (m *MockHistoryService) GetWebPropertySnapshots(ctx context.Context, orgID mo.Option[identifiers.OrganizationID], webPropertyID assets.WebPropertyID, fromTime, toTime time.Time) (history.WebPropertySnapshotsResult, cenclierrors.CencliError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWebPropertySnapshots", ctx, orgID, webPropertyID, fromTime, toTime)
+	ret0, _ := ret[0].(history.WebPropertySnapshotsResult)
+	ret1, _ := ret[1].(cenclierrors.CencliError)
+	return ret0, ret1
+}
+
+// GetWebPropertySnapshots indicates an expected call of GetWebPropertySnapshots.
+func (mr *MockHistoryServiceMockRecorder) GetWebPropertySnapshots(ctx, orgID, webPropertyID, fromTime, toTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWebPropertySnapshots", reflect.TypeOf((*MockHistoryService)(nil).GetWebPropertySnapshots), ctx, orgID, webPropertyID, fromTime, toTime)
+}

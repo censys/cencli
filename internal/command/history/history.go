@@ -35,6 +35,7 @@ type Command struct {
 	start     time.Time
 	end       time.Time
 	orgID     mo.Option[identifiers.OrganizationID]
+	mode      string
 	// services
 	historySvc history.Service
 }
@@ -44,6 +45,7 @@ type historyCommandFlags struct {
 	end      flags.TimestampFlag
 	duration flags.HumanDurationFlag
 	orgID    flags.OrgIDFlag
+	mode     flags.StringFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -61,7 +63,9 @@ func (c *Command) Short() string {
 
 func (c *Command) Long() string {
 	return "Explore how hosts, web properties, and certificates have changed over time.\n\n" +
-		"Returns raw data showing events, observations, and snapshots for the specified time window.\n\n" +
+		"Returns timeline events for hosts, observation ranges for certificates, and daily snapshots for web properties, within the specified time window.\n\n" +
+		"For web properties, --mode events returns scan timeline events instead of daily snapshots. It requires web property event history to be enabled for your organization.\n\n" +
+		"Web property history consumes credits, and longer windows cost more.\n\n" +
 		"To retrieve certificate history, you must have access to the Threat Hunting module."
 }
 
@@ -71,6 +75,7 @@ func (c *Command) Examples() []string {
 		"example.com:443 --end 2025-05-31T00:00:00Z --duration 72d",
 		"56a06a23... --start 2025-01-01T00:00:00Z --end 2025-01-31T00:00:00Z",
 		"example.com:443 --duration 7d",
+		"example.com:443 --mode events --duration 30d",
 		"8.8.8.8 --duration 14d",
 	}
 }
@@ -81,6 +86,8 @@ func (c *Command) Init() error {
 	c.flags.end = flags.NewTimestampFlag(c.Flags(), false, "end", "e", mo.None[time.Time](), "end time")
 	c.flags.duration = flags.NewHumanDurationFlag(c.Flags(), false, "duration", "d", mo.Some(7*24*time.Hour), "time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d")
 	c.flags.orgID = flags.NewOrgIDFlag(c.Flags(), "")
+	c.flags.mode = flags.NewStringFlag(c.Flags(), false, "mode", "", modeSnapshots,
+		"web property history source: snapshots (one lookup per day) or events (scan timeline)")
 	return nil
 }
 
@@ -111,6 +118,11 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		return assets.NewTooManyAssetsError(c.assets.KnownAssetCount(), 1)
 	}
 	c.assetID = c.assets.KnownAssetIDs()[0]
+
+	c.mode, err = c.parseMode()
+	if err != nil {
+		return err
+	}
 
 	// resolve time window
 	startOpt, err := c.flags.start.Value(c.Config().DefaultTZ)
@@ -170,7 +182,7 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		logger,
 		fmt.Sprintf("Fetching history for %s...", c.assetID),
 		func(pctx context.Context) cenclierrors.CencliError {
-			// Service will report detailed progress during fetch (pagination, day-by-day, etc.)
+			// Service will report detailed progress during fetch (pagination, etc.)
 			var fetchErr cenclierrors.CencliError
 			switch c.assetType {
 			case assets.AssetTypeHost:
@@ -178,7 +190,11 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 			case assets.AssetTypeCertificate:
 				result, fetchErr = c.historySvc.GetCertificateHistory(pctx, c.orgID, c.assets.CertificateIDs()[0], c.start, c.end)
 			case assets.AssetTypeWebProperty:
-				result, fetchErr = c.historySvc.GetWebPropertyHistory(pctx, c.orgID, c.assets.WebPropertyIDs()[0], c.start, c.end)
+				if c.mode == modeEvents {
+					result, fetchErr = c.historySvc.GetWebPropertyHistory(pctx, c.orgID, c.assets.WebPropertyIDs()[0], c.start, c.end)
+				} else {
+					result, fetchErr = c.historySvc.GetWebPropertySnapshots(pctx, c.orgID, c.assets.WebPropertyIDs()[0], c.start, c.end)
+				}
 			default:
 				return cenclierrors.NewCencliError(fmt.Errorf("unsupported asset type: %s", c.assetType))
 			}
@@ -208,12 +224,20 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		}
 		partialError = certResult.PartialError
 	case assets.AssetTypeWebProperty:
-		webPropResult := result.(history.WebPropertyHistoryResult)
-		c.PrintAppResponseMeta(webPropResult.Meta)
-		if printErr := c.PrintData(c, webPropResult.Snapshots); printErr != nil {
-			return printErr
+		switch webPropResult := result.(type) {
+		case history.WebPropertyHistoryResult:
+			c.PrintAppResponseMeta(webPropResult.Meta)
+			if printErr := c.PrintData(c, webPropResult.Events); printErr != nil {
+				return printErr
+			}
+			partialError = webPropResult.PartialError
+		case history.WebPropertySnapshotsResult:
+			c.PrintAppResponseMeta(webPropResult.Meta)
+			if printErr := c.PrintData(c, webPropResult.Snapshots); printErr != nil {
+				return printErr
+			}
+			partialError = webPropResult.PartialError
 		}
-		partialError = webPropResult.PartialError
 	default:
 		return cenclierrors.NewCencliError(fmt.Errorf("unsupported asset type: %s", c.assetType))
 	}
@@ -281,4 +305,24 @@ func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {
 			),
 		),
 	}
+}
+
+const (
+	modeSnapshots = "snapshots"
+	modeEvents    = "events"
+)
+
+// parseMode reads --mode, which only applies to web properties.
+func (c *Command) parseMode() (string, cenclierrors.CencliError) {
+	mode, err := c.flags.mode.Value()
+	if err != nil {
+		return "", err
+	}
+	if mode != modeSnapshots && mode != modeEvents {
+		return "", newInvalidModeError(mode)
+	}
+	if c.Flags().Changed("mode") && c.assetType != assets.AssetTypeWebProperty {
+		return "", newModeNotApplicableError(c.assetType)
+	}
+	return mode, nil
 }
