@@ -10,9 +10,14 @@ The `history` command allows you to retrieve historical data for hosts, web prop
 
 ```bash
 $ censys history 8.8.8.8 --duration 30d # host history for last 30 days
-$ censys history example.com:443 --start 2025-01-01T00:00:00Z --duration 7d # web property history
+$ censys history example.com:443 --start 2025-01-01T00:00:00Z --duration 7d # web property history (daily snapshots)
+$ censys history example.com:443 --mode events --duration 30d # web property history (scan timeline events)
 $ censys history 3daf2843a77b6f4e6af43cd9b6f6746053b8c928e056e8a724808db8905a94cf --end 2025-05-31T00:00:00Z --duration 72d # certificate history
 ```
+
+## Credits
+
+Web property history consumes credits, and longer windows cost more, so keep `--duration` as short as the question needs. The default snapshot mode makes one request per day of the window. With `--mode events`, each page of up to 100 events is one request.
 
 ## Asset Type Detection
 
@@ -75,6 +80,20 @@ $ censys history 3daf28... --duration 90d
 - If `--end` is specified: window is from (end - duration) to end
 - If both `--start` and `--end` are specified: duration is ignored
 
+### `--mode`
+
+Choose where web property history comes from. Only applies to web properties: passing it with a host or certificate is an error.
+
+**Type:** `string`  
+**Default:** `snapshots`
+
+- `snapshots`: one snapshot of the web property per day in the window.
+- `events`: the scan timeline, one event per endpoint or JARM scan, with a diff against the previous scan. This requires web property event history to be enabled for your organization. If it is not, the command fails with `Feature Not Enabled` and exits 1.
+
+```bash
+$ censys history example.com:443 --mode events --duration 30d
+```
+
 ### `--org-id`
 
 Specify the organization ID to use for the request. This overrides the default organization ID from your configuration.
@@ -94,7 +113,7 @@ $ censys history 8.8.8.8 --org-id 00000000-0000-0000-0000-000000000001
 The `history` command defaults to **`json`** output format (or the global config value). Unlike other commands, history only supports structured data formats.
 
 **Default:** `json` (or configured global default)  
-**Supported formats:** `json`, `yaml`, `ndjson`, `tree`
+**Supported formats:** `json`, `yaml`, `tree`, plus NDJSON with `--streaming`
 
 **Note:** The `short` and `template` output formats are **not supported** for the history command due to the time-series nature of the data.
 
@@ -108,7 +127,7 @@ $ censys history 8.8.8.8 --duration 30d
 $ censys history 8.8.8.8 --duration 30d --output-format yaml
 
 # NDJSON output (one event per line)
-$ censys history 8.8.8.8 --duration 30d --output-format ndjson
+$ censys history 8.8.8.8 --duration 30d --streaming
 ```
 
 ## Output Format
@@ -160,14 +179,14 @@ Returns an array of observation ranges showing when and where the certificate wa
 
 ### Web Property History Output
 
-Returns an array of daily snapshots:
+By default, returns an array of daily snapshots:
 
 ```json
 [
   {
-    "Time": "2025-01-01T00:00:00Z",
-    "Exists": true,
-    "Data": {
+    "time": "2025-01-01T00:00:00Z",
+    "exists": true,
+    "data": {
       "hostname": "example.com",
       "port": 443,
       "endpoints": [...],
@@ -176,25 +195,41 @@ Returns an array of daily snapshots:
     }
   },
   {
-    "Time": "2025-01-02T00:00:00Z",
-    "Exists": true,
-    "Data": {...}
-  },
-  {
-    "Time": "2025-01-03T00:00:00Z",
-    "Exists": false,
-    "Data": null
+    "time": "2025-01-02T00:00:00Z",
+    "exists": false,
+    "data": null
   }
 ]
 ```
 
-**Note:** Web property snapshots include an `Exists` field indicating whether the property had meaningful data at that time. If `Exists` is `false`, the `Data` field will be `null`.
+**Note:** `exists` shows whether the property had meaningful data at that time. If `exists` is `false`, `data` is `null`.
+
+With `--mode events`, returns an array of timeline events, newest first. Each event is one endpoint or JARM scan of the web property, with the full scan and a field-by-field diff against the previous scan of the same kind:
+
+```json
+[
+  {
+    "event_time": "2025-01-16T08:22:10Z",
+    "endpoint_scanned": {
+      "scan": {"hostname": "example.com", "port": 443, "path": "/", "http": {...}, ...},
+      "diff": {"http.status_code": {...}, ...}
+    }
+  },
+  {
+    "event_time": "2025-01-15T12:34:56Z",
+    "jarm_scanned": {
+      "scan": {"fingerprint": "...", ...},
+      "diff": {...}
+    }
+  }
+]
+```
 
 ## Performance Notes
 
 Historical data fetching can be time-intensive, especially for:
-- **Web properties** with long time windows (fetches daily snapshots)
-- **Hosts** with many timeline events (requires pagination)
+- **Web properties** with long time windows (the default mode fetches one snapshot per day)
+- **Hosts** and web properties in `--mode events` with many timeline events (requires pagination)
 - **Certificates** with many observations across hosts
 
 The command has **no timeout** by default to accommodate long-running requests.

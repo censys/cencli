@@ -122,7 +122,7 @@ The `censeye` command allows you to perform a Censeye scan on a host. See the [c
 
 ### History
 
-This is a WIP. See the [history command docs](./docs/commands/HISTORY.md) for more details.
+See how a host, web property, or certificate has changed over time: timeline events for hosts, daily snapshots for web properties (or scan timeline events with `--mode events`), and observation ranges for certificates. See the [history command docs](./docs/commands/HISTORY.md) for more details.
 
 ### Tags
 
