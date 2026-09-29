@@ -37,7 +37,7 @@ Controls how data is formatted when printed to stdout:
 - **`yaml`** - Structured YAML output
 - **`tree`** - Hierarchical tree view of nested data structures
 - **`short`** - Human-readable formatted output (available on select commands like `aggregate`, `censeye`, `dns`, `search`, `view`)
-- **`template`** - Render using custom Handlebars templates (available on `search` and `view` commands)
+- **`template`** - Render using custom Handlebars templates (available on `search`, `view`, and `dns` commands)
 
 **Note:** Some commands default to `short` output instead of `json` to provide a better user experience. For example, the `aggregate`, `censeye`, and `dns` commands show formatted tables by default. You can always override this with `--output-format json` or another format.
 
@@ -228,6 +228,7 @@ Each template corresponds to a specific data type:
 | Certificate | `certificate.hbs` | `view` command (certificate assets) |
 | Web Property | `webproperty.hbs` | `view` command (web property assets) |
 | Search Result | `searchresult.hbs` | `search` command |
+| DNS | `dns.hbs` | `dns` command |
 
 You can customize templates by editing the files in your templates directory. The path to each template can also be overridden in `config.yaml`:
 
@@ -241,6 +242,8 @@ templates:
     path: /path/to/custom/webproperty.hbs
   searchresult:
     path: /path/to/custom/searchresult.hbs
+  dns:
+    path: /path/to/custom/dns.hbs
 ```
 
 See [the view command docs](commands/VIEW.md#templates) for more details on creating and customizing templates.
