@@ -148,3 +148,18 @@ func (mr *MockGlobalDataClientMockRecorder) Search(ctx, orgID, query, fields, pa
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockGlobalDataClient)(nil).Search), ctx, orgID, query, fields, pageSize, pageToken)
 }
+
+// WebPropertyTimeline mocks base method.
+func (m *MockGlobalDataClient) WebPropertyTimeline(ctx context.Context, orgID mo.Option[string], webPropertyID string, fromTime, toTime time.Time) (censys.Result[components.WebpropertyTimeline], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WebPropertyTimeline", ctx, orgID, webPropertyID, fromTime, toTime)
+	ret0, _ := ret[0].(censys.Result[components.WebpropertyTimeline])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// WebPropertyTimeline indicates an expected call of WebPropertyTimeline.
+func (mr *MockGlobalDataClientMockRecorder) WebPropertyTimeline(ctx, orgID, webPropertyID, fromTime, toTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WebPropertyTimeline", reflect.TypeOf((*MockGlobalDataClient)(nil).WebPropertyTimeline), ctx, orgID, webPropertyID, fromTime, toTime)
+}
