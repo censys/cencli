@@ -2,6 +2,9 @@ package history
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -25,175 +28,137 @@ func (s *historyService) GetWebPropertyHistory(
 	toTime time.Time,
 ) (WebPropertyHistoryResult, cenclierrors.CencliError) {
 	start := time.Now()
-	// convert orgID and webPropertyID
 	orgIDStr := utilconvert.OptionalString(orgID)
 	webPropIDStr := webPropertyID.String()
 
-	var allSnapshots []*WebPropertySnapshot
+	var allEvents []*components.WebTimelineEvent
 	var lastMeta *responsemeta.ResponseMeta
 	var firstError cenclierrors.CencliError
 
-	totalRequests := uint64(0)
+	currentToTime := toTime
 
-	// Calculate total days by truncating to date boundaries
-	// This ensures the count matches the actual loop iterations
-	fromDate := time.Date(fromTime.Year(), fromTime.Month(), fromTime.Day(), 0, 0, 0, 0, time.UTC)
-	toDate := time.Date(toTime.Year(), toTime.Month(), toTime.Day(), 0, 0, 0, 0, time.UTC)
-	totalDays := int(toDate.Sub(fromDate).Hours()/24) + 1
+	pages := uint64(0)
+	// The backend can return the same event twice, within a page or across
+	// pages, so events already seen on this page or the previous one are skipped.
+	var prevPageKeys map[string]struct{}
 
-	// Walk through each day in the time range
-	current := fromTime
-	for current.Before(toTime) || current.Equal(toTime) {
-		// Check for context cancellation
+	dateRange := fmt.Sprintf("%s to %s", fromTime.Format("2006-01-02T15:04:05Z"), toTime.Format("2006-01-02T15:04:05Z"))
+
+	for {
 		if err := ctx.Err(); err != nil {
 			contextErr := cenclierrors.ParseContextError(err)
 
 			// Return partial results with context error
-			if totalRequests > 0 || streaming.IsStreaming(ctx) {
-				latency := time.Since(start)
+			if pages > 0 || streaming.IsStreaming(ctx) {
 				if lastMeta != nil {
-					lastMeta.Latency = latency
-					lastMeta.PageCount = totalRequests
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = pages
 				}
 				return WebPropertyHistoryResult{
 					Meta:         lastMeta,
-					Snapshots:    allSnapshots,
+					Events:       allEvents,
 					PartialError: cenclierrors.ToPartialError(contextErr),
 				}, nil
 			}
 			return WebPropertyHistoryResult{}, contextErr
 		}
 
-		totalRequests++
-		// Update progress with day-by-day info showing current date and progress
-		currentDate := current.Format("2006-01-02")
-		progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching web property history for %s (day %d/%d: %s)...", webPropIDStr, totalRequests, totalDays, currentDate))
+		pages++
+		if pages == 1 {
+			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching web property timeline for %s (%s)...", webPropIDStr, dateRange))
+		} else {
+			currentRangeEnd := currentToTime.Format("2006-01-02T15:04:05Z")
+			progress.ReportMessage(ctx, progress.StageFetch, fmt.Sprintf("Fetching web property timeline for %s (page %d, scanning back to %s)...", webPropIDStr, pages, currentRangeEnd))
+		}
 
-		// fetch web property at this specific time
-		res, err := s.client.GetWebProperties(
-			ctx,
-			orgIDStr,
-			[]string{webPropIDStr},
-			mo.Some(current),
-		)
-
-		var snapshot *WebPropertySnapshot
+		res, err := s.client.WebPropertyTimeline(ctx, orgIDStr, webPropIDStr, fromTime, currentToTime)
 		if err != nil {
-			// If this is the first request, return the error immediately
-			if totalRequests == 1 {
+			if pages == 1 {
 				return WebPropertyHistoryResult{}, err
 			}
-			// Otherwise, record the error and return partial results
-			// Note: We don't break here because for web properties, errors often mean
-			// the property didn't exist at that time, so we continue to the next day
-			if firstError == nil {
-				firstError = err
-				// Report the first error so users are aware something went wrong
-				progress.ReportError(ctx, progress.StageFetch, err)
-			}
-			snapshot = &WebPropertySnapshot{
-				Time:   current,
-				Data:   nil,
-				Exists: false,
-			}
-		} else {
-			// store metadata from the last successful request
-			lastMeta = responsemeta.NewResponseMeta(res.Metadata.Request, res.Metadata.Response, res.Metadata.Latency, res.Metadata.Attempts)
-
-			// Check if we got any results
-			exists := false
-			var webProp *components.Webproperty
-			if res.Data != nil && len(*res.Data) > 0 {
-				webProp = &(*res.Data)[0]
-				// Check if the web property has meaningful data beyond hostname/port
-				exists = webPropertyHasMeaningfulData(webProp)
-			}
-
-			snapshot = &WebPropertySnapshot{
-				Time:   current,
-				Data:   webProp,
-				Exists: exists,
-			}
+			firstError = err
+			progress.ReportError(ctx, progress.StageFetch, err)
+			break
 		}
 
-		// Either stream or accumulate snapshot
-		var emitErr error
-		allSnapshots, emitErr = streaming.EmitOrCollect(ctx, snapshot, allSnapshots)
-		if emitErr != nil {
-			if lastMeta != nil {
-				lastMeta.Latency = time.Since(start)
-				lastMeta.PageCount = totalRequests
+		lastMeta = responsemeta.NewResponseMeta(res.Metadata.Request, res.Metadata.Response, res.Metadata.Latency, res.Metadata.Attempts)
+
+		events := res.Data.GetEvents()
+		pageKeys := make(map[string]struct{}, len(events))
+		for i := range events {
+			event := &events[i].Resource
+			key := webTimelineEventKey(event)
+			if _, seen := pageKeys[key]; seen {
+				continue
 			}
-			return WebPropertyHistoryResult{
-				Meta:         lastMeta,
-				Snapshots:    nil,
-				PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
-			}, nil
+			pageKeys[key] = struct{}{}
+			if _, seen := prevPageKeys[key]; seen {
+				continue
+			}
+			var emitErr error
+			allEvents, emitErr = streaming.EmitOrCollect(ctx, event, allEvents)
+			if emitErr != nil {
+				if lastMeta != nil {
+					lastMeta.Latency = time.Since(start)
+					lastMeta.PageCount = pages
+				}
+				return WebPropertyHistoryResult{
+					Meta:         lastMeta,
+					Events:       nil,
+					PartialError: cenclierrors.ToPartialError(cenclierrors.NewCencliError(emitErr)),
+				}, nil
+			}
+		}
+		if len(events) > 0 {
+			prevPageKeys = pageKeys
 		}
 
-		// Move to next day
-		current = current.AddDate(0, 0, 1)
+		// Neither a short nor an empty page ends pagination; only the cursor does.
+		scannedTo := res.Data.GetScannedTo()
+		if scannedTo.IsZero() || !scannedTo.After(fromTime) {
+			// zero time is the API's "exhausted" sentinel
+			break
+		}
+		if !scannedTo.Before(currentToTime) {
+			// the cursor did not move back; the next request would repeat this one
+			firstError = newTimelineStalledError(currentToTime)
+			break
+		}
+
+		currentToTime = scannedTo
 	}
 
-	// set correct values for latency and request count
-	latency := time.Since(start)
 	if lastMeta != nil {
-		lastMeta.Latency = latency
-		lastMeta.PageCount = totalRequests
+		lastMeta.Latency = time.Since(start)
+		lastMeta.PageCount = pages
 	}
-
 	return WebPropertyHistoryResult{
 		Meta:         lastMeta,
-		Snapshots:    allSnapshots,
-		PartialError: cenclierrors.ToPartialError(firstError),
+		Events:       allEvents,
+		PartialError: partialFromLoop(firstError),
 	}, nil
 }
 
-// webPropertyHasMeaningfulData returns true if the web property has any non-zero field
-// other than Hostname and Port, indicating it actually existed at that time
-func webPropertyHasMeaningfulData(webProp *components.Webproperty) bool {
-	if webProp == nil {
-		return false
+// partialFromLoop wraps a mid-pagination failure as partial data. A stalled
+// cursor is reported as is: it can happen before any event was returned.
+func partialFromLoop(err cenclierrors.CencliError) cenclierrors.PartialError {
+	if _, stalled := err.(*timelineStalledError); stalled {
+		return err
 	}
+	return cenclierrors.ToPartialError(err)
+}
 
-	// Check various fields that indicate the web property has actual data
-	// Beyond just hostname and port
-	if len(webProp.Endpoints) > 0 {
-		return true
+// webTimelineEventKey identifies an event for seam deduplication. An event that
+// cannot be marshalled gets a unique key, so it is always kept.
+func webTimelineEventKey(event *components.WebTimelineEvent) string {
+	eventTime := ""
+	if t := event.GetEventTime(); t != nil {
+		eventTime = *t
 	}
-	if webProp.Cert != nil {
-		return true
+	b, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Sprintf("%s|unhashable|%p", eventTime, event)
 	}
-	if webProp.TLS != nil {
-		return true
-	}
-	if webProp.Jarm != nil {
-		return true
-	}
-	if len(webProp.Software) > 0 {
-		return true
-	}
-	if len(webProp.Hardware) > 0 {
-		return true
-	}
-	if len(webProp.OperatingSystems) > 0 {
-		return true
-	}
-	if len(webProp.Vulns) > 0 {
-		return true
-	}
-	if len(webProp.Exposures) > 0 {
-		return true
-	}
-	if len(webProp.Misconfigs) > 0 {
-		return true
-	}
-	if len(webProp.Threats) > 0 {
-		return true
-	}
-	if len(webProp.Labels) > 0 {
-		return true
-	}
-
-	return false
+	sum := sha256.Sum256(b)
+	return eventTime + "|" + hex.EncodeToString(sum[:])
 }

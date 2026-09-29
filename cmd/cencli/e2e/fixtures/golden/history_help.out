@@ -1,7 +1,9 @@
 Explore how hosts, web properties, and certificates have changed over time.        
                                                                                    
-Returns raw data showing events, observations, and snapshots for the specified time
-window.                                                                            
+Returns timeline events for hosts and web properties, and observation ranges for   
+certificates, within the specified time window.                                    
+                                                                                   
+Web property history consumes credits; longer windows cost more.                   
                                                                                    
 To retrieve certificate history, you must have access to the Threat Hunting module.
 

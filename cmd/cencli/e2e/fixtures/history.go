@@ -21,39 +21,19 @@ var historyFixtures = []Fixture{
 		},
 	},
 	{
+		// The only live web property fixture, since the timeline costs credits.
+		// 30d: the property is scanned about weekly, so 7d can be empty.
 		Name:      "webproperty-basic",
-		Args:      []string{"platform.censys.io:80", "--duration", "2d"},
+		Args:      []string{"platform.censys.io:80", "--duration", "30d"},
 		ExitCode:  0,
-		Timeout:   12 * time.Second,
+		Timeout:   20 * time.Second,
 		NeedsAuth: true,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			assertHas200(t, stderr)
-			v := unmarshalJSONAny[[]struct {
-				Time   time.Time `json:"time"`
-				Data   any       `json:"data"`
-				Exists bool      `json:"exists"`
-			}](t, stdout)
-			assert.Greater(t, len(v), 1)
+			assertWebTimelineEvents(t, unmarshalJSONAny[[]webTimelineEvent](t, stdout))
 		},
 	},
 	// Output format tests
-	{
-		Name:      "output-json-default",
-		Args:      []string{"platform.censys.io:80", "--duration", "2d"},
-		ExitCode:  0,
-		Timeout:   12 * time.Second,
-		NeedsAuth: true,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
-			assertHas200(t, stderr)
-			// Verify default JSON output
-			v := unmarshalJSONAny[[]struct {
-				Time   time.Time `json:"time"`
-				Data   any       `json:"data"`
-				Exists bool      `json:"exists"`
-			}](t, stdout)
-			assert.Greater(t, len(v), 1)
-		},
-	},
 	{
 		Name:      "output-short-unsupported",
 		Args:      []string{"platform.censys.io:80", "--duration", "2d", "--output-format", "short"},
@@ -79,4 +59,19 @@ var historyFixtures = []Fixture{
 		},
 	},
 	// TODO: certificate and host history
+}
+
+type webTimelineEvent struct {
+	EventTime       string `json:"event_time"`
+	EndpointScanned any    `json:"endpoint_scanned"`
+	JarmScanned     any    `json:"jarm_scanned"`
+}
+
+func assertWebTimelineEvents(t *testing.T, events []webTimelineEvent) {
+	t.Helper()
+	assert.NotEmpty(t, events)
+	for _, e := range events {
+		assert.NotEmpty(t, e.EventTime)
+		assert.True(t, e.EndpointScanned != nil || e.JarmScanned != nil, "event carries no scan: %+v", e)
+	}
 }
