@@ -128,6 +128,10 @@ See how a host, web property, or certificate has changed over time: timeline eve
 
 The `tags` command lets you label and organize assets. You can manage tags themselves (`list`, `get`, `create`, `update`, `delete`), assign and unassign them on hosts, certificates, and web properties, and list what a tag is assigned to. Assets can be given as arguments, read from a file or STDIN, or selected in bulk by a CenQL query — bulk changes run as asynchronous jobs you can track, wait on, and cancel with `censys tags operations`. See the [tags command docs](./docs/commands/TAGS.md) for more details.
 
+### Scan
+
+The `scan` command requests a live rescan of a web property (`censys scan rescan example.com:443`, 10 credits per accepted request) and tracks scans until they complete (`censys scan get <scan-id> --wait`, free). Rescans require an organization and are never retried automatically. See the [scan command docs](./docs/commands/SCAN.md) for more details.
+
 ### Other Commands
 
 - `$ censys org`: manage and view organization details. See the [org command docs](./docs/commands/ORG.md) for more details.
