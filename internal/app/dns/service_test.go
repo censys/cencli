@@ -91,6 +91,7 @@ func TestNameResolutions(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, res.Records, 1)
 				require.Equal(t, "104.18.10.84", *res.Records[0].IP)
+				require.Equal(t, "censys.com", res.Records[0].Input)
 				require.Equal(t, int64(1), res.TotalRecords)
 				require.Nil(t, res.PartialError)
 				require.NotNil(t, res.Meta)
@@ -247,6 +248,7 @@ func TestNameResolutionRanges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Records, 1)
 	require.Equal(t, "v=spf1", *res.Records[0].Value)
+	require.Equal(t, "censys.com", res.Records[0].Input)
 }
 
 func TestIPResolutions(t *testing.T) {
@@ -269,6 +271,7 @@ func TestIPResolutions(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, res.Records, 1)
 		require.Equal(t, "censys.com", res.Records[0].Domain)
+		require.Equal(t, "104.18.10.84", res.Records[0].Input)
 	})
 
 	t.Run("error - MX is not valid for an ip", func(t *testing.T) {
@@ -304,6 +307,7 @@ func TestIPResolutionRanges(t *testing.T) {
 		res, err := New(mc).IPResolutionRanges(context.Background(), mustHost(t, "104.18.10.84"), p)
 		require.NoError(t, err)
 		require.Len(t, res.Records, 1)
+		require.Equal(t, "104.18.10.84", res.Records[0].Input)
 	})
 
 	t.Run("success - domain filter passes through to the client", func(t *testing.T) {
@@ -350,6 +354,9 @@ func TestNameResolutions_Streaming(t *testing.T) {
 		if item.Done {
 			break
 		}
+		record, ok := item.Data.(*NameRecord)
+		require.True(t, ok, "streaming emits the wrapped record")
+		require.Equal(t, "censys.com", record.Input)
 		count++
 	}
 	require.Equal(t, 2, count)

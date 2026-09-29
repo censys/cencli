@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -69,20 +72,56 @@ func hostID(t *testing.T, raw string) assets.HostID {
 	return h
 }
 
-func nameResult(ips ...string) dnsapp.NameResolutionsResult {
+// nameResult is a name lookup result for input with one A record per IP.
+func nameResult(input string, ips ...string) dnsapp.NameResolutionsResult {
 	records := make([]*components.DNSResolutionRecord, 0, len(ips))
 	for _, ip := range ips {
 		records = append(records, &components.DNSResolutionRecord{RecordType: components.DNSResolutionRecordRecordTypeA, IP: strPtr(ip), FirstSeen: testFrom, LastSeen: testTo})
 	}
-	return dnsapp.NameResolutionsResult{Meta: testMeta(), Records: records, TotalRecords: int64(len(ips))}
+	return dnsapp.NameResolutionsResult{Meta: testMeta(), Records: wrapName(input, records), TotalRecords: int64(len(ips))}
 }
 
-func ipResult(domains ...string) dnsapp.IPResolutionsResult {
+// ipResult is an IP lookup result for input with one A record per domain.
+func ipResult(input string, domains ...string) dnsapp.IPResolutionsResult {
 	records := make([]*components.DNSIPResolutionRecord, 0, len(domains))
 	for _, d := range domains {
 		records = append(records, &components.DNSIPResolutionRecord{Domain: d, RecordType: components.DNSIPResolutionRecordRecordTypeA, FirstSeen: testFrom, LastSeen: testTo})
 	}
-	return dnsapp.IPResolutionsResult{Meta: testMeta(), Records: records, TotalRecords: int64(len(domains))}
+	return dnsapp.IPResolutionsResult{Meta: testMeta(), Records: wrapIP(input, records), TotalRecords: int64(len(domains))}
+}
+
+// wrapName, wrapNameRanges, and wrapIP wrap SDK records with their input, as
+// the service does.
+func wrapName(input string, records []*components.DNSResolutionRecord) []*dnsapp.NameRecord {
+	out := make([]*dnsapp.NameRecord, 0, len(records))
+	for _, r := range records {
+		out = append(out, &dnsapp.NameRecord{Input: input, DNSResolutionRecord: r})
+	}
+	return out
+}
+
+func wrapNameRanges(input string, records []*components.DNSResolutionRangeRecord) []*dnsapp.NameRangeRecord {
+	out := make([]*dnsapp.NameRangeRecord, 0, len(records))
+	for _, r := range records {
+		out = append(out, &dnsapp.NameRangeRecord{Input: input, DNSResolutionRangeRecord: r})
+	}
+	return out
+}
+
+func wrapIP(input string, records []*components.DNSIPResolutionRecord) []*dnsapp.IPRecord {
+	out := make([]*dnsapp.IPRecord, 0, len(records))
+	for _, r := range records {
+		out = append(out, &dnsapp.IPRecord{Input: input, DNSIPResolutionRecord: r})
+	}
+	return out
+}
+
+// writeInputFile writes content to a temporary file and returns its path.
+func writeInputFile(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "inputs.txt")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
 }
 
 // withWindow appends the fixed test window to the given arguments.
@@ -95,8 +134,10 @@ type dnsTestCase struct {
 	dnsSvc func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service
 	// setup runs after config.New. Global flags (--streaming, --quiet) live on the
 	// real root command only, so tests set them through viper.
-	setup  func()
-	args   []string
+	setup func()
+	args  []string
+	// stdin feeds the command's input, for --input-file -.
+	stdin  string
 	assert func(t *testing.T, stdout, stderr string, err error)
 }
 
@@ -123,6 +164,9 @@ func runDNSTestCases(t *testing.T, testCases []dnsTestCase) {
 			require.NoError(t, err)
 
 			rootCmd.SetArgs(tc.args)
+			if tc.stdin != "" {
+				rootCmd.SetIn(bytes.NewBufferString(tc.stdin))
+			}
 			cmdErr := rootCmd.Execute()
 			tc.assert(t, stdout.String(), stderr.String(), cmdErr)
 		})
@@ -139,7 +183,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - name uses NameResolutions",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("104.18.10.84"), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com", "104.18.10.84"), nil)
 				return ms
 			},
 			args: withWindow("censys.com", "-O", "json"),
@@ -149,13 +193,14 @@ func TestDNSCommand(t *testing.T) {
 				require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 				require.Len(t, got, 1)
 				require.Equal(t, "104.18.10.84", got[0]["ip"])
+				require.Equal(t, "censys.com", got[0]["input"])
 			},
 		},
 		{
 			name: "success - ip uses IPResolutions",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "104.18.10.84"), defaultParams()).Return(ipResult("censys.com"), nil)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "104.18.10.84"), defaultParams()).Return(ipResult("104.18.10.84", "censys.com"), nil)
 				return ms
 			},
 			args: withWindow("104.18.10.84", "-O", "json"),
@@ -169,7 +214,7 @@ func TestDNSCommand(t *testing.T) {
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutionRanges(gomock.Any(), domainName(t, "censys.com"), defaultParams()).
-					Return(dnsapp.NameResolutionRangesResult{Meta: testMeta(), Records: []*components.DNSResolutionRangeRecord{}}, nil)
+					Return(dnsapp.NameResolutionRangesResult{Meta: testMeta(), Records: []*dnsapp.NameRangeRecord{}}, nil)
 				return ms
 			},
 			args:   withWindow("censys.com", "--timeline", "-O", "json"),
@@ -180,7 +225,7 @@ func TestDNSCommand(t *testing.T) {
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().IPResolutionRanges(gomock.Any(), hostID(t, "104.18.10.84"), defaultParams()).
-					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*components.DNSIPResolutionRangeRecord{}}, nil)
+					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*dnsapp.IPRangeRecord{}}, nil)
 				return ms
 			},
 			args:   withWindow("104.18.10.84", "-t", "-O", "json"),
@@ -190,7 +235,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - defanged ip is an ip",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult("8.8.8.8"), nil)
 				return ms
 			},
 			args:   withWindow("8.8.8[.]8", "-O", "json"),
@@ -200,7 +245,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - pasted url is a name",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("https://Censys.com/some/path", "-O", "json"),
@@ -210,7 +255,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - ip in a url is an ip",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult("8.8.8.8"), nil)
 				return ms
 			},
 			args:   withWindow("https://8.8.8.8/", "-O", "json"),
@@ -220,7 +265,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - defanged url with an ip is an ip",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "1.2.3.4"), defaultParams()).Return(ipResult(), nil)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "1.2.3.4"), defaultParams()).Return(ipResult("1.2.3.4"), nil)
 				return ms
 			},
 			args:   withWindow("hxxp://1.2.3[.]4/x", "-O", "json"),
@@ -230,7 +275,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - defanged name is a name",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("censys[.]com", "-O", "json"),
@@ -240,7 +285,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - a url with a numeric path is not mistaken for a cidr",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult("8.8.8.8"), nil)
 				return ms
 			},
 			args:   withWindow("https://8.8.8.8/32", "-O", "json"),
@@ -290,7 +335,7 @@ func TestDNSCommand(t *testing.T) {
 				p.RecordTypes = []string{"a", "mx"}
 				p.PageSize = mo.Some[uint64](50)
 				p.MaxPages = mo.Some[uint64](2)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), p).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), p).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("censys.com", "-r", "a,mx", "-n", "50", "-p", "2", "-O", "json"),
@@ -302,7 +347,7 @@ func TestDNSCommand(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				p := defaultParams()
 				p.MaxPages = mo.None[uint64]()
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), p).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), p).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args: withWindow("censys.com", "-p", "-1", "-O", "json"),
@@ -316,7 +361,7 @@ func TestDNSCommand(t *testing.T) {
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*components.DNSResolutionRecord{}}, nil)
+					Return(dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*dnsapp.NameRecord{}}, nil)
 				return ms
 			},
 			args: withWindow("censys.com", "-O", "json"),
@@ -331,10 +376,10 @@ func TestDNSCommand(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, _ assets.DomainName, _ dnsapp.Params) (dnsapp.NameResolutionsResult, cenclierrors.CencliError) {
-						for _, r := range nameResult("1.1.1.1", "2.2.2.2").Records {
+						for _, r := range nameResult("censys.com", "1.1.1.1", "2.2.2.2").Records {
 							require.NoError(t, streaming.Emit(ctx, r))
 						}
-						return dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*components.DNSResolutionRecord{}, TotalRecords: 2}, nil
+						return dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*dnsapp.NameRecord{}, TotalRecords: 2}, nil
 					})
 				return ms
 			},
@@ -345,6 +390,9 @@ func TestDNSCommand(t *testing.T) {
 				lines := strings.Split(strings.TrimSpace(stdout), "\n")
 				require.Len(t, lines, 2)
 				require.Contains(t, lines[0], `"1.1.1.1"`)
+				for _, line := range lines {
+					require.Contains(t, line, `"input":"censys.com"`)
+				}
 			},
 		},
 		{
@@ -367,37 +415,10 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 		{
-			name:   "error - a list is too many assets",
-			dnsSvc: noCalls,
-			args:   withWindow("a.com,b.com"),
-			assert: func(t *testing.T, _, _ string, err error) {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "2 assets provided, only 1 are supported")
-			},
-		},
-		{
-			name:   "error - an ip and a name list is rejected before any API call",
-			dnsSvc: noCalls,
-			args:   withWindow("8.8.8.8,example.com"),
-			assert: func(t *testing.T, _, _ string, err error) {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "2 assets provided, only 1 are supported")
-			},
-		},
-		{
-			name:   "error - a list of subdomains is rejected before any API call",
-			dnsSvc: noCalls,
-			args:   withWindow("www.censys.com,api.censys.com"),
-			assert: func(t *testing.T, _, _ string, err error) {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "2 assets provided, only 1 are supported")
-			},
-		},
-		{
 			name: "success - a url with a comma in its path is one input",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("https://censys.com/a,b", "-O", "json"),
@@ -407,7 +428,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - a defanged url with a comma is one input",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("hxxps://censys[.]com/a,b", "-O", "json"),
@@ -417,7 +438,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - a bracketed-scheme defanged name is a name",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("hxxps[://]censys[.]com", "-O", "json"),
@@ -427,7 +448,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - a bracketed-scheme url with a comma is one input",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult(), nil)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com"), nil)
 				return ms
 			},
 			args:   withWindow("hxxps[://]censys.com/a,b", "-O", "json"),
@@ -437,7 +458,7 @@ func TestDNSCommand(t *testing.T) {
 			name: "success - a bracketed-scheme defanged url with an ip is an ip",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult(), nil)
+				ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult("8.8.8.8"), nil)
 				return ms
 			},
 			args:   withWindow("hxxp[://]8.8.8[.]8/x", "-O", "json"),
@@ -467,7 +488,7 @@ func TestDNSCommand(t *testing.T) {
 			args:   []string{},
 			assert: func(t *testing.T, _, _ string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "accepts 1 arg(s), received 0")
+				require.Contains(t, err.Error(), "you must provide at least one asset")
 			},
 		},
 		{
@@ -490,7 +511,7 @@ func TestDNSCommand(t *testing.T) {
 				p := defaultParams()
 				p.Domain = mo.Some(domainName(t, "censys.com"))
 				ms.EXPECT().IPResolutionRanges(gomock.Any(), hostID(t, "104.18.10.84"), p).
-					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*components.DNSIPResolutionRangeRecord{}}, nil)
+					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*dnsapp.IPRangeRecord{}}, nil)
 				return ms
 			},
 			args:   withWindow("104.18.10.84", "--timeline", "--domain", "censys.com", "-O", "json"),
@@ -503,7 +524,7 @@ func TestDNSCommand(t *testing.T) {
 				p := defaultParams()
 				p.Domain = mo.Some(domainName(t, "censys.com"))
 				ms.EXPECT().IPResolutionRanges(gomock.Any(), hostID(t, "104.18.10.84"), p).
-					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*components.DNSIPResolutionRangeRecord{}}, nil)
+					Return(dnsapp.IPResolutionRangesResult{Meta: testMeta(), Records: []*dnsapp.IPRangeRecord{}}, nil)
 				return ms
 			},
 			args:   withWindow("104.18.10.84", "--timeline", "--domain", "censys[.]com", "-O", "json"),
@@ -546,6 +567,10 @@ func TestDNSCommand(t *testing.T) {
 				require.Contains(t, stdout, `"censys view <ip>"`)
 				require.Contains(t, stdout, "--timeline")
 				require.Contains(t, stdout, "141.193.213.10 --timeline --domain censys.com")
+				require.Contains(t, stdout, "dns <name|ip>...")
+				require.Contains(t, stdout, "censys.com,104.18.10.84")
+				require.Contains(t, stdout, "--input-file iocs.txt")
+				require.Contains(t, stdout, "--input-file - # read inputs from STDIN")
 			},
 		},
 	})
@@ -619,11 +644,11 @@ func TestDNSCommand_Short(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSResolutionRecord{
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
 						{RecordType: components.DNSResolutionRecordRecordTypeMx, MailServer: strPtr("aspmx.l.google.com"), Priority: &mx, FirstSeen: testFrom, LastSeen: testTo},
 						{RecordType: components.DNSResolutionRecordRecordTypeA, IP: strPtr("104.18.10.84"), FirstSeen: testFrom, LastSeen: testTo},
 						{RecordType: components.DNSResolutionRecordRecordTypeSoa, Mname: strPtr("ns1.example.net"), Rname: strPtr("dns.example.net"), FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 3,
 				}, nil)
 				return ms
@@ -648,13 +673,13 @@ func TestDNSCommand_Short(t *testing.T) {
 				ten, five := int64(10), int64(5)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSResolutionRecord{
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
 						{RecordType: components.DNSResolutionRecordRecordTypeMx, MailServer: strPtr("b.example"), Priority: &ten, FirstSeen: testFrom, LastSeen: testTo},
 						{RecordType: components.DNSResolutionRecordRecordTypeMx, MailServer: strPtr("a.example"), Priority: &five, FirstSeen: testFrom, LastSeen: testTo},
 						// A record type the SDK does not define yet; the table must still
 						// place it after every known type instead of first (slices.Index's -1).
 						{RecordType: components.DNSResolutionRecordRecordType("CAA"), FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 3,
 				}, nil)
 				return ms
@@ -675,10 +700,10 @@ func TestDNSCommand_Short(t *testing.T) {
 				older := testTo.Add(-48 * time.Hour)
 				ms.EXPECT().IPResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.IPResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSIPResolutionRecord{
+					Records: wrapIP("104.18.10.84", []*components.DNSIPResolutionRecord{
 						{Domain: "old.example.com", RecordType: components.DNSIPResolutionRecordRecordTypeA, FirstSeen: testFrom, LastSeen: older},
 						{Domain: "new.example.com", RecordType: components.DNSIPResolutionRecordRecordTypeA, FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 2,
 				}, nil)
 				return ms
@@ -699,10 +724,10 @@ func TestDNSCommand_Short(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutionRanges(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionRangesResult{
 					Meta: testMeta(),
-					Records: []*components.DNSResolutionRangeRecord{
+					Records: wrapNameRanges("censys.com", []*components.DNSResolutionRangeRecord{
 						{RecordType: components.DNSResolutionRangeRecordRecordTypeA, IP: strPtr("2.2.2.2"), FirstObserved: testFrom.Add(time.Hour), LastObserved: testTo},
 						{RecordType: components.DNSResolutionRangeRecordRecordTypeA, IP: strPtr("1.1.1.1"), FirstObserved: testFrom, LastObserved: testTo},
-					},
+					}),
 					TotalRecords: 2,
 				}, nil)
 				return ms
@@ -720,7 +745,7 @@ func TestDNSCommand_Short(t *testing.T) {
 			name: "success - truncated result shows the count and a note",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				r := nameResult("1.1.1.1", "2.2.2.2")
+				r := nameResult("censys.com", "1.1.1.1", "2.2.2.2")
 				r.TotalRecords = 5321
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(r, nil)
 				return ms
@@ -736,7 +761,7 @@ func TestDNSCommand_Short(t *testing.T) {
 			name: "success - no note when --max-pages -1 already fetched everything",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				r := nameResult("1.1.1.1", "2.2.2.2")
+				r := nameResult("censys.com", "1.1.1.1", "2.2.2.2")
 				r.TotalRecords = 5321
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(r, nil)
 				return ms
@@ -752,7 +777,7 @@ func TestDNSCommand_Short(t *testing.T) {
 			name: "success - no note when a partial error already explains the truncation",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				r := nameResult("1.1.1.1", "2.2.2.2")
+				r := nameResult("censys.com", "1.1.1.1", "2.2.2.2")
 				r.TotalRecords = 5321
 				r.PartialError = cenclierrors.ToPartialError(cenclierrors.NewCencliError(errors.New("page 2 failed")))
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(r, nil)
@@ -772,9 +797,9 @@ func TestDNSCommand_Short(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSResolutionRecord{
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
 						{RecordType: components.DNSResolutionRecordRecordTypeTxt, Value: strPtr("a\nb\tc\rd"), FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 1,
 				}, nil)
 				return ms
@@ -793,9 +818,9 @@ func TestDNSCommand_Short(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSResolutionRecord{
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
 						{RecordType: components.DNSResolutionRecordRecordTypeTxt, Value: strPtr("\x1b[31mred\x1b[0m"), FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 1,
 				}, nil)
 				return ms
@@ -813,9 +838,9 @@ func TestDNSCommand_Short(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.NameResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSResolutionRecord{
+					Records: wrapName("censys.com", []*components.DNSResolutionRecord{
 						{RecordType: components.DNSResolutionRecordRecordTypeTxt, Value: strPtr(strings.Repeat("\x1b", 60) + "hello"), FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 1,
 				}, nil)
 				return ms
@@ -833,9 +858,9 @@ func TestDNSCommand_Short(t *testing.T) {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().IPResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(dnsapp.IPResolutionsResult{
 					Meta: testMeta(),
-					Records: []*components.DNSIPResolutionRecord{
+					Records: wrapIP("104.18.10.84", []*components.DNSIPResolutionRecord{
 						{Domain: "\x1b]8;;http://x\x07", RecordType: components.DNSIPResolutionRecordRecordTypeA, FirstSeen: testFrom, LastSeen: testTo},
-					},
+					}),
 					TotalRecords: 1,
 				}, nil)
 				return ms
@@ -851,7 +876,7 @@ func TestDNSCommand_Short(t *testing.T) {
 			name: "success - truncation note is suppressed by --quiet",
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
-				r := nameResult("1.1.1.1")
+				r := nameResult("censys.com", "1.1.1.1")
 				r.TotalRecords = 10
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(r, nil)
 				return ms
@@ -868,7 +893,7 @@ func TestDNSCommand_Short(t *testing.T) {
 			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
 				ms := dnsmocks.NewMockDNSService(ctrl)
 				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*components.DNSResolutionRecord{}}, nil)
+					Return(dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*dnsapp.NameRecord{}}, nil)
 				return ms
 			},
 			args: withWindow("censys.com"),
@@ -876,6 +901,417 @@ func TestDNSCommand_Short(t *testing.T) {
 				require.NoError(t, err)
 				require.Contains(t, stdout, "Active 2026-09-21 00:00 → 2026-09-28 00:00 UTC")
 				require.Contains(t, stdout, "No DNS records found in this window. Widen it with --duration (e.g. -d 90d).")
+			},
+		},
+	})
+}
+
+// jsonInputs decodes a JSON array of records and returns each record's input.
+func jsonInputs(t *testing.T, stdout string) []string {
+	t.Helper()
+	var got []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	inputs := make([]string, 0, len(got))
+	for _, r := range got {
+		input, ok := r["input"].(string)
+		require.True(t, ok, "every record has an input")
+		inputs = append(inputs, input)
+	}
+	return inputs
+}
+
+// apiError is a hard (first-page) lookup error that is not a 403.
+func apiError(msg string) cenclierrors.CencliError {
+	return cenclierrors.NewCencliError(errors.New(msg))
+}
+
+func TestDNSCommand_MultipleInputs(t *testing.T) {
+	twoLines := writeInputFile(t, "a.com\nb.com,104.18.10.84\n")
+	tooMany := make([]string, 0, maxInputs+1)
+	for i := 0; i <= maxInputs; i++ {
+		tooMany = append(tooMany, fmt.Sprintf("host%d.example.com", i))
+	}
+
+	runDNSTestCases(t, []dnsTestCase{
+		{
+			name: "success - a comma list looks up each name in order",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), defaultParams()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), defaultParams()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"a.com", "b.com"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			name: "success - a list mixes name and ip lookups",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), defaultParams()).Return(nameResult("censys.com", "104.18.10.84"), nil),
+					ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "104.18.10.84"), defaultParams()).Return(ipResult("104.18.10.84", "censys.com"), nil),
+				)
+				return ms
+			},
+			args: withWindow("censys.com,104.18.10.84", "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"censys.com", "104.18.10.84"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			name: "success - several positional arguments",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), defaultParams()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), defaultParams()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com", "b.com", "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"a.com", "b.com"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			name: "success - --input-file reads one input or a comma list per line",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), defaultParams()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), defaultParams()).Return(nameResult("b.com", "2.2.2.2"), nil),
+					ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "104.18.10.84"), defaultParams()).Return(ipResult("104.18.10.84", "censys.com"), nil),
+				)
+				return ms
+			},
+			args: withWindow("--input-file", twoLines, "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"a.com", "b.com", "104.18.10.84"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			name: "success - --input-file overrides the positional arguments",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), defaultParams()).Return(nameResult("a.com"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), defaultParams()).Return(nameResult("b.com"), nil),
+					ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "104.18.10.84"), defaultParams()).Return(ipResult("104.18.10.84"), nil),
+				)
+				return ms
+			},
+			args:   withWindow("ignored.com", "-i", twoLines, "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) { require.NoError(t, err) },
+		},
+		{
+			name: "success - --input-file - reads inputs from stdin",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), defaultParams()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "8.8.8.8"), defaultParams()).Return(ipResult("8.8.8.8", "dns.google"), nil),
+				)
+				return ms
+			},
+			stdin: "a.com\n8.8.8[.]8\n",
+			args:  withWindow("-i", "-", "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"a.com", "8.8.8.8"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			name: "success - duplicate inputs are looked up once",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), defaultParams()).Return(nameResult("a.com", "1.1.1.1"), nil)
+				return ms
+			},
+			args: withWindow("a.com,a.com", "a[.]com", "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"a.com"}, jsonInputs(t, stdout))
+			},
+		},
+		{
+			name:   "error - more than the maximum inputs is too many assets",
+			dnsSvc: noCalls,
+			args:   withWindow(strings.Join(tooMany, ",")),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "101 assets provided, only 100 are supported")
+			},
+		},
+		{
+			name:   "error - only blank inputs is no assets",
+			dnsSvc: noCalls,
+			args:   withWindow(" , "),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "you must provide at least one asset")
+			},
+		},
+		{
+			name:   "error - an invalid input among valid ones is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("censys.com,a..b.com"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "invalid asset ID: a..b.com")
+				require.Contains(t, err.Error(), "empty label")
+			},
+		},
+		{
+			name:   "error - an MX filter with an ip in the list is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("censys.com,104.18.10.84", "-r", "MX"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "invalid record type 'MX'")
+			},
+		},
+		{
+			name:   "error - --domain with a name in the list is rejected before any API call",
+			dnsSvc: noCalls,
+			args:   withWindow("104.18.10.84,censys.com", "--timeline", "--domain", "x.com"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--domain applies only to an IP lookup with --timeline")
+			},
+		},
+		{
+			name: "success - one input's error does not stop the others",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, apiError("upstream failed")),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"b.com"}, jsonInputs(t, stdout))
+				require.Contains(t, stderr, "a.com: upstream failed")
+			},
+		},
+		{
+			name: "error - every input failing returns the first error",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, apiError("first failed")),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, apiError("second failed")),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, _, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "a.com: first failed")
+				require.Contains(t, stderr, "b.com: second failed")
+			},
+		},
+		{
+			name: "error - a 403 stops the remaining lookups",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, dnsapp.NewAccessDeniedError())
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "Search and Core plans")
+			},
+		},
+		{
+			name: "success - a 403 after a success still stops the remaining lookups",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, dnsapp.NewAccessDeniedError()),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com,c.com", "-O", "json"),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "Search and Core plans")
+			},
+		},
+		{
+			name: "success - a partial error for one input is printed with the others' data",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				partial := nameResult("a.com", "1.1.1.1")
+				partial.PartialError = cenclierrors.ToPartialError(apiError("page 2 failed"))
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(partial, nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, []string{"a.com", "b.com"}, jsonInputs(t, stdout))
+				require.Contains(t, stderr, "page 2 failed")
+			},
+		},
+		{
+			name: "success - no data for any input prints an empty JSON list",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(nameResult("a.com"), nil).Times(2)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "json"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Equal(t, "[]", strings.TrimSpace(stdout))
+			},
+		},
+		{
+			name: "success - yaml records carry their input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(nameResult("a.com", "1.1.1.1"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-O", "yaml"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "input: a.com")
+				require.Contains(t, stdout, "input: b.com")
+			},
+		},
+		{
+			name: "success - streaming emits every input's records with their input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				emit := func(input string) func(context.Context, assets.DomainName, dnsapp.Params) (dnsapp.NameResolutionsResult, cenclierrors.CencliError) {
+					return func(ctx context.Context, _ assets.DomainName, _ dnsapp.Params) (dnsapp.NameResolutionsResult, cenclierrors.CencliError) {
+						for _, r := range nameResult(input, "1.1.1.1").Records {
+							require.NoError(t, streaming.Emit(ctx, r))
+						}
+						return dnsapp.NameResolutionsResult{Meta: testMeta(), Records: []*dnsapp.NameRecord{}, TotalRecords: 1}, nil
+					}
+				}
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).DoAndReturn(emit("a.com")),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).DoAndReturn(emit("b.com")),
+				)
+				return ms
+			},
+			setup: func() { viper.Set("streaming", true) },
+			args:  withWindow("a.com,b.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				lines := strings.Split(strings.TrimSpace(stdout), "\n")
+				require.Len(t, lines, 2)
+				require.Contains(t, lines[0], `"input":"a.com"`)
+				require.Contains(t, lines[1], `"input":"b.com"`)
+			},
+		},
+		{
+			name: "success - max pages -1 warning names the input count",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), gomock.Any(), gomock.Any()).Return(nameResult("a.com"), nil).Times(2)
+				return ms
+			},
+			args: withWindow("a.com,b.com", "-p", "-1", "-O", "json"),
+			assert: func(t *testing.T, _, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stderr, "fetching all pages (--max-pages=-1) for each of 2 inputs")
+			},
+		},
+	})
+}
+
+func TestDNSCommand_ShortMultipleInputs(t *testing.T) {
+	runDNSTestCases(t, []dnsTestCase{
+		{
+			name: "success - one section per input, window once",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "censys.com"), gomock.Any()).Return(nameResult("censys.com", "104.18.10.84"), nil),
+					ms.EXPECT().IPResolutions(gomock.Any(), hostID(t, "104.18.10.84"), gomock.Any()).Return(ipResult("104.18.10.84", "censys.com"), nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "empty.example.com"), gomock.Any()).Return(nameResult("empty.example.com"), nil),
+				)
+				return ms
+			},
+			args: withWindow("censys.com,104.18.10.84,empty.example.com"),
+			assert: func(t *testing.T, stdout, _ string, err error) {
+				require.NoError(t, err)
+				lines := fields(stdout)
+				require.Equal(t, []string{"Active", "2026-09-21", "00:00", "→", "2026-09-28", "00:00", "UTC"}, lines[0])
+				require.Equal(t, []string{"DNS", "records", "for", "censys.com", "(1)"}, lines[1])
+				require.Equal(t, []string{"Type", "Value", "First", "Seen", "Last", "Seen"}, lines[2])
+				require.Equal(t, []string{"A", "104.18.10.84", "2026-09-21", "00:00", "2026-09-28", "00:00"}, lines[3])
+				require.Equal(t, []string{"Domains", "resolving", "to", "104.18.10.84", "(1)"}, lines[4])
+				require.Equal(t, []string{"Domain", "Type", "First", "Seen", "Last", "Seen"}, lines[5])
+				require.Equal(t, "censys.com", lines[6][0])
+				require.Equal(t, []string{"DNS", "records", "for", "empty.example.com", "(0)"}, lines[7])
+				require.Equal(t, "No", lines[8][0])
+				require.Len(t, lines, 9)
+				require.Equal(t, 1, strings.Count(stdout, "Active 2026-09-21"), "the window is printed once")
+				require.Contains(t, stdout, "No DNS records found in this window. Widen it with --duration (e.g. -d 90d).")
+				require.Contains(t, stdout, "\n\nDomains resolving to 104.18.10.84 (1)", "sections are separated by a blank line")
+			},
+		},
+		{
+			name: "success - the truncation note names the input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				truncated := nameResult("a.com", "1.1.1.1")
+				truncated.TotalRecords = 50
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(truncated, nil),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com"),
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, stdout, "DNS records for a.com (1 of 50)")
+				require.Contains(t, stderr, "Showing 1 of 50 records for a.com. Use --max-pages -1 to fetch all.")
+				require.Equal(t, 1, strings.Count(stderr, "Showing"))
+			},
+		},
+		{
+			name: "success - a failed input has no section",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				gomock.InOrder(
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).Return(dnsapp.NameResolutionsResult{}, apiError("upstream failed")),
+					ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "b.com"), gomock.Any()).Return(nameResult("b.com", "2.2.2.2"), nil),
+				)
+				return ms
+			},
+			args: withWindow("a.com,b.com"),
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.NoError(t, err)
+				require.NotContains(t, stdout, "a.com")
+				require.Contains(t, stdout, "DNS records for b.com (1)")
+				require.Contains(t, stderr, "a.com: upstream failed")
 			},
 		},
 	})

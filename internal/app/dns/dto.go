@@ -1,6 +1,8 @@
 package dns
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/samber/mo"
@@ -32,7 +34,7 @@ type Params struct {
 // NameResolutionsResult holds one aggregated row per record of a name.
 type NameResolutionsResult struct {
 	Meta         *responsemeta.ResponseMeta
-	Records      []*components.DNSResolutionRecord
+	Records      []*NameRecord
 	TotalRecords int64
 	// PartialError contains any error encountered after the first successful page.
 	// When present, the result contains partial data and the error should be reported to the user.
@@ -42,7 +44,7 @@ type NameResolutionsResult struct {
 // NameResolutionRangesResult holds one row per observed time range of a name's records.
 type NameResolutionRangesResult struct {
 	Meta         *responsemeta.ResponseMeta
-	Records      []*components.DNSResolutionRangeRecord
+	Records      []*NameRangeRecord
 	TotalRecords int64
 	// PartialError contains any error encountered after the first successful page.
 	// When present, the result contains partial data and the error should be reported to the user.
@@ -52,7 +54,7 @@ type NameResolutionRangesResult struct {
 // IPResolutionsResult holds one aggregated row per domain that resolved to an IP.
 type IPResolutionsResult struct {
 	Meta         *responsemeta.ResponseMeta
-	Records      []*components.DNSIPResolutionRecord
+	Records      []*IPRecord
 	TotalRecords int64
 	// PartialError contains any error encountered after the first successful page.
 	// When present, the result contains partial data and the error should be reported to the user.
@@ -62,9 +64,76 @@ type IPResolutionsResult struct {
 // IPResolutionRangesResult holds one row per observed time range of the domains that resolved to an IP.
 type IPResolutionRangesResult struct {
 	Meta         *responsemeta.ResponseMeta
-	Records      []*components.DNSIPResolutionRangeRecord
+	Records      []*IPRangeRecord
 	TotalRecords int64
 	// PartialError contains any error encountered after the first successful page.
 	// When present, the result contains partial data and the error should be reported to the user.
 	PartialError cenclierrors.CencliError
+}
+
+// NameRecord is one name lookup record with the input (the normalized name)
+// it answers. Input is encoded next to the SDK record's fields, so records
+// from several inputs stay distinguishable in one output list.
+type NameRecord struct {
+	Input string `json:"input"`
+	*components.DNSResolutionRecord
+}
+
+func (r NameRecord) MarshalJSON() ([]byte, error) {
+	return marshalWithInput(r.Input, r.DNSResolutionRecord)
+}
+
+// NameRangeRecord is one name timeline record with the input it answers.
+type NameRangeRecord struct {
+	Input string `json:"input"`
+	*components.DNSResolutionRangeRecord
+}
+
+func (r NameRangeRecord) MarshalJSON() ([]byte, error) {
+	return marshalWithInput(r.Input, r.DNSResolutionRangeRecord)
+}
+
+// IPRecord is one IP lookup record with the input (the normalized IP) it answers.
+type IPRecord struct {
+	Input string `json:"input"`
+	*components.DNSIPResolutionRecord
+}
+
+func (r IPRecord) MarshalJSON() ([]byte, error) {
+	return marshalWithInput(r.Input, r.DNSIPResolutionRecord)
+}
+
+// IPRangeRecord is one IP timeline record with the input it answers.
+type IPRangeRecord struct {
+	Input string `json:"input"`
+	*components.DNSIPResolutionRangeRecord
+}
+
+func (r IPRangeRecord) MarshalJSON() ([]byte, error) {
+	return marshalWithInput(r.Input, r.DNSIPResolutionRangeRecord)
+}
+
+// marshalWithInput encodes record as one JSON object with "input" first,
+// followed by the record's own fields. The SDK record types define
+// MarshalJSON, and a struct that embeds one inherits that method, so without
+// this encoding/json would call the inherited method and drop Input.
+func marshalWithInput(input string, record any) ([]byte, error) {
+	encodedInput, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
+	}
+	body, err := json.Marshal(record)
+	if err != nil {
+		return nil, err
+	}
+	out := append([]byte(`{"input":`), encodedInput...)
+	switch {
+	case string(body) == "null" || string(body) == "{}":
+		return append(out, '}'), nil
+	case len(body) < 2 || body[0] != '{':
+		return nil, fmt.Errorf("dns record for %s is not a JSON object", input)
+	default:
+		out = append(out, ',')
+		return append(out, body[1:]...), nil
+	}
 }

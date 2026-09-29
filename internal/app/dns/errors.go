@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -44,6 +45,14 @@ func (e *accessDeniedError) Error() string {
 func (e *accessDeniedError) Title() string { return "Active DNS Not Available" }
 
 func (e *accessDeniedError) ShouldPrintUsage() bool { return false }
+
+// IsAccessDeniedError reports whether err is the error for a 403 from the DNS
+// endpoints. The plan restriction applies to every lookup, so a caller that
+// runs several lookups can stop at the first one.
+func IsAccessDeniedError(err error) bool {
+	var target *accessDeniedError
+	return errors.As(err, &target)
+}
 
 // invalidPaginationParamsError signals pagination values that would fetch
 // nothing.

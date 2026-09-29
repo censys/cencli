@@ -46,8 +46,11 @@ func (s *dnsService) NameResolutions(ctx context.Context, name assets.DomainName
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSNameResolutionBoundResponse], client.ClientError) {
 			return s.client.ListDNSNameResolutionBounds(ctx, orgID, name.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
 		},
-		func(r *components.DNSNameResolutionBoundResponse) pagination.PageData[*components.DNSResolutionRecord] {
-			return pagination.PageData[*components.DNSResolutionRecord]{Items: pointers(r.Records), TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
+		func(r *components.DNSNameResolutionBoundResponse) pagination.PageData[*NameRecord] {
+			items := wrapRecords(r.Records, func(rec *components.DNSResolutionRecord) *NameRecord {
+				return &NameRecord{Input: name.String(), DNSResolutionRecord: rec}
+			})
+			return pagination.PageData[*NameRecord]{Items: items, TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
 		},
 	)
 	if err != nil {
@@ -62,8 +65,11 @@ func (s *dnsService) NameResolutionRanges(ctx context.Context, name assets.Domai
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSNameResolutionRangeResponse], client.ClientError) {
 			return s.client.ListDNSNameResolutionRanges(ctx, orgID, name.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
 		},
-		func(r *components.DNSNameResolutionRangeResponse) pagination.PageData[*components.DNSResolutionRangeRecord] {
-			return pagination.PageData[*components.DNSResolutionRangeRecord]{Items: pointers(r.Records), TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
+		func(r *components.DNSNameResolutionRangeResponse) pagination.PageData[*NameRangeRecord] {
+			items := wrapRecords(r.Records, func(rec *components.DNSResolutionRangeRecord) *NameRangeRecord {
+				return &NameRangeRecord{Input: name.String(), DNSResolutionRangeRecord: rec}
+			})
+			return pagination.PageData[*NameRangeRecord]{Items: items, TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
 		},
 	)
 	if err != nil {
@@ -78,8 +84,11 @@ func (s *dnsService) IPResolutions(ctx context.Context, ip assets.HostID, params
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSIPResolutionBoundResponse], client.ClientError) {
 			return s.client.ListDNSIPResolutionBounds(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
 		},
-		func(r *components.DNSIPResolutionBoundResponse) pagination.PageData[*components.DNSIPResolutionRecord] {
-			return pagination.PageData[*components.DNSIPResolutionRecord]{Items: pointers(r.Records), TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
+		func(r *components.DNSIPResolutionBoundResponse) pagination.PageData[*IPRecord] {
+			items := wrapRecords(r.Records, func(rec *components.DNSIPResolutionRecord) *IPRecord {
+				return &IPRecord{Input: ip.String(), DNSIPResolutionRecord: rec}
+			})
+			return pagination.PageData[*IPRecord]{Items: items, TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
 		},
 	)
 	if err != nil {
@@ -94,8 +103,11 @@ func (s *dnsService) IPResolutionRanges(ctx context.Context, ip assets.HostID, p
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSIPResolutionRangeResponse], client.ClientError) {
 			return s.client.ListDNSIPResolutionRanges(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, utilconvert.OptionalString(params.Domain), optionalInt64(params.PageSize), pageToken)
 		},
-		func(r *components.DNSIPResolutionRangeResponse) pagination.PageData[*components.DNSIPResolutionRangeRecord] {
-			return pagination.PageData[*components.DNSIPResolutionRangeRecord]{Items: pointers(r.Records), TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
+		func(r *components.DNSIPResolutionRangeResponse) pagination.PageData[*IPRangeRecord] {
+			items := wrapRecords(r.Records, func(rec *components.DNSIPResolutionRangeRecord) *IPRangeRecord {
+				return &IPRangeRecord{Input: ip.String(), DNSIPResolutionRangeRecord: rec}
+			})
+			return pagination.PageData[*IPRangeRecord]{Items: items, TotalSize: r.TotalRecords, NextPageToken: r.NextPageToken}
 		},
 	)
 	if err != nil {
@@ -160,12 +172,13 @@ func optionalInt64(v mo.Option[uint64]) mo.Option[int64] {
 	return mo.None[int64]()
 }
 
-// pointers returns a pointer to each element, so records can be streamed and
-// printed without copying.
-func pointers[T any](items []T) []*T {
-	out := make([]*T, len(items))
+// wrapRecords wraps each record with the lookup's input. wrap receives a
+// pointer to each element, so records can be streamed and printed without
+// copying.
+func wrapRecords[T, W any](items []T, wrap func(*T) *W) []*W {
+	out := make([]*W, len(items))
 	for i := range items {
-		out[i] = &items[i]
+		out[i] = wrap(&items[i])
 	}
 	return out
 }

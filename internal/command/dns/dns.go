@@ -3,7 +3,9 @@ package dns
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,6 +32,10 @@ const (
 	minPageSize     = 1
 	maxPageSize     = 100
 	defaultMaxPages = 10
+
+	// maxInputs caps the inputs of one command. The API has no bulk lookup,
+	// so each input is its own lookup, run one after another.
+	maxInputs = 100
 )
 
 // Command implements the `dns` CLI command.
@@ -38,18 +44,24 @@ type Command struct {
 	// flags
 	flags dnsCommandFlags
 	// state populated during PreRun
-	input    string // normalized name or IP, for titles and logs
-	ip       mo.Option[assets.HostID]
-	name     mo.Option[assets.DomainName]
+	inputs   []lookupInput
 	timeline bool
 	params   dns.Params
-	// result stored for rendering
-	result fetched
+	// results stored for rendering: one per input whose lookup succeeded, in input order
+	results []fetched
 	// services
 	dnsSvc dns.Service
 }
 
+// lookupInput is one parsed input. Exactly one of ip and name is set.
+type lookupInput struct {
+	value string // normalized name or IP, for titles, logs, and de-duplication
+	ip    mo.Option[assets.HostID]
+	name  mo.Option[assets.DomainName]
+}
+
 type dnsCommandFlags struct {
+	inputFile   flags.FileFlag
 	start       flags.TimestampFlag
 	end         flags.TimestampFlag
 	duration    flags.HumanDurationFlag
@@ -68,7 +80,7 @@ func NewDNSCommand(ctx *command.Context) *Command {
 	return &Command{BaseCommand: command.NewBaseCommand(ctx)}
 }
 
-func (c *Command) Use() string { return fmt.Sprintf("%s <name|ip>", cmdName) }
+func (c *Command) Use() string { return fmt.Sprintf("%s <name|ip>...", cmdName) }
 
 func (c *Command) Short() string {
 	return "Look up Active DNS records for domain names and IP addresses"
@@ -92,11 +104,15 @@ func (c *Command) Examples() []string {
 		"104.18.10.84",
 		"104.18.10.84 --start 2026-06-01T00:00:00Z --duration 30d",
 		"141.193.213.10 --timeline --domain censys.com",
+		"censys.com,104.18.10.84",
+		"--input-file iocs.txt",
+		"--input-file -  # read inputs from STDIN",
 		"censys.com --output-format json",
 	}
 }
 
 func (c *Command) Init() error {
+	c.flags.inputFile = flags.NewFileFlag(c.Flags(), false, "input-file", "i", "file to read the assets from. Overrides the positional argument.")
 	c.flags.start = flags.NewTimestampFlag(c.Flags(), false, "start", "s", mo.None[time.Time](), "start time")
 	c.flags.end = flags.NewTimestampFlag(c.Flags(), false, "end", "e", mo.None[time.Time](), "end time")
 	c.flags.duration = flags.NewHumanDurationFlag(c.Flags(), false, "duration", "d", mo.Some(7*24*time.Hour), "time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d")
@@ -127,7 +143,9 @@ func (c *Command) Init() error {
 	return nil
 }
 
-func (c *Command) Args() command.PositionalArgs { return command.ExactArgs(1) }
+// Args accepts any number of positional arguments: gatherInputs enforces at
+// least one input (from the arguments or --input-file) and at most maxInputs.
+func (c *Command) Args() command.PositionalArgs { return command.MinimumNArgs(0) }
 
 func (c *Command) DefaultOutputType() command.OutputType {
 	return command.OutputTypeShort
@@ -142,9 +160,11 @@ func (c *Command) SupportsStreaming() bool {
 }
 
 func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	if err := c.parseInput(args[0]); err != nil {
+	inputs, err := c.gatherInputs(cmd, args)
+	if err != nil {
 		return err
 	}
+	c.inputs = inputs
 
 	recordTypes, err := c.flags.recordTypes.Value()
 	if err != nil {
@@ -152,9 +172,17 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	}
 	// Validate --record-type before any service (and so the API client) is
 	// needed, so an invalid value is reported even with no client configured.
+	// Each lookup direction present in the inputs must support every value.
 	// The service validates again for callers that invoke it directly.
-	if err := dns.ValidateRecordTypes(recordTypes, c.ip.IsPresent()); err != nil {
-		return err
+	if c.hasInput(false) {
+		if err := dns.ValidateRecordTypes(recordTypes, false); err != nil {
+			return err
+		}
+	}
+	if c.hasInput(true) {
+		if err := dns.ValidateRecordTypes(recordTypes, true); err != nil {
+			return err
+		}
 	}
 
 	// resolve time window
@@ -221,12 +249,48 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	return nil
 }
 
-// parseInput detects the lookup direction: an IP address looks up the names
-// that resolved to it; anything else must be a domain name. It does not use
-// assets.AssetClassifier, which has no domain-name type and reads a bare name
-// as a web property on port 443.
-func (c *Command) parseInput(raw string) cenclierrors.CencliError {
-	value := raw
+// gatherInputs reads the inputs from --input-file (which overrides the
+// positional arguments, as in view) or the positional arguments, splits comma
+// lists, and parses each input. It fails on the first invalid input, before
+// any lookup runs, and de-duplicates by the normalized input, keeping the
+// first occurrence's position.
+func (c *Command) gatherInputs(cmd *cobra.Command, args []string) ([]lookupInput, cenclierrors.CencliError) {
+	raws := args
+	if c.flags.inputFile.IsSet() {
+		lines, err := c.flags.inputFile.Lines(cmd)
+		if err != nil {
+			return nil, err
+		}
+		raws = lines
+	}
+
+	var inputs []lookupInput
+	seen := make(map[string]bool)
+	for _, raw := range raws {
+		for _, value := range splitInput(raw) {
+			input, err := parseInput(value)
+			if err != nil {
+				return nil, err
+			}
+			if seen[input.value] {
+				continue
+			}
+			seen[input.value] = true
+			inputs = append(inputs, input)
+		}
+	}
+
+	switch {
+	case len(inputs) == 0:
+		return nil, assets.NewNoAssetsError()
+	case len(inputs) > maxInputs:
+		return nil, assets.NewTooManyAssetsError(len(inputs), maxInputs)
+	}
+	return inputs, nil
+}
+
+// splitInput splits one argument or file line into its comma-separated inputs.
+func splitInput(raw string) []string {
 	// A pasted URL (defanged or not) may contain a comma in its path or query
 	// (e.g. "https://censys.com/a,b"), which is not a list of assets. Detect
 	// that case on the raw argument: a scheme, defanged or not, always leaves
@@ -235,44 +299,42 @@ func (c *Command) parseInput(raw string) cenclierrors.CencliError {
 	// raw argument (instead of refang.RefangURL's output) matters because
 	// RefangURL prepends "http://" to some bare inputs, which would make a
 	// list like "8.8.8.8,example.com" look like a URL and skip the split.
-	if !strings.Contains(raw, "//") {
-		values := cmdutil.SplitString(raw)
-		switch len(values) {
-		case 0:
-			return assets.NewNoAssetsError()
-		case 1:
-		default:
-			return assets.NewTooManyAssetsError(len(values), 1)
-		}
-		value = values[0]
+	if strings.Contains(raw, "//") {
+		return []string{raw}
 	}
+	return cmdutil.SplitString(raw)
+}
 
+// parseInput detects the lookup direction: an IP address looks up the names
+// that resolved to it; anything else must be a domain name. It does not use
+// assets.AssetClassifier, which has no domain-name type and reads a bare name
+// as a web property on port 443.
+func parseInput(value string) (lookupInput, cenclierrors.CencliError) {
 	if isCIDR(value) {
-		return assets.NewInvalidAssetIDError(value, "a CIDR range is not supported; give one IP address")
+		return lookupInput{}, assets.NewInvalidAssetIDError(value, "a CIDR range is not supported; give one IP address")
 	}
 
 	if ip, err := assets.NewHostID(value); err == nil {
-		c.ip = mo.Some(ip)
-		c.input = ip.String()
-		return nil
+		return lookupInput{value: ip.String(), ip: mo.Some(ip)}, nil
 	}
 	name, err := assets.NewDomainName(value)
 	if err != nil {
 		// Keep the reason: it tells the user how to fix the input ("remove the port").
-		return assets.NewInvalidAssetIDError(value, err.Error())
+		return lookupInput{}, assets.NewInvalidAssetIDError(value, err.Error())
 	}
 	// A pasted URL whose host is an IP (e.g. https://8.8.8.8/) parses as a domain
 	// name here, because NewDomainName strips the scheme and path and does not
 	// itself reject IP-shaped input. Recover the IP direction so it is not
 	// misrouted to the name lookup.
 	if ip, err := assets.NewHostID(name.String()); err == nil {
-		c.ip = mo.Some(ip)
-		c.input = ip.String()
-		return nil
+		return lookupInput{value: ip.String(), ip: mo.Some(ip)}, nil
 	}
-	c.name = mo.Some(name)
-	c.input = name.String()
-	return nil
+	return lookupInput{value: name.String(), name: mo.Some(name)}, nil
+}
+
+// hasInput reports whether any input is an IP (isIP) or a name (!isIP).
+func (c *Command) hasInput(isIP bool) bool {
+	return slices.ContainsFunc(c.inputs, func(in lookupInput) bool { return in.ip.IsPresent() == isIP })
 }
 
 // isCIDR reports whether raw is a bare CIDR range ("<ip>/<prefix-length>"),
@@ -302,9 +364,10 @@ func isCIDR(raw string) bool {
 	return net.ParseIP(strings.TrimSpace(refang.RefangIP(ipPart))) != nil
 }
 
-// parseDomainFlag reads --domain. It only applies to an IP lookup with
+// parseDomainFlag reads --domain. It only applies to IP lookups with
 // --timeline (the API supports the filter only on IP ranges), so any other
-// use is a usage error before a service (and so the API client) is needed.
+// use, including a name among the inputs, is a usage error before a service
+// (and so the API client) is needed.
 // The value is parsed with assets.NewDomainName, so defanged input normalizes
 // and an invalid name is rejected with the usual Invalid Asset ID error.
 func (c *Command) parseDomainFlag() (mo.Option[assets.DomainName], cenclierrors.CencliError) {
@@ -315,7 +378,7 @@ func (c *Command) parseDomainFlag() (mo.Option[assets.DomainName], cenclierrors.
 	if raw == "" {
 		return mo.None[assets.DomainName](), nil
 	}
-	if c.name.IsPresent() || !c.timeline {
+	if c.hasInput(false) || !c.timeline {
 		return mo.None[assets.DomainName](), NewDomainFlagMisuseError()
 	}
 	domain, derr := assets.NewDomainName(raw)
@@ -356,10 +419,12 @@ func (c *Command) parsePaginationFlags() (mo.Option[uint64], mo.Option[uint64], 
 	return pageSize, maxPages, nil
 }
 
-// fetched is what Run and RenderShort need from any of the four lookups.
+// fetched is what Run and RenderShort need from one input's lookup, for any
+// of the four lookups.
 type fetched struct {
-	meta *responsemeta.ResponseMeta
-	// records holds one of the four SDK record slices (see RenderShort).
+	input lookupInput
+	meta  *responsemeta.ResponseMeta
+	// records holds one of the four wrapped record slices (see RenderShort).
 	records      any
 	total        int64
 	partialError cenclierrors.CencliError
@@ -367,7 +432,7 @@ type fetched struct {
 
 func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	logger := c.Logger(cmdName).With(
-		"input", c.input,
+		"inputs", len(c.inputs),
 		"timeline", c.timeline,
 		"start", c.params.FromTime.Format(time.RFC3339),
 		"end", c.params.ToTime.Format(time.RFC3339),
@@ -375,8 +440,12 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 
 	// Warn before fetching all pages; copied from search, which owns the same warning.
 	if !c.Config().Quiet && !c.params.MaxPages.IsPresent() {
-		msg := styles.GlobalStyles.Warning.Render(
-			"Warning: fetching all pages (--max-pages=-1). This may take a while and increase API usage.")
+		scope := ""
+		if len(c.inputs) > 1 {
+			scope = fmt.Sprintf(" for each of %d inputs", len(c.inputs))
+		}
+		msg := styles.GlobalStyles.Warning.Render(fmt.Sprintf(
+			"Warning: fetching all pages (--max-pages=-1)%s. This may take a while and increase API usage.", scope))
 		formatter.Println(formatter.Stderr, msg)
 		logger.Debug("fetching all pages", "message", msg)
 	}
@@ -385,61 +454,132 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
 	defer stopStreaming(nil)
 
-	err := c.WithProgress(
-		ctx,
-		logger,
-		fmt.Sprintf("Fetching DNS records for %s...", c.input),
-		func(pctx context.Context) cenclierrors.CencliError {
-			var fetchErr cenclierrors.CencliError
-			c.result, fetchErr = c.fetch(pctx)
-			return fetchErr
-		},
-	)
-	if err != nil {
-		logger.Debug("dns fetch failed", "error", err)
-		return err
+	// Look up each input in turn. A failed input does not stop the others; its
+	// error is printed after the output.
+	var failures []cenclierrors.CencliError
+	for i, input := range c.inputs {
+		result, err := c.fetchWithProgress(ctx, logger, input, i)
+		if err != nil {
+			logger.Debug("dns fetch failed", "input", input.value, "error", err)
+			// A plan restriction fails every lookup the same way, so stop here.
+			if dns.IsAccessDeniedError(err) {
+				return err
+			}
+			failures = append(failures, c.withInput(input, err))
+			// After an interrupt, every remaining lookup would fail the same way.
+			if ctx.Err() != nil {
+				break
+			}
+			continue
+		}
+		c.PrintAppResponseMeta(result.meta)
+		c.results = append(c.results, result)
 	}
 
-	// Print response metadata and output (PrintData handles streaming vs buffered automatically)
-	c.PrintAppResponseMeta(c.result.meta)
-	if printErr := c.PrintData(c, c.result.records); printErr != nil {
+	if len(c.results) == 0 {
+		for _, failure := range failures[1:] {
+			formatter.PrintError(failure, cmd)
+		}
+		return failures[0]
+	}
+
+	// PrintData handles streaming vs buffered automatically
+	if printErr := c.PrintData(c, c.data()); printErr != nil {
 		return printErr
 	}
+	// Flush any streamed records, so the errors below follow all of the output.
+	stopStreaming(nil)
 
-	// If there was a partial error, print it to stderr after rendering the data
-	if c.result.partialError != nil {
-		formatter.PrintError(c.result.partialError, cmd)
+	// Print partial errors (a later page failed) and failed inputs to stderr after the data
+	for _, result := range c.results {
+		if result.partialError != nil {
+			formatter.PrintError(c.withInput(result.input, result.partialError), cmd)
+		}
+	}
+	for _, failure := range failures {
+		formatter.PrintError(failure, cmd)
 	}
 	return nil
 }
 
-// fetch calls the lookup that matches the input direction and --timeline.
-func (c *Command) fetch(ctx context.Context) (fetched, cenclierrors.CencliError) {
+// fetchWithProgress looks up one input, showing its progress; i is the
+// input's index in c.inputs.
+func (c *Command) fetchWithProgress(ctx context.Context, logger *slog.Logger, input lookupInput, i int) (fetched, cenclierrors.CencliError) {
+	msg := fmt.Sprintf("Fetching DNS records for %s...", input.value)
+	if len(c.inputs) > 1 {
+		msg = fmt.Sprintf("Fetching DNS records for %s (%d/%d)...", input.value, i+1, len(c.inputs))
+	}
+	var result fetched
+	err := c.WithProgress(ctx, logger, msg, func(pctx context.Context) cenclierrors.CencliError {
+		var fetchErr cenclierrors.CencliError
+		result, fetchErr = c.fetch(pctx, input)
+		return fetchErr
+	})
+	return result, err
+}
+
+// withInput names the input in err when the command has several inputs, so
+// the user can tell which one failed. With one input, err is unchanged.
+func (c *Command) withInput(input lookupInput, err cenclierrors.CencliError) cenclierrors.CencliError {
+	if len(c.inputs) == 1 {
+		return err
+	}
+	return newInputError(input.value, err)
+}
+
+// data returns every input's records as one list, in input order. It is never
+// nil, so JSON output prints [] (not null) when there are no records.
+func (c *Command) data() []any {
+	data := []any{}
+	for _, result := range c.results {
+		switch records := result.records.(type) {
+		case []*dns.NameRecord:
+			data = appendAll(data, records)
+		case []*dns.NameRangeRecord:
+			data = appendAll(data, records)
+		case []*dns.IPRecord:
+			data = appendAll(data, records)
+		case []*dns.IPRangeRecord:
+			data = appendAll(data, records)
+		}
+	}
+	return data
+}
+
+func appendAll[T any](dst []any, items []T) []any {
+	for _, item := range items {
+		dst = append(dst, item)
+	}
+	return dst
+}
+
+// fetch calls the lookup that matches the input's direction and --timeline.
+func (c *Command) fetch(ctx context.Context, input lookupInput) (fetched, cenclierrors.CencliError) {
 	switch {
-	case c.ip.IsPresent() && c.timeline:
-		r, err := c.dnsSvc.IPResolutionRanges(ctx, c.ip.MustGet(), c.params)
+	case input.ip.IsPresent() && c.timeline:
+		r, err := c.dnsSvc.IPResolutionRanges(ctx, input.ip.MustGet(), c.params)
 		if err != nil {
 			return fetched{}, err
 		}
-		return fetched{meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
-	case c.ip.IsPresent():
-		r, err := c.dnsSvc.IPResolutions(ctx, c.ip.MustGet(), c.params)
+		return fetched{input: input, meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
+	case input.ip.IsPresent():
+		r, err := c.dnsSvc.IPResolutions(ctx, input.ip.MustGet(), c.params)
 		if err != nil {
 			return fetched{}, err
 		}
-		return fetched{meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
+		return fetched{input: input, meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
 	case c.timeline:
-		r, err := c.dnsSvc.NameResolutionRanges(ctx, c.name.MustGet(), c.params)
+		r, err := c.dnsSvc.NameResolutionRanges(ctx, input.name.MustGet(), c.params)
 		if err != nil {
 			return fetched{}, err
 		}
-		return fetched{meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
+		return fetched{input: input, meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
 	default:
-		r, err := c.dnsSvc.NameResolutions(ctx, c.name.MustGet(), c.params)
+		r, err := c.dnsSvc.NameResolutions(ctx, input.name.MustGet(), c.params)
 		if err != nil {
 			return fetched{}, err
 		}
-		return fetched{meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
+		return fetched{input: input, meta: r.Meta, records: r.Records, total: r.TotalRecords, partialError: r.PartialError}, nil
 	}
 }
 

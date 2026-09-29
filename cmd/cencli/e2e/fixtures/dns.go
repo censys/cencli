@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -79,8 +80,8 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
-		Name:      "list-name-name",
-		Args:      []string{"a.com,b.com"},
+		Name:      "reject-too-many-inputs",
+		Args:      []string{tooManyDNSInputs()},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
@@ -88,46 +89,21 @@ var dnsFixtures = []Fixture{
 			lines := strings.Split(string(stderr), "\n")
 			assert.Greater(t, len(lines), 3)
 			assert.Equal(t, "[Too Many Assets]", lines[0])
-			assert.Contains(t, lines[1], "only 1 are supported")
+			assert.Contains(t, lines[1], "101 assets provided, only 100 are supported")
 		},
 	},
 	{
-		Name:      "list-name-ip",
-		Args:      []string{"censys.com,8.8.8.8"},
+		Name:      "reject-list-with-invalid-member",
+		Args:      []string{"censys.com,a..b.com"},
 		ExitCode:  2,
 		Timeout:   1 * time.Second,
 		NeedsAuth: false,
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			lines := strings.Split(string(stderr), "\n")
 			assert.Greater(t, len(lines), 3)
-			assert.Equal(t, "[Too Many Assets]", lines[0])
-			assert.Contains(t, lines[1], "only 1 are supported")
-		},
-	},
-	{
-		Name:      "list-ip-name",
-		Args:      []string{"8.8.8.8,example.com"},
-		ExitCode:  2,
-		Timeout:   1 * time.Second,
-		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
-			lines := strings.Split(string(stderr), "\n")
-			assert.Greater(t, len(lines), 3)
-			assert.Equal(t, "[Too Many Assets]", lines[0])
-			assert.Contains(t, lines[1], "only 1 are supported")
-		},
-	},
-	{
-		Name:      "list-name-name-2",
-		Args:      []string{"www.censys.com,api.censys.com"},
-		ExitCode:  2,
-		Timeout:   1 * time.Second,
-		NeedsAuth: false,
-		Assert: func(t *testing.T, stdout, stderr []byte) {
-			lines := strings.Split(string(stderr), "\n")
-			assert.Greater(t, len(lines), 3)
-			assert.Equal(t, "[Too Many Assets]", lines[0])
-			assert.Contains(t, lines[1], "only 1 are supported")
+			assert.Equal(t, "[Invalid Asset ID]", lines[0])
+			assert.Contains(t, lines[1], "a..b.com")
+			assert.Contains(t, lines[1], "empty label")
 		},
 	},
 	{
@@ -217,9 +193,13 @@ var dnsFixtures = []Fixture{
 		Assert: func(t *testing.T, stdout, stderr []byte) {
 			assertHas200(t, stderr)
 			v := unmarshalJSONAny[[]struct {
+				Input      string `json:"input"`
 				RecordType string `json:"record_type"`
 			}](t, stdout)
 			assert.NotEmpty(t, v)
+			for _, r := range v {
+				assert.Equal(t, "censys.com", r.Input)
+			}
 		},
 	},
 	{
@@ -233,4 +213,14 @@ var dnsFixtures = []Fixture{
 			assert.Contains(t, string(stdout), "Domains resolving to 8.8.8.8")
 		},
 	},
+}
+
+// tooManyDNSInputs returns a comma list of 101 distinct names, one more than
+// dns accepts in one command.
+func tooManyDNSInputs() string {
+	names := make([]string, 0, 101)
+	for i := range 101 {
+		names = append(names, fmt.Sprintf("host%d.example.com", i))
+	}
+	return strings.Join(names, ",")
 }
