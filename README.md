@@ -126,7 +126,9 @@ This is a WIP. See the [history command docs](./docs/commands/HISTORY.md) for mo
 
 ### DNS
 
-The `dns` command looks up Active DNS records for a domain name, or the domain names that resolved to an IP address, over a time window. See the [dns command docs](./docs/commands/DNS.md) for more details.
+The `dns` command looks up Active DNS records for a domain name, or the domain names that resolved to an IP address, over a time window. It accepts several names or IPs at once — as arguments or from a file — and supports JSON, YAML, NDJSON, and template output. See the [dns command docs](./docs/commands/DNS.md) for more details.
+
+![dns](examples/dns/dns.gif)
 
 ### Tags
 
