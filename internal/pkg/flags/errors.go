@@ -32,3 +32,31 @@ func (e *conflictingFlagsError) Title() string {
 func (e *conflictingFlagsError) ShouldPrintUsage() bool {
 	return true
 }
+
+// InvalidTimeWindowError represents a --start/--end/--duration combination
+// that gives no valid window.
+type InvalidTimeWindowError interface {
+	cenclierrors.CencliError
+}
+
+type invalidTimeWindowError struct {
+	reason string
+}
+
+var _ InvalidTimeWindowError = &invalidTimeWindowError{}
+
+func NewInvalidTimeWindowError(reason string) InvalidTimeWindowError {
+	return &invalidTimeWindowError{reason: reason}
+}
+
+func (e *invalidTimeWindowError) Error() string {
+	return fmt.Sprintf("invalid time window: %s", e.reason)
+}
+
+func (e *invalidTimeWindowError) Title() string {
+	return "Invalid Time Window"
+}
+
+func (e *invalidTimeWindowError) ShouldPrintUsage() bool {
+	return true
+}

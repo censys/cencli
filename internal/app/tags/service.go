@@ -11,6 +11,7 @@ import (
 
 	"github.com/censys/censys-sdk-go/models/components"
 
+	"github.com/censys/cencli/internal/app/pagination"
 	"github.com/censys/cencli/internal/app/progress"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
@@ -97,7 +98,7 @@ func (s *tagsService) ListTags(
 		})
 	}
 
-	page, err := paginate(ctx, params.MaxPages, "tags", listFn, extractTagsPage)
+	page, err := pagination.Paginate(ctx, params.MaxPages, "tags", listFn, extractTagsPage)
 	if err != nil {
 		return ListResult{}, err
 	}
@@ -136,10 +137,10 @@ func (s *tagsService) ListAssignments(
 
 	pageSize := optionalInt64(params.PageSize)
 
-	// paginate only returns a hard error when the *first* page failed, so a retry
+	// pagination.Paginate only returns a hard error when the *first* page failed, so a retry
 	// here cannot re-emit anything already streamed.
 	page, err := callWithTag(ctx, s, orgIDStr, params.TagID,
-		func(tagID string) (paginated[Assignment], cenclierrors.CencliError) {
+		func(tagID string) (pagination.Paginated[Assignment], cenclierrors.CencliError) {
 			listFn := func(pageToken mo.Option[string]) (client.Result[components.TagAssignmentsList], client.ClientError) {
 				return s.client.ListTagAssignments(ctx, client.ListTagAssignmentsRequest{
 					OrgID:         orgIDStr,
@@ -154,7 +155,7 @@ func (s *tagsService) ListAssignments(
 					PageToken:     pageToken,
 				})
 			}
-			return paginate(ctx, params.MaxPages, "assignments", listFn, extractAssignmentsPage)
+			return pagination.Paginate(ctx, params.MaxPages, "assignments", listFn, extractAssignmentsPage)
 		})
 	if err != nil {
 		return AssignmentsResult{}, err
@@ -169,7 +170,7 @@ func (s *tagsService) ListAssignments(
 }
 
 // extractTagsPage adapts a tags list envelope for the paginator.
-func extractTagsPage(list *components.TagsList) pageData[Tag] {
+func extractTagsPage(list *components.TagsList) pagination.PageData[Tag] {
 	items := make([]Tag, 0, len(list.Tags))
 	for _, t := range list.Tags {
 		items = append(items, mapTag(t))
@@ -180,11 +181,11 @@ func extractTagsPage(list *components.TagsList) pageData[Tag] {
 		nextPageToken = *npt
 	}
 
-	return pageData[Tag]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
+	return pagination.PageData[Tag]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
 }
 
 // extractAssignmentsPage adapts an assignments list envelope for the paginator.
-func extractAssignmentsPage(list *components.TagAssignmentsList) pageData[Assignment] {
+func extractAssignmentsPage(list *components.TagAssignmentsList) pagination.PageData[Assignment] {
 	items := make([]Assignment, 0, len(list.Assignments))
 	for _, a := range list.Assignments {
 		items = append(items, mapTagAssignment(a))
@@ -195,7 +196,7 @@ func extractAssignmentsPage(list *components.TagAssignmentsList) pageData[Assign
 		nextPageToken = *npt
 	}
 
-	return pageData[Assignment]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
+	return pagination.PageData[Assignment]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
 }
 
 // optionalInt64 narrows an unsigned page size to the signed type the client sends.

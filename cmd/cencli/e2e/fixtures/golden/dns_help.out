@@ -1,0 +1,54 @@
+Look up Active DNS observations for a domain name or an IP address.                       
+                                                                                          
+For a domain name, shows the records the name resolved to (A, AAAA, MX, NS, SOA, TXT). For
+an IP address, shows the domain names that resolved to it.                                
+                                                                                          
+Several names or IPs can be given, up to 100: as positional arguments, comma-separated    
+lists, or read from a file (or STDIN) with --input-file. Each input is looked up          
+independently: if one fails, the rest still proceed.                                      
+                                                                                          
+Results cover a time window (default: the last 7 days). Use --timeline to show each       
+observed time range instead of one row per record.                                        
+                                                                                          
+For the DNS names in a host's current record, use "censys view <ip>".                     
+                                                                                          
+This command is only available to organizations on the Censys Search and Censys Core      
+plans.                                                                                    
+
+Usage:
+  censys dns <name|ip>... [flags]
+
+Examples:
+  censys dns censys.com
+  censys dns censys.com --record-type A,MX
+  censys dns censys.com --timeline --duration 90d
+  censys dns 104.18.10.84
+  censys dns 104.18.10.84 --start 2026-06-01T00:00:00Z --duration 30d
+  censys dns 141.193.213.10 --timeline --domain censys.com
+  censys dns censys.com,104.18.10.84
+  censys dns --input-file iocs.txt
+  censys dns --input-file - # read inputs from STDIN
+  censys dns censys.com --output-format json
+
+Flags:
+      --domain string         limit an IP timeline to one domain name (IP input with --timeline only)
+  -d, --duration string       time window (e.g., 1d, 1w, 1y, 2h). Defaults to 7d (default "168h0m0s")
+  -e, --end string            end time
+  -h, --help                  help for dns
+  -i, --input-file string     file to read the names or IPs from (or - for STDIN). Overrides positional arguments.
+  -p, --max-pages int         maximum number of pages to fetch (-1 for all pages) (default 10)
+  -o, --org-id string         organization ID to target (personal access tokens only)
+  -n, --page-size int         number of records to return per page (default 100)
+  -r, --record-type strings   record types to include (A, AAAA, MX, NS, SOA, TXT; IP addresses support A and AAAA)
+  -s, --start string          start time
+  -t, --timeline              show one row per observed time range instead of one row per record
+
+Global Flags:
+      --debug                   enable debug logging
+      --no-color                disable ANSI colors and styles
+      --no-spinner              disable spinner during operations
+  -O, --output-format string    output format (json|yaml|tree|short|template) (default "short")
+  -q, --quiet                   suppress non-essential output
+  -S, --streaming               enable streaming output mode (NDJSON) for commands that support it
+      --timeout-http duration   per-request timeout for HTTP requests (e.g. 10s, 1m) - use 0 to disable
+

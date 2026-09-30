@@ -125,7 +125,7 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	c.start, c.end, err = resolveTimeWindow(startOpt, endOpt, durationOpt)
+	c.start, c.end, err = flags.ResolveTimeWindow(startOpt, endOpt, durationOpt)
 	if err != nil {
 		return err
 	}
@@ -224,51 +224,6 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	}
 
 	return nil
-}
-
-// resolveTimeWindow determines the start and end times based on the provided flags.
-func resolveTimeWindow(
-	startOpt mo.Option[time.Time],
-	endOpt mo.Option[time.Time],
-	durationOpt mo.Option[time.Duration],
-) (time.Time, time.Time, cenclierrors.CencliError) {
-	var start, end time.Time
-	var duration time.Duration
-
-	if durationOpt.IsPresent() {
-		duration = durationOpt.MustGet()
-	} else {
-		duration = 7 * 24 * time.Hour // default to 7 days
-	}
-
-	hasStart := startOpt.IsPresent()
-	hasEnd := endOpt.IsPresent()
-
-	if hasStart {
-		start = startOpt.MustGet()
-	}
-	if hasEnd {
-		end = endOpt.MustGet()
-	}
-
-	switch {
-	case hasStart && hasEnd:
-		// both start and end are set, use them as is
-		if end.Before(start) {
-			return time.Time{}, time.Time{}, newInvalidTimeWindowError("end time must be after start time")
-		}
-		return start, end, nil
-	case hasStart:
-		// only start is set, calculate end
-		return start, start.Add(duration), nil
-	case hasEnd:
-		// only end is set, calculate start
-		return end.Add(-duration), end, nil
-	default:
-		// neither is set, use now as end and calculate start
-		end = time.Now().UTC()
-		return end.Add(-duration), end, nil
-	}
 }
 
 func (*Command) Tapes(recorder *tape.Recorder) []tape.Tape {

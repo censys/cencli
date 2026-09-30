@@ -107,6 +107,8 @@ The `view` command defaults to **`json`** output format (or the global config va
 - **`short`** - Concise summary view of assets
 - **`template`** - Render using asset-specific Handlebars templates (see [Templates](#templates) section)
 
+**Note:** A short-format view of exactly one host prints a tip to stderr pointing to `censys dns <ip>`, since an Active DNS lookup on the same IP is often the next thing you want (suppressed by `--quiet`).
+
 ### Streaming Output
 
 Use `--streaming` (or `-S`) to enable streaming mode, which outputs results as NDJSON (newline-delimited JSON) with one asset per line emitted immediately as data is fetched. This is useful when viewing many assets at once. See [global configuration](../GLOBAL_CONFIGURATION.md#--streaming--s) for more details.

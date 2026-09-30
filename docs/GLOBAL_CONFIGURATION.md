@@ -36,10 +36,10 @@ Controls how data is formatted when printed to stdout:
 - **`json`** - Structured JSON output (default for most commands)
 - **`yaml`** - Structured YAML output
 - **`tree`** - Hierarchical tree view of nested data structures
-- **`short`** - Human-readable formatted output (available on select commands like `aggregate`, `censeye`, `search`, `view`)
-- **`template`** - Render using custom Handlebars templates (available on `search` and `view` commands)
+- **`short`** - Human-readable formatted output (available on select commands like `aggregate`, `censeye`, `dns`, `search`, `view`)
+- **`template`** - Render using custom Handlebars templates (available on `search`, `view`, and `dns` commands)
 
-**Note:** Some commands default to `short` output instead of `json` to provide a better user experience. For example, the `aggregate` and `censeye` commands show formatted tables by default. You can always override this with `--output-format json` or another format.
+**Note:** Some commands default to `short` output instead of `json` to provide a better user experience. For example, the `aggregate`, `censeye`, and `dns` commands show formatted tables by default. You can always override this with `--output-format json` or another format.
 
 ### `--streaming`, `-S`
 
@@ -57,7 +57,7 @@ When enabled, commands that support streaming will output results as NDJSON (new
 - **Partial results are preserved on interruption** - If you press Ctrl-C or an error occurs, all previously emitted records remain intact
 - **Safe for large queries** - Ideal for use with `--max-pages -1` when fetching potentially unbounded result sets
 
-**Supported commands:** `search`, `view`, `history`
+**Supported commands:** `search`, `view`, `history`, `dns`
 
 **Note:** `--streaming` cannot be used together with `--output-format`. When streaming mode is enabled, output is always NDJSON. If you set `streaming: true` in your config file, it will be silently ignored for commands that don't support streaming.
 
@@ -228,6 +228,7 @@ Each template corresponds to a specific data type:
 | Certificate | `certificate.hbs` | `view` command (certificate assets) |
 | Web Property | `webproperty.hbs` | `view` command (web property assets) |
 | Search Result | `searchresult.hbs` | `search` command |
+| DNS | `dns.hbs` | `dns` command |
 
 You can customize templates by editing the files in your templates directory. The path to each template can also be overridden in `config.yaml`:
 
@@ -241,6 +242,8 @@ templates:
     path: /path/to/custom/webproperty.hbs
   searchresult:
     path: /path/to/custom/searchresult.hbs
+  dns:
+    path: /path/to/custom/dns.hbs
 ```
 
 See [the view command docs](commands/VIEW.md#templates) for more details on creating and customizing templates.
