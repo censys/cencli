@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -493,12 +494,14 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	// error is printed after the output.
 	var failures []cenclierrors.CencliError
 	var accessDeniedErr cenclierrors.CencliError
+	var interruptedErr cenclierrors.CencliError
 	for i, input := range c.inputs {
 		// A prior input can succeed with partial data (a later page failed on
 		// cancellation) without returning a fetch error itself, so the context
 		// must be checked here too: otherwise this input's lookup would still
 		// start, only to fail before any request goes out.
 		if ctx.Err() != nil {
+			interruptedErr = cenclierrors.ParseContextError(ctx.Err())
 			c.reportInterrupted(len(c.inputs) - i)
 			break
 		}
@@ -524,6 +527,7 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 			failures = append(failures, c.withInput(input, err))
 			// After an interrupt, every remaining lookup would fail the same way.
 			if ctx.Err() != nil {
+				interruptedErr = cenclierrors.ParseContextError(ctx.Err())
 				c.reportInterrupted(len(c.inputs) - i - 1)
 				break
 			}
@@ -536,15 +540,32 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	}
 
 	if len(c.results) == 0 {
+		// An interruption can stop the loop before any input's lookup ever
+		// starts (or right after one fails), so it takes priority over
+		// whatever failures were collected: print every one of them in
+		// input order, then return the interruption itself, so the exit
+		// code is the interruption's rather than an unrelated failure's.
+		if interruptedErr != nil {
+			for _, failure := range failures {
+				formatter.PrintError(failure, cmd)
+			}
+			return interruptedErr
+		}
 		// Print every failure but the last in input order, then return the
 		// last: the caller prints a returned error right after Run's own
 		// stderr output, so this is the only ordering that puts every
 		// failure on stderr in input order. With one failure, nothing is
 		// printed here and that failure is returned, unchanged from before.
-		for _, failure := range failures[:len(failures)-1] {
-			formatter.PrintError(failure, cmd)
+		if len(failures) > 0 {
+			for _, failure := range failures[:len(failures)-1] {
+				formatter.PrintError(failure, cmd)
+			}
+			return failures[len(failures)-1]
 		}
-		return failures[len(failures)-1]
+		// Unreachable in practice (the loop above always either succeeds,
+		// records a failure, or is caught by the interruption check above),
+		// but never index an empty slice here.
+		return cenclierrors.NewCencliError(errors.New("no inputs were looked up"))
 	}
 
 	// With several inputs, one metadata block per input would be noise (100

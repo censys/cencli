@@ -1699,6 +1699,79 @@ func TestDNSCommand_Interrupted(t *testing.T) {
 	}
 }
 
+// TestDNSCommand_NoResultsInterrupted covers the no-results path (nothing
+// collected) when the loop stops on a cancelled context. Before the fix, this
+// path indexed the (possibly empty) failures slice unconditionally and
+// panicked; it must instead return the interruption without ever indexing an
+// empty slice.
+func TestDNSCommand_NoResultsInterrupted(t *testing.T) {
+	testCases := []struct {
+		name       string
+		dnsSvc     func(t *testing.T, ctrl *gomock.Controller, cancel context.CancelFunc) dnsapp.Service
+		wantStderr string
+	}{
+		{
+			// The context is already cancelled before Run's loop runs at all:
+			// c.results and failures are both empty, so the no-results path
+			// must not index failures[len(failures)-1].
+			name: "error - cancel before the first input",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller, cancel context.CancelFunc) dnsapp.Service {
+				cancel()
+				return dnsmocks.NewMockDNSService(ctrl)
+			},
+		},
+		{
+			// a.com fails on a non-403 error and cancels the context as a
+			// side effect (as a signal during the call would); b.com must
+			// never be looked up. The returned error must be the
+			// interruption, not a.com's unrelated failure.
+			name: "error - one input fails, then a cancel",
+			dnsSvc: func(t *testing.T, ctrl *gomock.Controller, cancel context.CancelFunc) dnsapp.Service {
+				ms := dnsmocks.NewMockDNSService(ctrl)
+				ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).
+					DoAndReturn(func(ctx context.Context, _ assets.DomainName, _ dnsapp.Params) (dnsapp.NameResolutionsResult, cenclierrors.CencliError) {
+						cancel()
+						return dnsapp.NameResolutionsResult{}, apiError("first failed")
+					})
+				return ms
+			},
+			wantStderr: "a.com: first failed",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			viper.Reset()
+			cfg, err := config.New(tempDir)
+			require.NoError(t, err)
+
+			var stdout, stderr bytes.Buffer
+			formatter.Stdout = &stdout
+			formatter.Stderr = &stderr
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl), command.WithDNSService(tc.dnsSvc(t, ctrl, cancel)))
+			rootCmd, err := command.RootCommandToCobra(NewDNSCommand(cmdContext))
+			require.NoError(t, err)
+			rootCmd.SetArgs(withWindow("a.com,b.com", "-O", "json"))
+
+			cmdErr := rootCmd.ExecuteContext(ctx)
+			require.Error(t, cmdErr)
+			require.Contains(t, cmdErr.Error(), "cancelled before it completed")
+			require.NotContains(t, cmdErr.Error(), "first failed", "the returned error is the interruption, not a.com's failure")
+			require.Equal(t, 130, formatter.ExitCode(cmdErr))
+			if tc.wantStderr != "" {
+				require.Contains(t, stderr.String(), tc.wantStderr)
+			}
+		})
+	}
+}
+
 // TestDNSCommand_InterruptedAfterPartialData covers a context cancelled while
 // an input's own lookup still succeeds: the service can return records with a
 // partial (page-level) interruption error and no fetch error, when the context
