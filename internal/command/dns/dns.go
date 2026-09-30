@@ -394,12 +394,21 @@ func isCIDR(raw string) bool {
 // --timeline (the API supports the filter only on IP ranges), so any other
 // use, including a name among the inputs, is a usage error before a service
 // (and so the API client) is needed.
+// An unset --domain is read as absent, so an IP timeline stays unfiltered.
+// But an explicitly empty (or all-whitespace) value is rejected instead: it
+// would otherwise widen the lookup to every domain silently, for example when
+// the value comes from an unset shell variable. This check runs before the
+// misuse check above, so a blank --domain is reported as such even without
+// --timeline or an IP input.
 // The value is parsed with assets.NewDomainName, so defanged input normalizes
 // and an invalid name is rejected with the usual Invalid Asset ID error.
 func (c *Command) parseDomainFlag() (mo.Option[assets.DomainName], cenclierrors.CencliError) {
 	raw, err := c.flags.domain.Value()
 	if err != nil {
 		return mo.None[assets.DomainName](), err
+	}
+	if c.Flags().Changed("domain") && strings.TrimSpace(raw) == "" {
+		return mo.None[assets.DomainName](), NewDomainFlagEmptyError()
 	}
 	if raw == "" {
 		return mo.None[assets.DomainName](), nil
@@ -485,6 +494,14 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 	var failures []cenclierrors.CencliError
 	var accessDeniedErr cenclierrors.CencliError
 	for i, input := range c.inputs {
+		// A prior input can succeed with partial data (a later page failed on
+		// cancellation) without returning a fetch error itself, so the context
+		// must be checked here too: otherwise this input's lookup would still
+		// start, only to fail before any request goes out.
+		if ctx.Err() != nil {
+			c.reportInterrupted(len(c.inputs) - i)
+			break
+		}
 		result, err := c.fetchWithProgress(ctx, logger, input, i)
 		if err != nil {
 			logger.Debug("dns fetch failed", "input", input.value, "error", err)

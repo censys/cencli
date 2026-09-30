@@ -212,6 +212,19 @@ var dnsFixtures = []Fixture{
 		},
 	},
 	{
+		Name:      "reject-empty-domain",
+		Args:      []string{"104.18.10.84", "--timeline", "--domain", ""},
+		ExitCode:  2,
+		Timeout:   1 * time.Second,
+		NeedsAuth: false,
+		Assert: func(t *testing.T, stdout, stderr []byte) {
+			lines := strings.Split(string(stderr), "\n")
+			assert.Greater(t, len(lines), 3)
+			assert.Equal(t, "[Invalid Flag Value]", lines[0])
+			assert.Contains(t, lines[1], "--domain needs a domain name")
+		},
+	},
+	{
 		Name:      "name-json",
 		Args:      []string{"censys.com", "--output-format", "json"},
 		ExitCode:  0,

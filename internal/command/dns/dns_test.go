@@ -578,6 +578,33 @@ func TestDNSCommand(t *testing.T) {
 			},
 		},
 		{
+			name:   "error - an explicitly empty --domain is rejected",
+			dnsSvc: noCalls,
+			args:   withWindow("104.18.10.84", "--timeline", "--domain", ""),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--domain needs a domain name")
+			},
+		},
+		{
+			name:   "error - a whitespace-only --domain is rejected",
+			dnsSvc: noCalls,
+			args:   withWindow("104.18.10.84", "--timeline", "--domain", "   "),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--domain needs a domain name")
+			},
+		},
+		{
+			name:   "error - an explicitly empty --domain is rejected before the misuse check",
+			dnsSvc: noCalls,
+			args:   withWindow("censys.com", "--domain", ""),
+			assert: func(t *testing.T, _, _ string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--domain needs a domain name")
+			},
+		},
+		{
 			name:   "success - help",
 			dnsSvc: noCalls,
 			args:   []string{"--help"},
@@ -1670,6 +1697,50 @@ func TestDNSCommand_Interrupted(t *testing.T) {
 			require.Contains(t, stderr.String(), tc.wantStderr)
 		})
 	}
+}
+
+// TestDNSCommand_InterruptedAfterPartialData covers a context cancelled while
+// an input's own lookup still succeeds: the service can return records with a
+// partial (page-level) interruption error and no fetch error, when the context
+// is cancelled after the first page arrives. The loop must not start the next
+// input's lookup in that case; it must stop before it and report the
+// remaining count, the same as when the fetch itself fails on cancellation.
+func TestDNSCommand_InterruptedAfterPartialData(t *testing.T) {
+	tempDir := t.TempDir()
+	viper.Reset()
+	cfg, err := config.New(tempDir)
+	require.NoError(t, err)
+
+	var stdout, stderr bytes.Buffer
+	formatter.Stdout = &stdout
+	formatter.Stderr = &stderr
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// b.com has no expectation: the second input's service method must never
+	// be called once the context is already cancelled.
+	ms := dnsmocks.NewMockDNSService(ctrl)
+	ms.EXPECT().NameResolutions(gomock.Any(), domainName(t, "a.com"), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _ assets.DomainName, _ dnsapp.Params) (dnsapp.NameResolutionsResult, cenclierrors.CencliError) {
+			cancel()
+			result := nameResult("a.com", "1.1.1.1")
+			result.PartialError = cenclierrors.NewInterruptedError()
+			return result, nil
+		})
+
+	cmdContext := command.NewCommandContext(cfg, newOrgLookupStore(ctrl), command.WithDNSService(ms))
+	rootCmd, err := command.RootCommandToCobra(NewDNSCommand(cmdContext))
+	require.NoError(t, err)
+	rootCmd.SetArgs(withWindow("a.com,b.com", "-O", "json"))
+
+	cmdErr := rootCmd.ExecuteContext(ctx)
+	require.NoError(t, cmdErr, "a.com already returned data, so the run is not itself a failure")
+	require.Equal(t, []string{"a.com"}, jsonInputs(t, stdout.String()))
+	require.Contains(t, stderr.String(), "interrupted; 1 input not looked up")
 }
 
 func TestDNSCommand_ShortMultipleInputs(t *testing.T) {

@@ -131,7 +131,7 @@ $ censys dns censys.com --timeline --duration 90d
 
 ### `--domain`
 
-Limit an IP timeline to one domain name that resolved to it — "when did this domain point at this IP". It works only for IP input with `--timeline`; any other use (a domain name among the inputs, or `--timeline` not set) is a usage error.
+Limit an IP timeline to one domain name that resolved to it — "when did this domain point at this IP". It works only for IP input with `--timeline`; any other use (a domain name among the inputs, or `--timeline` not set) is a usage error. An explicitly empty value (`--domain ""`) is also a usage error, rather than being treated as unset.
 
 **Type:** `string` (domain name)  
 **Default:** none

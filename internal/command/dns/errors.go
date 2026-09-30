@@ -21,6 +21,23 @@ func (e *domainFlagMisuseError) Title() string { return "Conflicting Flags" }
 
 func (e *domainFlagMisuseError) ShouldPrintUsage() bool { return true }
 
+// domainFlagEmptyError signals that --domain was explicitly set to an empty
+// (or all-whitespace) value. Unlike an absent flag, this must be rejected: an
+// absent --domain leaves an IP timeline unfiltered on purpose, but a blank
+// value (for example an unset shell variable passed through) would silently
+// widen the lookup to every domain instead.
+type domainFlagEmptyError struct{}
+
+// NewDomainFlagEmptyError creates the error shown when --domain is explicitly
+// set to an empty value.
+func NewDomainFlagEmptyError() cenclierrors.CencliError { return &domainFlagEmptyError{} }
+
+func (e *domainFlagEmptyError) Error() string { return "--domain needs a domain name" }
+
+func (e *domainFlagEmptyError) Title() string { return "Invalid Flag Value" }
+
+func (e *domainFlagEmptyError) ShouldPrintUsage() bool { return true }
+
 // inputError names the input whose lookup failed, for a command with several
 // inputs. It keeps the wrapped error's title and usage behavior.
 type inputError struct {
