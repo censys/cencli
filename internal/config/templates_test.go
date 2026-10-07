@@ -25,12 +25,14 @@ func TestTemplatePathsWrittenToYAML(t *testing.T) {
 	require.Contains(t, cfg.Templates, TemplateEntityCertificate)
 	require.Contains(t, cfg.Templates, TemplateEntityWebProperty)
 	require.Contains(t, cfg.Templates, TemplateEntitySearchResult)
+	require.Contains(t, cfg.Templates, TemplateEntityDNS)
 
 	// All template paths should be set
 	assert.NotEmpty(t, cfg.Templates[TemplateEntityHost].Path)
 	assert.NotEmpty(t, cfg.Templates[TemplateEntityCertificate].Path)
 	assert.NotEmpty(t, cfg.Templates[TemplateEntityWebProperty].Path)
 	assert.NotEmpty(t, cfg.Templates[TemplateEntitySearchResult].Path)
+	assert.NotEmpty(t, cfg.Templates[TemplateEntityDNS].Path)
 
 	// Verify the config file contains the template paths
 	configPath := filepath.Join(tempDir, "config.yaml")
@@ -44,11 +46,13 @@ func TestTemplatePathsWrittenToYAML(t *testing.T) {
 	assert.Contains(t, configStr, "certificate:")
 	assert.Contains(t, configStr, "webproperty:")
 	assert.Contains(t, configStr, "searchresult:")
+	assert.Contains(t, configStr, "dns:")
 	assert.Contains(t, configStr, "path:")
 	assert.Contains(t, configStr, "host.hbs")
 	assert.Contains(t, configStr, "certificate.hbs")
 	assert.Contains(t, configStr, "webproperty.hbs")
 	assert.Contains(t, configStr, "searchresult.hbs")
+	assert.Contains(t, configStr, "dns.hbs")
 
 	// Verify template files were created
 	templatesDir := filepath.Join(tempDir, "templates")
@@ -57,6 +61,40 @@ func TestTemplatePathsWrittenToYAML(t *testing.T) {
 	assert.FileExists(t, filepath.Join(templatesDir, "certificate.hbs"))
 	assert.FileExists(t, filepath.Join(templatesDir, "webproperty.hbs"))
 	assert.FileExists(t, filepath.Join(templatesDir, "searchresult.hbs"))
+	assert.FileExists(t, filepath.Join(templatesDir, "dns.hbs"))
+}
+
+// TestTemplateEntity_UnmarshalText tests that TemplateEntity decodes each
+// registered entity name and rejects one that has not been registered.
+func TestTemplateEntity_UnmarshalText(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expected    TemplateEntity
+		expectError bool
+	}{
+		{name: "success - host", input: "host", expected: TemplateEntityHost},
+		{name: "success - certificate", input: "certificate", expected: TemplateEntityCertificate},
+		{name: "success - webproperty", input: "webproperty", expected: TemplateEntityWebProperty},
+		{name: "success - searchresult", input: "searchresult", expected: TemplateEntitySearchResult},
+		{name: "success - dns", input: "dns", expected: TemplateEntityDNS},
+		{name: "error - unsupported entity", input: "bogus", expectError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var e TemplateEntity
+			err := e.UnmarshalText([]byte(tt.input))
+			if tt.expectError {
+				require.Error(t, err)
+				require.ErrorIs(t, err, ErrUnsupportedTemplateEntity)
+				require.Contains(t, err.Error(), tt.input)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, e)
+		})
+	}
 }
 
 func TestInitTemplates(t *testing.T) {
@@ -103,6 +141,7 @@ func TestInitTemplates(t *testing.T) {
 						TemplateEntityCertificate:  {},
 						TemplateEntityWebProperty:  {},
 						TemplateEntitySearchResult: {},
+						TemplateEntityDNS:          {},
 					},
 				}, nil
 			},
@@ -125,13 +164,17 @@ func TestInitTemplates(t *testing.T) {
 				require.Contains(t, cfg.Templates, TemplateEntitySearchResult)
 				expectedSearchPath := filepath.Join(templatesDir, "searchresult.hbs")
 				assert.Equal(t, expectedSearchPath, cfg.Templates[TemplateEntitySearchResult].Path)
+
+				require.Contains(t, cfg.Templates, TemplateEntityDNS)
+				expectedDNSPath := filepath.Join(templatesDir, "dns.hbs")
+				assert.Equal(t, expectedDNSPath, cfg.Templates[TemplateEntityDNS].Path)
 			},
 			expectedFiles: func(t *testing.T, tempDir string) {
 				templatesDir := filepath.Join(tempDir, "templates")
 				assert.DirExists(t, templatesDir)
 
 				// All template files should exist
-				files := []string{"host.hbs", "certificate.hbs", "webproperty.hbs", "searchresult.hbs"}
+				files := []string{"host.hbs", "certificate.hbs", "webproperty.hbs", "searchresult.hbs", "dns.hbs"}
 				for _, filename := range files {
 					filePath := filepath.Join(templatesDir, filename)
 					assert.FileExists(t, filePath)

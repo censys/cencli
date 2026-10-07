@@ -38,5 +38,6 @@ func Fixtures() map[string][]Fixture {
 		"tags":        tagsFixtures,
 		"scan":        scanFixtures,
 		"collections": collectionsFixtures,
+		"dns":         dnsFixtures,
 	}
 }

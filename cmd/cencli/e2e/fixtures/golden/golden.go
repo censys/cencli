@@ -17,6 +17,8 @@ var (
 	CenseyeHelpStdout []byte
 	//go:embed history_help.out
 	HistoryHelpStdout []byte
+	//go:embed dns_help.out
+	DNSHelpStdout []byte
 	//go:embed root.out
 	RootStdout []byte
 	//go:embed credits_help.out

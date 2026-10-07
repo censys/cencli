@@ -15,7 +15,7 @@ var (
 
 	// URL heuristics
 	reHasProtocol            = regexp.MustCompile(`(?i)(hxxp|https?|ftp)[:\[_\\]`)
-	reHasDefang              = regexp.MustCompile(`\[\.\]|\(\.\)|\\\.|\[/\]|\(\.|\\:|\[\:\]|\(\:\)`)
+	reHasDefang              = regexp.MustCompile(`\[\.\]|\(\.\)|\\\.|\[/\]|\(\.|\\:|\[\:\]|\(\:\)|\[://\]`)
 	reHasURLEnc              = regexp.MustCompile(`%[0-9A-Fa-f]{2}`)
 	reHasSubdomain           = regexp.MustCompile(`^[A-Za-z0-9][-A-Za-z0-9]*\.[A-Za-z0-9][-A-Za-z0-9]*\.[A-Za-z]{2,63}`)
 	reHasGenericTLD          = regexp.MustCompile(`^[A-Za-z0-9][-A-Za-z0-9]*\.[A-Za-z]{2,63}(/|:|$)`)
@@ -120,6 +120,9 @@ func RefangURL(s string) string {
 		"__", "://",
 		":\\\\", "://",
 	).Replace(result)
+
+	// Replace [://] with ://
+	result = regexp.MustCompile(`\[://\]`).ReplaceAllString(result, "://")
 
 	// Replace [:] with :
 	result = regexp.MustCompile(`\[\:\]`).ReplaceAllString(result, ":")

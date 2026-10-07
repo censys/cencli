@@ -226,7 +226,35 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		formatter.PrintError(c.result.PartialError, cmd)
 	}
 
+	c.printDNSHint()
+
 	return nil
+}
+
+// printDNSHint points the user at `censys dns` after a short-format view of
+// exactly one host, since that is the case where an active DNS lookup on the
+// same IP is most likely to be the next thing they want. It stays silent for
+// every other asset type or count, for non-short output, for streaming mode,
+// and when --quiet asked for silence. The IP never needs shell quoting, so
+// unlike the tags package's track hint, this has no quoting helper to call.
+func (c *Command) printDNSHint() {
+	if c.Config().Quiet || c.Config().Streaming {
+		return
+	}
+	if c.Config().OutputFormat != formatter.OutputFormatShort {
+		return
+	}
+	// Require one host input and one host returned, and name the returned
+	// host: the input list and the result list need not line up.
+	if c.result.Type != assets.AssetTypeHost || len(c.assets.HostIDs()) != 1 || len(c.result.Hosts) != 1 {
+		return
+	}
+	ip := c.result.Hosts[0].IP
+	if ip == nil || *ip == "" {
+		return
+	}
+	formatter.Println(formatter.Stderr, fmt.Sprintf(
+		"Tip: Active DNS observations for this IP: censys dns %s", *ip))
 }
 
 // assetResult is a tagged union that carries meta and the concrete asset list.

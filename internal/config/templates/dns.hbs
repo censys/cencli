@@ -1,0 +1,35 @@
+{{#each this}}
+{{{orange input}}} [{{yellow record_type}}]
+{{#if domain}}
+Value: {{{blue domain}}}
+{{/if}}
+{{#if ip}}
+Value: {{{blue ip}}}
+{{/if}}
+{{#if mail_server}}
+Value: {{blue priority}} {{{blue mail_server}}}
+{{/if}}
+{{#if name_server}}
+Value: {{{blue name_server}}}
+{{/if}}
+{{#if mname}}
+Value: {{{blue mname}}} {{{blue rname}}}
+{{/if}}
+{{#if value}}
+Value: {{{blue value}}}
+{{/if}}
+{{#if timeline}}
+{{#if first_observed}}
+First Observed: {{blue first_observed}}
+Last Observed: {{blue last_observed}}
+{{else}}
+First Observed: {{blue first_seen}}
+Last Observed: {{blue last_seen}}
+{{/if}}
+{{else}}
+First Seen: {{blue first_seen}}
+Last Seen: {{blue last_seen}}
+{{/if}}
+
+------------------------------------------------------------
+{{/each}}

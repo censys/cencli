@@ -29,6 +29,7 @@ const (
 	TemplateEntityCertificate  TemplateEntity = "certificate"
 	TemplateEntityWebProperty  TemplateEntity = "webproperty"
 	TemplateEntitySearchResult TemplateEntity = "searchresult"
+	TemplateEntityDNS          TemplateEntity = "dns"
 )
 
 var ErrUnsupportedTemplateEntity = fmt.Errorf("unsupported template entity type")
@@ -47,6 +48,7 @@ var defaultTemplateConfig = map[TemplateEntity]TemplateConfig{
 	TemplateEntityCertificate:  {},
 	TemplateEntityWebProperty:  {},
 	TemplateEntitySearchResult: {},
+	TemplateEntityDNS:          {},
 }
 
 var _ encoding.TextUnmarshaler = (*TemplateEntity)(nil)
@@ -62,6 +64,8 @@ func (a *TemplateEntity) UnmarshalText(text []byte) error {
 		*a = TemplateEntityWebProperty
 	case TemplateEntitySearchResult.String():
 		*a = TemplateEntitySearchResult
+	case TemplateEntityDNS.String():
+		*a = TemplateEntityDNS
 	default:
 		return fmt.Errorf("%w: %s", ErrUnsupportedTemplateEntity, s)
 	}

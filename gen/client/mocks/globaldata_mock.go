@@ -164,6 +164,66 @@ func (mr *MockGlobalDataClientMockRecorder) HostTimeline(ctx, orgID, hostID, fro
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HostTimeline", reflect.TypeOf((*MockGlobalDataClient)(nil).HostTimeline), ctx, orgID, hostID, fromTime, toTime)
 }
 
+// ListDNSIPResolutionBounds mocks base method.
+func (m *MockGlobalDataClient) ListDNSIPResolutionBounds(ctx context.Context, orgID mo.Option[string], ip string, fromTime, toTime time.Time, recordTypes []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.DNSIPResolutionBoundResponse], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDNSIPResolutionBounds", ctx, orgID, ip, fromTime, toTime, recordTypes, pageSize, pageToken)
+	ret0, _ := ret[0].(censys.Result[components.DNSIPResolutionBoundResponse])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListDNSIPResolutionBounds indicates an expected call of ListDNSIPResolutionBounds.
+func (mr *MockGlobalDataClientMockRecorder) ListDNSIPResolutionBounds(ctx, orgID, ip, fromTime, toTime, recordTypes, pageSize, pageToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDNSIPResolutionBounds", reflect.TypeOf((*MockGlobalDataClient)(nil).ListDNSIPResolutionBounds), ctx, orgID, ip, fromTime, toTime, recordTypes, pageSize, pageToken)
+}
+
+// ListDNSIPResolutionRanges mocks base method.
+func (m *MockGlobalDataClient) ListDNSIPResolutionRanges(ctx context.Context, orgID mo.Option[string], ip string, fromTime, toTime time.Time, recordTypes []string, domain mo.Option[string], pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.DNSIPResolutionRangeResponse], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDNSIPResolutionRanges", ctx, orgID, ip, fromTime, toTime, recordTypes, domain, pageSize, pageToken)
+	ret0, _ := ret[0].(censys.Result[components.DNSIPResolutionRangeResponse])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListDNSIPResolutionRanges indicates an expected call of ListDNSIPResolutionRanges.
+func (mr *MockGlobalDataClientMockRecorder) ListDNSIPResolutionRanges(ctx, orgID, ip, fromTime, toTime, recordTypes, domain, pageSize, pageToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDNSIPResolutionRanges", reflect.TypeOf((*MockGlobalDataClient)(nil).ListDNSIPResolutionRanges), ctx, orgID, ip, fromTime, toTime, recordTypes, domain, pageSize, pageToken)
+}
+
+// ListDNSNameResolutionBounds mocks base method.
+func (m *MockGlobalDataClient) ListDNSNameResolutionBounds(ctx context.Context, orgID mo.Option[string], name string, fromTime, toTime time.Time, recordTypes []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.DNSNameResolutionBoundResponse], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDNSNameResolutionBounds", ctx, orgID, name, fromTime, toTime, recordTypes, pageSize, pageToken)
+	ret0, _ := ret[0].(censys.Result[components.DNSNameResolutionBoundResponse])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListDNSNameResolutionBounds indicates an expected call of ListDNSNameResolutionBounds.
+func (mr *MockGlobalDataClientMockRecorder) ListDNSNameResolutionBounds(ctx, orgID, name, fromTime, toTime, recordTypes, pageSize, pageToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDNSNameResolutionBounds", reflect.TypeOf((*MockGlobalDataClient)(nil).ListDNSNameResolutionBounds), ctx, orgID, name, fromTime, toTime, recordTypes, pageSize, pageToken)
+}
+
+// ListDNSNameResolutionRanges mocks base method.
+func (m *MockGlobalDataClient) ListDNSNameResolutionRanges(ctx context.Context, orgID mo.Option[string], name string, fromTime, toTime time.Time, recordTypes []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.DNSNameResolutionRangeResponse], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListDNSNameResolutionRanges", ctx, orgID, name, fromTime, toTime, recordTypes, pageSize, pageToken)
+	ret0, _ := ret[0].(censys.Result[components.DNSNameResolutionRangeResponse])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListDNSNameResolutionRanges indicates an expected call of ListDNSNameResolutionRanges.
+func (mr *MockGlobalDataClientMockRecorder) ListDNSNameResolutionRanges(ctx, orgID, name, fromTime, toTime, recordTypes, pageSize, pageToken any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDNSNameResolutionRanges", reflect.TypeOf((*MockGlobalDataClient)(nil).ListDNSNameResolutionRanges), ctx, orgID, name, fromTime, toTime, recordTypes, pageSize, pageToken)
+}
+
 // Search mocks base method.
 func (m *MockGlobalDataClient) Search(ctx context.Context, orgID mo.Option[string], query string, fields []string, pageSize mo.Option[int64], pageToken mo.Option[string]) (censys.Result[components.SearchQueryResponse], censys.ClientError) {
 	m.ctrl.T.Helper()
