@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/censys/cencli/internal/app/pagination"
 )
 
 func TestIsAccessDeniedError(t *testing.T) {
@@ -19,7 +21,7 @@ func TestIsAccessDeniedError(t *testing.T) {
 		},
 		{
 			name: "success - another error",
-			err:  NewInvalidPaginationParamsError("x"),
+			err:  pagination.NewInvalidParamsError("x"),
 			want: false,
 		},
 		{

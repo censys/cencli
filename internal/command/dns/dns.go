@@ -228,7 +228,7 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err != nil {
 		return err
 	}
-	pageSize, maxPages, err := c.parsePaginationFlags()
+	pageSize, maxPages, err := command.ParsePaginationFlags(c.flags.pageSize, c.flags.maxPages)
 	if err != nil {
 		return err
 	}
@@ -424,37 +424,6 @@ func (c *Command) parseDomainFlag() (mo.Option[assets.DomainName], cenclierrors.
 	return mo.Some(domain), nil
 }
 
-// parsePaginationFlags reads --page-size and --max-pages. A --max-pages of -1
-// means all pages, which is returned as an absent value.
-func (c *Command) parsePaginationFlags() (mo.Option[uint64], mo.Option[uint64], cenclierrors.CencliError) {
-	pageSize := mo.None[uint64]()
-	maxPages := mo.None[uint64]()
-
-	rawPageSize, err := c.flags.pageSize.Value()
-	if err != nil {
-		return pageSize, maxPages, err
-	}
-	if rawPageSize.IsPresent() {
-		pageSize = mo.Some(uint64(rawPageSize.MustGet()))
-	}
-
-	rawMaxPages, err := c.flags.maxPages.Value()
-	if err != nil {
-		return pageSize, maxPages, err
-	}
-	if rawMaxPages.IsPresent() {
-		switch v := rawMaxPages.MustGet(); {
-		case v == -1:
-			maxPages = mo.None[uint64]()
-		case v <= 0:
-			return pageSize, maxPages, flags.NewIntegerFlagInvalidValueError("max-pages", v, "must be -1 or >= 1")
-		default:
-			maxPages = mo.Some(uint64(v))
-		}
-	}
-	return pageSize, maxPages, nil
-}
-
 // fetched is what Run and RenderShort need from one input's lookup, for any
 // of the four lookups.
 type fetched struct {
@@ -474,7 +443,8 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		"end", c.params.ToTime.Format(time.RFC3339),
 	)
 
-	// Warn before fetching all pages; copied from search, which owns the same warning.
+	// Warn before fetching all pages. This stays local, not command.WarnFetchingAllPages,
+	// because with several inputs the warning says the fetch repeats for each one.
 	if !c.Config().Quiet && !c.params.MaxPages.IsPresent() {
 		scope := ""
 		if len(c.inputs) > 1 {

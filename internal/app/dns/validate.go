@@ -4,8 +4,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/samber/mo"
-
 	"github.com/censys/censys-sdk-go/models/operations"
 
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
@@ -62,15 +60,4 @@ func normalizeRecordTypes(values []string, supported []string) ([]string, cencli
 		}
 	}
 	return out, nil
-}
-
-// validatePaginationParams rejects pagination values that would fetch nothing.
-func validatePaginationParams(pageSize, maxPages mo.Option[uint64]) cenclierrors.CencliError {
-	if pageSize.IsPresent() && pageSize.MustGet() == 0 {
-		return NewInvalidPaginationParamsError("page size must be greater than 0")
-	}
-	if maxPages.IsPresent() && maxPages.MustGet() == 0 {
-		return NewInvalidPaginationParamsError("max pages must be greater than 0")
-	}
-	return nil
 }

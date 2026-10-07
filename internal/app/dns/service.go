@@ -44,7 +44,7 @@ func (s *dnsService) NameResolutions(ctx context.Context, name assets.DomainName
 	orgID := utilconvert.OptionalString(params.OrgID)
 	page, err := lookup(ctx, params, nameRecordTypes,
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSNameResolutionBoundResponse], client.ClientError) {
-			return s.client.ListDNSNameResolutionBounds(ctx, orgID, name.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
+			return s.client.ListDNSNameResolutionBounds(ctx, orgID, name.String(), params.FromTime, params.ToTime, recordTypes, pagination.OptionalInt64(params.PageSize), pageToken)
 		},
 		func(r *components.DNSNameResolutionBoundResponse) pagination.Page[*NameRecord] {
 			items := wrapRecords(r.Records, func(rec *components.DNSResolutionRecord) *NameRecord {
@@ -63,7 +63,7 @@ func (s *dnsService) NameResolutionRanges(ctx context.Context, name assets.Domai
 	orgID := utilconvert.OptionalString(params.OrgID)
 	page, err := lookup(ctx, params, nameRecordTypes,
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSNameResolutionRangeResponse], client.ClientError) {
-			return s.client.ListDNSNameResolutionRanges(ctx, orgID, name.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
+			return s.client.ListDNSNameResolutionRanges(ctx, orgID, name.String(), params.FromTime, params.ToTime, recordTypes, pagination.OptionalInt64(params.PageSize), pageToken)
 		},
 		func(r *components.DNSNameResolutionRangeResponse) pagination.Page[*NameRangeRecord] {
 			items := wrapRecords(r.Records, func(rec *components.DNSResolutionRangeRecord) *NameRangeRecord {
@@ -82,7 +82,7 @@ func (s *dnsService) IPResolutions(ctx context.Context, ip assets.HostID, params
 	orgID := utilconvert.OptionalString(params.OrgID)
 	page, err := lookup(ctx, params, ipRecordTypes,
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSIPResolutionBoundResponse], client.ClientError) {
-			return s.client.ListDNSIPResolutionBounds(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, optionalInt64(params.PageSize), pageToken)
+			return s.client.ListDNSIPResolutionBounds(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, pagination.OptionalInt64(params.PageSize), pageToken)
 		},
 		func(r *components.DNSIPResolutionBoundResponse) pagination.Page[*IPRecord] {
 			items := wrapRecords(r.Records, func(rec *components.DNSIPResolutionRecord) *IPRecord {
@@ -101,7 +101,7 @@ func (s *dnsService) IPResolutionRanges(ctx context.Context, ip assets.HostID, p
 	orgID := utilconvert.OptionalString(params.OrgID)
 	page, err := lookup(ctx, params, ipRecordTypes,
 		func(recordTypes []string, pageToken mo.Option[string]) (client.Result[components.DNSIPResolutionRangeResponse], client.ClientError) {
-			return s.client.ListDNSIPResolutionRanges(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, utilconvert.OptionalString(params.Domain), optionalInt64(params.PageSize), pageToken)
+			return s.client.ListDNSIPResolutionRanges(ctx, orgID, ip.String(), params.FromTime, params.ToTime, recordTypes, utilconvert.OptionalString(params.Domain), pagination.OptionalInt64(params.PageSize), pageToken)
 		},
 		func(r *components.DNSIPResolutionRangeResponse) pagination.Page[*IPRangeRecord] {
 			items := wrapRecords(r.Records, func(rec *components.DNSIPResolutionRangeRecord) *IPRangeRecord {
@@ -146,7 +146,7 @@ func lookup[Page, Item any](
 
 // prepare validates the pagination values and returns the normalized record types.
 func prepare(params Params, supported []string) ([]string, cenclierrors.CencliError) {
-	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+	if err := pagination.ValidateParams(params.PageSize, params.MaxPages); err != nil {
 		return nil, err
 	}
 	return normalizeRecordTypes(params.RecordTypes, supported)
@@ -162,14 +162,6 @@ func mapAccessError(err cenclierrors.CencliError) cenclierrors.CencliError {
 		}
 	}
 	return err
-}
-
-// optionalInt64 converts an optional page size for the client.
-func optionalInt64(v mo.Option[uint64]) mo.Option[int64] {
-	if v.IsPresent() {
-		return mo.Some(int64(v.MustGet()))
-	}
-	return mo.None[int64]()
 }
 
 // wrapRecords wraps each record with the lookup's input. wrap receives a

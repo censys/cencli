@@ -53,20 +53,3 @@ func IsAccessDeniedError(err error) bool {
 	var target *accessDeniedError
 	return errors.As(err, &target)
 }
-
-// invalidPaginationParamsError signals pagination values that would fetch
-// nothing.
-type invalidPaginationParamsError struct {
-	reason string
-}
-
-// NewInvalidPaginationParamsError creates an error for pagination values that would fetch nothing.
-func NewInvalidPaginationParamsError(reason string) cenclierrors.CencliError {
-	return &invalidPaginationParamsError{reason: reason}
-}
-
-func (e *invalidPaginationParamsError) Error() string { return e.reason }
-
-func (e *invalidPaginationParamsError) Title() string { return "Invalid Pagination Parameters" }
-
-func (e *invalidPaginationParamsError) ShouldPrintUsage() bool { return true }
