@@ -9,23 +9,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 )
 
-// invalidPaginationParamsError signals that a pagination parameter (page size or
-// max pages) would fetch nothing.
-type invalidPaginationParamsError struct {
-	reason string
-}
-
-// NewInvalidPaginationParamsError creates an invalid-pagination-params error.
-func NewInvalidPaginationParamsError(reason string) cenclierrors.CencliError {
-	return &invalidPaginationParamsError{reason: reason}
-}
-
-func (e *invalidPaginationParamsError) Error() string { return e.reason }
-
-func (e *invalidPaginationParamsError) Title() string { return "Invalid Pagination Parameters" }
-
-func (e *invalidPaginationParamsError) ShouldPrintUsage() bool { return true }
-
 // invalidEnumFilterError signals that a filter flag with a fixed set of accepted
 // values (e.g. --status) was given an unsupported value.
 type invalidEnumFilterError struct {

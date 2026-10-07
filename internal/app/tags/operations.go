@@ -48,13 +48,13 @@ func (s *tagsService) ListOperations(
 	}
 
 	// handle pagination invariants
-	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+	if err := pagination.ValidateParams(params.PageSize, params.MaxPages); err != nil {
 		return OperationsResult{}, err
 	}
 
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	pageSize := optionalInt64(params.PageSize)
+	pageSize := pagination.OptionalInt64(params.PageSize)
 
 	listPage := func(tagID string) (pagination.Result[TagOperation], cenclierrors.CencliError) {
 		listFn := func(pageToken mo.Option[string]) (client.Result[components.TagOperationsList], client.ClientError) {

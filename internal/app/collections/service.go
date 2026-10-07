@@ -47,11 +47,11 @@ func (s *collectionsService) ListCollections(
 	}
 
 	// handle pagination invariants
-	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+	if err := pagination.ValidateParams(params.PageSize, params.MaxPages); err != nil {
 		return ListResult{}, err
 	}
 
-	pageSize := optionalInt64(params.PageSize)
+	pageSize := pagination.OptionalInt64(params.PageSize)
 
 	listFn := func(pageToken mo.Option[string]) (client.Result[components.ListCollectionsResponseV1], client.ClientError) {
 		return s.client.ListCollections(ctx, client.ListCollectionsRequest{
@@ -226,14 +226,6 @@ func newResponseMeta(md client.Metadata) *responsemeta.ResponseMeta {
 		return nil
 	}
 	return responsemeta.NewResponseMeta(md.Request, md.Response, md.Latency, md.Attempts)
-}
-
-// optionalInt64 narrows an unsigned page size to the signed type the client sends.
-func optionalInt64(v mo.Option[uint64]) mo.Option[int64] {
-	if !v.IsPresent() {
-		return mo.None[int64]()
-	}
-	return mo.Some(int64(v.MustGet()))
 }
 
 // mapCollection converts an SDK collection into the domain DTO.

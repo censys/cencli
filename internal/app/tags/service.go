@@ -67,11 +67,11 @@ func (s *tagsService) ListTags(
 	}
 
 	// handle pagination invariants
-	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+	if err := pagination.ValidateParams(params.PageSize, params.MaxPages); err != nil {
 		return ListResult{}, err
 	}
 
-	pageSize := optionalInt64(params.PageSize)
+	pageSize := pagination.OptionalInt64(params.PageSize)
 
 	listFn := func(pageToken mo.Option[string]) (client.Result[components.TagsList], client.ClientError) {
 		return s.client.ListTags(ctx, client.ListTagsRequest{
@@ -116,13 +116,13 @@ func (s *tagsService) ListAssignments(
 	}
 
 	// handle pagination invariants
-	if err := validatePaginationParams(params.PageSize, params.MaxPages); err != nil {
+	if err := pagination.ValidateParams(params.PageSize, params.MaxPages); err != nil {
 		return AssignmentsResult{}, err
 	}
 
 	orgIDStr := utilconvert.OptionalString(params.OrgID)
 
-	pageSize := optionalInt64(params.PageSize)
+	pageSize := pagination.OptionalInt64(params.PageSize)
 
 	// The paginator only returns a hard error when the *first* page failed, so a retry
 	// here cannot re-emit anything already streamed.
@@ -184,14 +184,6 @@ func extractAssignmentsPage(list *components.TagAssignmentsList) pagination.Page
 	}
 
 	return pagination.Page[Assignment]{Items: items, TotalSize: list.TotalSize, NextPageToken: nextPageToken}
-}
-
-// optionalInt64 narrows an unsigned page size to the signed type the client sends.
-func optionalInt64(v mo.Option[uint64]) mo.Option[int64] {
-	if !v.IsPresent() {
-		return mo.None[int64]()
-	}
-	return mo.Some(int64(v.MustGet()))
 }
 
 // GetTag retrieves a single tag by name or UUID. The endpoint accepts either
