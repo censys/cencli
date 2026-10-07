@@ -24,7 +24,7 @@ type GetCommand struct {
 	// flags the command uses
 	flags getCommandFlags
 	// state - populated by PreRun
-	orgID        mo.Option[identifiers.OrganizationID]
+	orgID        identifiers.OrganizationID
 	collectionID identifiers.CollectionID
 	// result stores the collection for rendering
 	result collections.GetResult
@@ -81,26 +81,28 @@ func (c *GetCommand) Init() error {
 }
 
 func (c *GetCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	flagOrgID, err := c.flags.orgID.Value()
-	if err != nil {
-		return err
-	}
-	// Route through the credential-aware resolver: --org-id applies only to
-	// personal access tokens, so this rejects it when the credential defines the
-	// organization itself, and otherwise supplies the credential's organization.
-	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
-	if err != nil {
-		return err
-	}
+	var err cenclierrors.CencliError
 	c.collectionID, err = requireCollectionID(args[0])
 	if err != nil {
 		return err
 	}
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Every collections endpoint requires an organization. Resolve it after the
+	// input checks, as scan does, so an input error is reported first; this
+	// still fails before any request when no organization is configured.
+	c.orgID, err = c.ResolveRequiredOrgID(cmd, flagOrgID)
+	if err != nil {
+		return err
+	}
+
 	return c.resolveCollectionsService()
 }
 
 func (c *GetCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	logger := c.Logger(cmdName).With("orgID_set", c.orgID.IsPresent())
+	logger := c.Logger(cmdName)
 
 	err := c.WithProgress(
 		cmd.Context(),
@@ -109,7 +111,7 @@ func (c *GetCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliE
 		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
 			c.result, fetchErr = c.collectionsSvc.GetCollection(pctx, collections.GetParams{
-				OrgID:        c.orgID,
+				OrgID:        mo.Some(c.orgID),
 				CollectionID: c.collectionID,
 			})
 			return fetchErr

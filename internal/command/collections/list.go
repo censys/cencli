@@ -31,7 +31,7 @@ type ListCommand struct {
 	// flags the command uses
 	flags listCommandFlags
 	// state - populated by PreRun
-	orgID    mo.Option[identifiers.OrganizationID]
+	orgID    identifiers.OrganizationID
 	statuses []string
 	pageSize mo.Option[uint64]
 	maxPages mo.Option[uint64]
@@ -118,17 +118,6 @@ func (c *ListCommand) Init() error {
 }
 
 func (c *ListCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	flagOrgID, err := c.flags.orgID.Value()
-	if err != nil {
-		return err
-	}
-	// Route through the credential-aware resolver: --org-id applies only to
-	// personal access tokens, so this rejects it when the credential defines the
-	// organization itself, and otherwise supplies the credential's organization.
-	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
-	if err != nil {
-		return err
-	}
 	statuses, err := c.flags.status.Value()
 	if err != nil {
 		return err
@@ -138,12 +127,23 @@ func (c *ListCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.Cen
 	if err != nil {
 		return err
 	}
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Every collections endpoint requires an organization. Resolve it after the
+	// input checks, as scan does, so an input error is reported first; this
+	// still fails before any request when no organization is configured.
+	c.orgID, err = c.ResolveRequiredOrgID(cmd, flagOrgID)
+	if err != nil {
+		return err
+	}
+
 	return c.resolveCollectionsService()
 }
 
 func (c *ListCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	logger := c.Logger(cmdName).With(
-		"orgID_set", c.orgID.IsPresent(),
 		"statuses", c.statuses,
 		"pageSize_set", c.pageSize.IsPresent(),
 		"maxPages_set", c.maxPages.IsPresent(),
@@ -158,7 +158,7 @@ func (c *ListCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencli
 		func(pctx context.Context) cenclierrors.CencliError {
 			var fetchErr cenclierrors.CencliError
 			c.result, fetchErr = c.collectionsSvc.ListCollections(pctx, collections.ListParams{
-				OrgID:    c.orgID,
+				OrgID:    mo.Some(c.orgID),
 				Statuses: c.statuses,
 				PageSize: c.pageSize,
 				MaxPages: c.maxPages,

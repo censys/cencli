@@ -16,10 +16,10 @@ $ censys collections delete <collection-id>              # delete a collection
 
 ## Organization Context
 
-Every `collections` subcommand accepts **`--org-id`, `-o`** (type `string`, UUID format). Which organization the commands act on depends on how you authenticated:
+Every `collections` subcommand accepts **`--org-id`, `-o`** (type `string`, UUID format), and every one **requires** an organization. Collections have no free-account fallback.
 
-- **Personal access token** — a PAT is not organization-scoped, so you choose: the stored organization ID by default, or `--org-id` per subcommand. To store a default, run `censys config org-id add` (see the [config command docs](./CONFIG.md)).
-- **OAuth login (`censys auth login`)** — the organization is fixed by what that login was authorized for. Stored organization IDs are ignored and `--org-id` fails with an error; run `censys auth logout` and log in again to target a different organization. See [Organization context](AUTH.md#organization-context).
+- **Personal access token** — the stored organization ID by default, or `--org-id` per subcommand. To store a default, run `censys config org-id add` (see the [config command docs](./CONFIG.md)). With neither, the command fails before sending anything (exit 2).
+- **OAuth login (`censys auth login`)** — the organization is fixed by what that login was authorized for. Stored organization IDs are ignored and `--org-id` fails with an error; run `censys auth logout` and log in again to target a different organization. A login authorized for your free account cannot use collections (exit 1). See [Organization context](AUTH.md#organization-context).
 
 To see global flags and how they affect these commands, see the [global configuration docs](../GLOBAL_CONFIGURATION.md).
 

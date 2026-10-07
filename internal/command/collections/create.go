@@ -25,7 +25,7 @@ type CreateCommand struct {
 	// flags the command uses
 	flags createCommandFlags
 	// state - populated by PreRun
-	orgID       mo.Option[identifiers.OrganizationID]
+	orgID       identifiers.OrganizationID
 	name        string
 	query       string
 	description mo.Option[string]
@@ -88,17 +88,6 @@ func (c *CreateCommand) Init() error {
 }
 
 func (c *CreateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	flagOrgID, err := c.flags.orgID.Value()
-	if err != nil {
-		return err
-	}
-	// Route through the credential-aware resolver: --org-id applies only to
-	// personal access tokens, so this rejects it when the credential defines the
-	// organization itself, and otherwise supplies the credential's organization.
-	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
-	if err != nil {
-		return err
-	}
 	c.name = strings.TrimSpace(args[0])
 
 	query, err := c.flags.query.Value()
@@ -113,12 +102,23 @@ func (c *CreateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 	}
 	c.description = optionalNonEmpty(description)
 
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Every collections endpoint requires an organization. Resolve it after the
+	// input checks, as scan does, so an input error is reported first; this
+	// still fails before any request when no organization is configured.
+	c.orgID, err = c.ResolveRequiredOrgID(cmd, flagOrgID)
+	if err != nil {
+		return err
+	}
+
 	return c.resolveCollectionsService()
 }
 
 func (c *CreateCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	logger := c.Logger(cmdName).With(
-		"orgID_set", c.orgID.IsPresent(),
 		"description_set", c.description.IsPresent(),
 	)
 
@@ -129,7 +129,7 @@ func (c *CreateCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 		func(pctx context.Context) cenclierrors.CencliError {
 			var createErr cenclierrors.CencliError
 			c.result, createErr = c.collectionsSvc.CreateCollection(pctx, collections.CreateParams{
-				OrgID:       c.orgID,
+				OrgID:       mo.Some(c.orgID),
 				Name:        c.name,
 				Query:       c.query,
 				Description: c.description,

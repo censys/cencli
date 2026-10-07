@@ -25,7 +25,15 @@ import (
 	"github.com/censys/cencli/internal/store"
 )
 
-const testCollectionID = "550e8400-e29b-41d4-a716-446655440000"
+const (
+	testCollectionID = "550e8400-e29b-41d4-a716-446655440000"
+	testStoredOrgID  = "11111111-1111-1111-1111-111111111111"
+)
+
+// storedOrgForTest is the org-id global the mock store reports. A test that
+// needs no stored org sets it to "" and restores it with t.Cleanup; tests in
+// this package share global state (viper, formatter) and do not run in parallel.
+var storedOrgForTest = testStoredOrgID
 
 func okMeta() *responsemeta.ResponseMeta {
 	return &responsemeta.ResponseMeta{
@@ -61,7 +69,7 @@ func runCommand(
 // runCommandWith is runCommand with an explicit quiet seam: quiet stands in for
 // the global --quiet flag, which lives on the real root command and so is not
 // registered when a subcommand is mounted alone. cli, when non-nil, is set on
-// the context so credential-aware org resolution (see command.Context.ResolveOrgID)
+// the context so credential-aware org resolution (see command.Context.ResolveRequiredOrgID)
 // can be exercised; a nil cli leaves the context with no client, which reports
 // credential.KindNone and so allows a manually chosen org, matching every
 // existing test in this file.
@@ -94,10 +102,16 @@ func runCommandWith(
 
 	mockStore := storemocks.NewMockStore(ctrl)
 	// With no client set (credential.KindNone) or a personal-access-token
-	// client, ResolveOrgID falls back to the stored org-id global when --org-id
-	// is absent; report none stored so a missing flag resolves cleanly.
-	mockStore.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
-		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+	// client, ResolveRequiredOrgID falls back to the stored org-id global when
+	// --org-id is absent. Every collections subcommand requires an org, so
+	// report testStoredOrgID as stored unless the test clears it.
+	if storedOrg := storedOrgForTest; storedOrg != "" {
+		mockStore.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+			Return(&store.ValueForGlobal{Value: storedOrg}, nil).AnyTimes()
+	} else {
+		mockStore.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
+			Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+	}
 	cmdContext := command.NewCommandContext(cfg, mockStore, command.WithCollectionsService(svc))
 	if cli != nil {
 		cmdContext.SetCensysClient(cli)
@@ -112,7 +126,7 @@ func runCommandWith(
 
 // boundCredentialClient returns a mock client reporting an OAuth-style
 // credential bound to orgID, the same credential.Info shape
-// internal/command/context_test.go uses to exercise ResolveOrgID's rejection
+// internal/command/context_test.go uses to exercise the org resolver's rejection
 // path. Collections commands have no client-injection test mechanism of their
 // own (nor does search, which G1 copies), so this reuses that mechanism here.
 func boundCredentialClient(ctrl *gomock.Controller, orgID uuid.UUID) client.Client {
@@ -380,6 +394,36 @@ func TestCollectionsListCommand(t *testing.T) {
 			}
 			stdout, stderr, err := runCommandWith(t, tc.service(ctrl), build, tc.args, tc.quiet, cli)
 			tc.assert(t, stdout, stderr, err)
+		})
+	}
+}
+
+// TestCollectionsRequireOrg checks that every subcommand fails before any
+// request when no organization is configured: the collections API requires one.
+func TestCollectionsRequireOrg(t *testing.T) {
+	storedOrgForTest = ""
+	t.Cleanup(func() { storedOrgForTest = testStoredOrgID })
+
+	testCases := []struct {
+		name  string
+		build func(*command.Context) command.Command
+		args  []string
+	}{
+		{name: "list", build: func(c *command.Context) command.Command { return NewListCommand(c) }},
+		{name: "get", build: func(c *command.Context) command.Command { return NewGetCommand(c) }, args: []string{testCollectionID}},
+		{name: "create", build: func(c *command.Context) command.Command { return NewCreateCommand(c) }, args: []string{"web", "--query", "q"}},
+		{name: "update", build: func(c *command.Context) command.Command { return NewUpdateCommand(c) }, args: []string{testCollectionID, "--name", "n"}},
+		{name: "delete", build: func(c *command.Context) command.Command { return NewDeleteCommand(c) }, args: []string{testCollectionID, "--yes"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			// No EXPECT calls: any service call fails the test.
+			svc := collectionsmocks.NewMockCollectionsService(ctrl)
+			_, _, err := runCommand(t, svc, tc.build, tc.args)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "no organization ID available")
 		})
 	}
 }

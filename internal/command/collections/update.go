@@ -24,7 +24,7 @@ type UpdateCommand struct {
 	// flags the command uses
 	flags updateCommandFlags
 	// state - populated by PreRun
-	orgID        mo.Option[identifiers.OrganizationID]
+	orgID        identifiers.OrganizationID
 	collectionID identifiers.CollectionID
 	name         mo.Option[string]
 	query        mo.Option[string]
@@ -96,17 +96,7 @@ func (c *UpdateCommand) Init() error {
 }
 
 func (c *UpdateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	flagOrgID, err := c.flags.orgID.Value()
-	if err != nil {
-		return err
-	}
-	// Route through the credential-aware resolver: --org-id applies only to
-	// personal access tokens, so this rejects it when the credential defines the
-	// organization itself, and otherwise supplies the credential's organization.
-	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
-	if err != nil {
-		return err
-	}
+	var err cenclierrors.CencliError
 	c.collectionID, err = requireCollectionID(args[0])
 	if err != nil {
 		return err
@@ -145,12 +135,23 @@ func (c *UpdateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 		return NewNothingToUpdateError()
 	}
 
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Every collections endpoint requires an organization. Resolve it after the
+	// input checks, as scan does, so an input error is reported first; this
+	// still fails before any request when no organization is configured.
+	c.orgID, err = c.ResolveRequiredOrgID(cmd, flagOrgID)
+	if err != nil {
+		return err
+	}
+
 	return c.resolveCollectionsService()
 }
 
 func (c *UpdateCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	logger := c.Logger(cmdName).With(
-		"orgID_set", c.orgID.IsPresent(),
 		"name_set", c.name.IsPresent(),
 		"query_set", c.query.IsPresent(),
 		"description_set", c.description.IsPresent(),
@@ -163,7 +164,7 @@ func (c *UpdateCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 		func(pctx context.Context) cenclierrors.CencliError {
 			var updateErr cenclierrors.CencliError
 			c.result, updateErr = c.collectionsSvc.UpdateCollection(pctx, collections.UpdateParams{
-				OrgID:        c.orgID,
+				OrgID:        mo.Some(c.orgID),
 				CollectionID: c.collectionID,
 				Name:         c.name,
 				Query:        c.query,

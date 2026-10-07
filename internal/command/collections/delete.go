@@ -31,7 +31,7 @@ type DeleteCommand struct {
 	// flags the command uses
 	flags deleteCommandFlags
 	// state - populated by PreRun
-	orgID        mo.Option[identifiers.OrganizationID]
+	orgID        identifiers.OrganizationID
 	collectionID identifiers.CollectionID
 	yes          bool
 	// result stores the deletion outcome for rendering
@@ -103,17 +103,6 @@ func (c *DeleteCommand) Init() error {
 }
 
 func (c *DeleteCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
-	flagOrgID, err := c.flags.orgID.Value()
-	if err != nil {
-		return err
-	}
-	// Route through the credential-aware resolver: --org-id applies only to
-	// personal access tokens, so this rejects it when the credential defines the
-	// organization itself, and otherwise supplies the credential's organization.
-	c.orgID, err = c.ResolveOrgID(cmd.Context(), flagOrgID)
-	if err != nil {
-		return err
-	}
 	yes, err := c.flags.yes.Value()
 	if err != nil {
 		return err
@@ -131,12 +120,23 @@ func (c *DeleteCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 		return NewConfirmationRequiredError()
 	}
 
+	flagOrgID, err := c.flags.orgID.Value()
+	if err != nil {
+		return err
+	}
+	// Every collections endpoint requires an organization. Resolve it after the
+	// input checks, as scan does, so an input error is reported first; this
+	// still fails before any request when no organization is configured.
+	c.orgID, err = c.ResolveRequiredOrgID(cmd, flagOrgID)
+	if err != nil {
+		return err
+	}
+
 	return c.resolveCollectionsService()
 }
 
 func (c *DeleteCommand) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
 	logger := c.Logger(cmdName).With(
-		"orgID_set", c.orgID.IsPresent(),
 		"yes", c.yes,
 	)
 
@@ -159,7 +159,7 @@ func (c *DeleteCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cenc
 		func(pctx context.Context) cenclierrors.CencliError {
 			var deleteErr cenclierrors.CencliError
 			c.result, deleteErr = c.collectionsSvc.DeleteCollection(pctx, collections.DeleteParams{
-				OrgID:        c.orgID,
+				OrgID:        mo.Some(c.orgID),
 				CollectionID: c.collectionID,
 			})
 			return deleteErr

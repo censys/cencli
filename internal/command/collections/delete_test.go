@@ -40,11 +40,10 @@ func runDeleteCommand(t *testing.T, svc appcollections.Service, seams deleteSeam
 	defer ctrl.Finish()
 
 	mockStore := storemocks.NewMockStore(ctrl)
-	// With no client set (credential.KindNone), ResolveOrgID falls back to the
-	// stored org-id global when --org-id is absent; report none stored so a
-	// missing flag resolves cleanly.
+	// With no client set (credential.KindNone), ResolveRequiredOrgID falls back
+	// to the stored org-id global when --org-id is absent.
 	mockStore.EXPECT().GetLastUsedGlobalByName(gomock.Any(), gomock.Any()).
-		Return((*store.ValueForGlobal)(nil), store.ErrGlobalNotFound).AnyTimes()
+		Return(&store.ValueForGlobal{Value: testStoredOrgID}, nil).AnyTimes()
 	cmdContext := command.NewCommandContext(cfg, mockStore, command.WithCollectionsService(svc))
 	cmd := NewDeleteCommand(cmdContext)
 	if seams.confirm != nil {
