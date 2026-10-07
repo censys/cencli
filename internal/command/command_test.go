@@ -2,6 +2,7 @@ package command
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/samber/mo"
@@ -190,6 +191,41 @@ func TestCommand(t *testing.T) {
 
 			cmdErr := rootCmd.Execute()
 			tc.assert(t, stdout.String(), stderr.String(), cmdErr)
+		})
+	}
+}
+
+func TestStreamingFromConfigDoesNotSilenceNonStreamingCommand(t *testing.T) {
+	for _, supportsStreaming := range []bool{false, true} {
+		t.Run(fmt.Sprintf("supports streaming %v", supportsStreaming), func(t *testing.T) {
+			viper.Reset()
+			cfg, err := config.New(t.TempDir())
+			require.NoError(t, err)
+			viper.Set(config.StreamingFlagName, true)
+
+			ctrl := gomock.NewController(t)
+			cmdContext := NewCommandContext(cfg, storemocks.NewMockStore(ctrl))
+			command := newTestCommand(cmdContext)
+			command.supportsStreamingFn = func() bool { return supportsStreaming }
+			command.runFn = func(cmd *cobra.Command, args []string) cenclierrors.CencliError {
+				return command.PrintData(command, map[string]string{"id": "abc"})
+			}
+
+			rootCmd, err := RootCommandToCobra(command)
+			require.NoError(t, err)
+			require.NoError(t, config.BindGlobalFlags(rootCmd.PersistentFlags(), cfg))
+			rootCmd.SetArgs([]string{})
+
+			var stdout bytes.Buffer
+			formatter.Stdout = &stdout
+			formatter.Stderr = &bytes.Buffer{}
+
+			require.NoError(t, rootCmd.Execute())
+			if supportsStreaming {
+				assert.Empty(t, stdout.String(), "a streaming command emits through its own streaming output")
+			} else {
+				assert.Contains(t, stdout.String(), `"abc"`)
+			}
 		})
 	}
 }

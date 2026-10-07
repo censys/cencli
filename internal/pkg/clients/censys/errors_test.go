@@ -50,20 +50,8 @@ func TestParseSDKError_Comprehensive(t *testing.T) {
 			expectedType:   "CensysClientStructuredError",
 			expectedStatus: "Bad Request",
 			expectedCode:   mo.Some(int64(400)),
-			expectedOutput: "{\n" +
-				"  \"title\": \"Bad Request\",\n" +
-				"  \"detail\": \"Request validation failed\",\n" +
-				"  \"status\": 400,\n" +
-				"  \"type\": \"validation_error\",\n" +
-				"  \"instance\": \"/api/v2/hosts/search\",\n" +
-				"  \"errors\": [\n" +
-				"    {\n" +
-				"      \"location\": \"query.field\",\n" +
-				"      \"message\": \"Field is required\",\n" +
-				"      \"value\": \"invalid_value\"\n" +
-				"    }\n" +
-				"  ]\n" +
-				"}",
+			expectedOutput: "Request validation failed (400 Bad Request)\n" +
+				"  - query.field: Field is required (got \"invalid_value\")",
 			expectedTitle: "Error Returned from Censys API",
 		},
 		{
@@ -75,10 +63,106 @@ func TestParseSDKError_Comprehensive(t *testing.T) {
 			expectedType:   "CensysClientStructuredError",
 			expectedStatus: "Not Found",
 			expectedCode:   mo.Some(int64(404)),
-			expectedOutput: "{\n" +
-				"  \"detail\": \"Resource not found\",\n" +
-				"  \"status\": 404\n" +
-				"}",
+			expectedOutput: "Resource not found (404 Not Found)",
+			expectedTitle:  "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel with only a title and a nonstandard status",
+			inputError: &sdkerrors.ErrorModel{
+				Title:  strPtr("Something odd"),
+				Status: int64Ptr(599),
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "unknown",
+			expectedCode:   mo.Some(int64(599)),
+			expectedOutput: "Something odd (599)",
+			expectedTitle:  "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel with a bare field error",
+			inputError: &sdkerrors.ErrorModel{
+				Detail: strPtr("Unprocessable Entity"),
+				Status: int64Ptr(422),
+				Errors: []components.ErrorDetail{{Message: strPtr("hostname must contain a period")}},
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "Unprocessable Entity",
+			expectedCode:   mo.Some(int64(422)),
+			expectedOutput: "Unprocessable Entity (422 Unprocessable Entity)\n" +
+				"  - hostname must contain a period",
+			expectedTitle: "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel whose title adds to the detail",
+			inputError: &sdkerrors.ErrorModel{
+				Title:  strPtr("Permission denied"),
+				Detail: strPtr("You do not have access to this tag"),
+				Status: int64Ptr(403),
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "Forbidden",
+			expectedCode:   mo.Some(int64(403)),
+			expectedOutput: "Permission denied: You do not have access to this tag (403 Forbidden)",
+			expectedTitle:  "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel with an empty detail falls back to the title",
+			inputError: &sdkerrors.ErrorModel{
+				Title:  strPtr("Something odd"),
+				Detail: strPtr(""),
+				Status: int64Ptr(404),
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "Not Found",
+			expectedCode:   mo.Some(int64(404)),
+			expectedOutput: "Something odd (404 Not Found)",
+			expectedTitle:  "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel field values are JSON-encoded",
+			inputError: &sdkerrors.ErrorModel{
+				Detail: strPtr("Request validation failed"),
+				Status: int64Ptr(422),
+				Errors: []components.ErrorDetail{
+					{Location: strPtr("body.query"), Message: strPtr("invalid query"), Value: "host.name: a\nand b"},
+					{Location: strPtr("body.target"), Message: strPtr("unknown field"), Value: map[string]any{"port": 443}},
+				},
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "Unprocessable Entity",
+			expectedCode:   mo.Some(int64(422)),
+			expectedOutput: "Request validation failed (422 Unprocessable Entity)\n" +
+				"  - body.query: invalid query (got \"host.name: a\\nand b\")\n" +
+				"  - body.target: unknown field (got {\"port\":443})",
+			expectedTitle: "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel control characters in server strings are escaped",
+			inputError: &sdkerrors.ErrorModel{
+				Title:  strPtr("Bad\x1b[31m title"),
+				Detail: strPtr("invalid query:\nline twö"),
+				Status: int64Ptr(422),
+				Errors: []components.ErrorDetail{{Location: strPtr("body.\tquery"), Message: strPtr("bad\rinput")}},
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "Unprocessable Entity",
+			expectedCode:   mo.Some(int64(422)),
+			expectedOutput: "Bad\\x1b[31m title: invalid query:\\nline twö (422 Unprocessable Entity)\n" +
+				"  - body.\\tquery: bad\\rinput",
+			expectedTitle: "Error Returned from Censys API",
+		},
+		{
+			name: "ErrorModel format characters and C1 controls are escaped, including in values",
+			inputError: &sdkerrors.ErrorModel{
+				Detail: strPtr("name \u202eevil\u200b"),
+				Status: int64Ptr(422),
+				Errors: []components.ErrorDetail{{Location: strPtr("body.name"), Message: strPtr("invalid"), Value: "a\u0085b\u202ec"}},
+			},
+			expectedType:   "CensysClientStructuredError",
+			expectedStatus: "Unprocessable Entity",
+			expectedCode:   mo.Some(int64(422)),
+			expectedOutput: `name \u202eevil\u200b (422 Unprocessable Entity)` + "\n" +
+				`  - body.name: invalid (got "a\u0085b\u202ec")`,
 			expectedTitle: "Error Returned from Censys API",
 		},
 		{
@@ -87,7 +171,7 @@ func TestParseSDKError_Comprehensive(t *testing.T) {
 			expectedType:   "CensysClientStructuredError",
 			expectedStatus: "unknown",
 			expectedCode:   mo.None[int64](),
-			expectedOutput: "{}",
+			expectedOutput: "the API returned an error without details",
 			expectedTitle:  "Error Returned from Censys API",
 		},
 		{

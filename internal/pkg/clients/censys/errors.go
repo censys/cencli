@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/censys/censys-sdk-go/models/sdkerrors"
 	"github.com/samber/mo"
@@ -88,14 +90,14 @@ func NewCensysClientStructuredError(err *sdkerrors.ErrorModel) ClientStructuredE
 	errors := make([]errorDetail, len(err.Errors))
 	for i, err := range err.Errors {
 		errors[i] = errorDetail{
-			location: mo.PointerToOption(err.Location),
-			message:  mo.PointerToOption(err.Message),
+			location: nonEmpty(err.Location),
+			message:  nonEmpty(err.Message),
 			value:    err.Value,
 		}
 	}
 	return &censysClientError{
-		detail:   mo.PointerToOption(err.Detail),
-		title:    mo.PointerToOption(err.Title),
+		detail:   nonEmpty(err.Detail),
+		title:    nonEmpty(err.Title),
 		status:   mo.PointerToOption(err.Status),
 		errors:   errors,
 		typ:      mo.PointerToOption(err.Type),
@@ -103,43 +105,69 @@ func NewCensysClientStructuredError(err *sdkerrors.ErrorModel) ClientStructuredE
 	}
 }
 
+func nonEmpty(s *string) mo.Option[string] {
+	if s == nil || *s == "" {
+		return mo.None[string]()
+	}
+	return mo.Some(*s)
+}
+
+func escapeControl(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			q := strconv.QuoteRuneToASCII(r)
+			sb.WriteString(q[1 : len(q)-1])
+			continue
+		}
+		sb.WriteRune(r)
+	}
+	return sb.String()
+}
+
 func (e *censysClientError) Error() string {
-	type errStruct struct {
-		Location *string `json:"location,omitempty"`
-		Message  *string `json:"message,omitempty"`
-		Value    any     `json:"value,omitempty"`
+	statusText := ""
+	if e.status.IsPresent() {
+		statusText = http.StatusText(int(e.status.MustGet()))
+	}
+	title := e.title.OrEmpty()
+	if title == statusText || title == e.detail.OrEmpty() {
+		title = ""
 	}
 
-	errs := make([]errStruct, 0, len(e.errors))
+	var sb strings.Builder
+	switch {
+	case title != "" && e.detail.IsPresent():
+		sb.WriteString(escapeControl(title) + ": " + escapeControl(e.detail.MustGet()))
+	case e.detail.IsPresent():
+		sb.WriteString(escapeControl(e.detail.MustGet()))
+	case e.title.IsPresent():
+		sb.WriteString(escapeControl(e.title.MustGet()))
+	default:
+		sb.WriteString("the API returned an error without details")
+	}
+	if e.status.IsPresent() {
+		if statusText != "" {
+			fmt.Fprintf(&sb, " (%d %s)", e.status.MustGet(), statusText)
+		} else {
+			fmt.Fprintf(&sb, " (%d)", e.status.MustGet())
+		}
+	}
 	for _, ed := range e.errors {
-		errs = append(errs, errStruct{
-			Location: ed.location.ToPointer(),
-			Message:  ed.message.ToPointer(),
-			Value:    ed.value,
-		})
+		sb.WriteString("\n  - ")
+		if ed.location.IsPresent() {
+			sb.WriteString(escapeControl(ed.location.MustGet()) + ": ")
+		}
+		sb.WriteString(escapeControl(ed.message.OrElse("invalid")))
+		if ed.value != nil {
+			if b, err := json.Marshal(ed.value); err == nil {
+				fmt.Fprintf(&sb, " (got %s)", escapeControl(string(b)))
+			} else {
+				fmt.Fprintf(&sb, " (got %s)", escapeControl(fmt.Sprint(ed.value)))
+			}
+		}
 	}
-
-	data := struct {
-		Title    *string     `json:"title,omitempty"`
-		Detail   *string     `json:"detail,omitempty"`
-		Status   *int64      `json:"status,omitempty"`
-		Type     *string     `json:"type,omitempty"`
-		Instance *string     `json:"instance,omitempty"`
-		Errors   []errStruct `json:"errors,omitempty"`
-	}{
-		Title:    e.title.ToPointer(),
-		Detail:   e.detail.ToPointer(),
-		Status:   e.status.ToPointer(),
-		Type:     e.typ.ToPointer(),
-		Instance: e.instance.ToPointer(),
-		Errors:   errs,
-	}
-
-	b, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		return fmt.Sprintf("failed to marshal censysClientError: %v", err)
-	}
-	return string(b)
+	return sb.String()
 }
 
 func (e *censysClientError) Title() string {
