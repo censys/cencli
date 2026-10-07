@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/censys/cencli/internal/app/collections"
+	"github.com/censys/cencli/internal/command"
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/styles"
@@ -98,37 +99,30 @@ func renderCollectionDetail(header string, col collections.Collection) cenclierr
 	out.WriteRune('\n')
 	out.WriteRune('\n')
 
-	writeField(&out, "Name", col.Name)
-	writeField(&out, "ID", col.ID)
+	command.WriteDetailField(&out, "Name", col.Name)
+	command.WriteDetailField(&out, "ID", col.ID)
 
 	description := "-"
 	if col.Description != "" {
 		description = col.Description
 	}
-	writeField(&out, "Description", description)
-	writeField(&out, "Query", col.Query)
-	writeField(&out, "Status", col.Status)
+	command.WriteDetailField(&out, "Description", description)
+	command.WriteDetailField(&out, "Query", col.Query)
+	command.WriteDetailField(&out, "Status", col.Status)
 	if col.StatusReason != nil && *col.StatusReason != "" {
-		writeField(&out, "Reason", *col.StatusReason)
+		command.WriteDetailField(&out, "Reason", *col.StatusReason)
 	}
-	writeField(&out, "Assets", strconv.FormatInt(col.TotalAssets, 10))
-	writeField(&out, "Added 24h", strconv.FormatInt(col.AddedAssets24Hours, 10))
-	writeField(&out, "Removed 24h", strconv.FormatInt(col.RemovedAssets24Hours, 10))
+	command.WriteDetailField(&out, "Assets", strconv.FormatInt(col.TotalAssets, 10))
+	command.WriteDetailField(&out, "Added 24h", strconv.FormatInt(col.AddedAssets24Hours, 10))
+	command.WriteDetailField(&out, "Removed 24h", strconv.FormatInt(col.RemovedAssets24Hours, 10))
 
 	createdBy := "-"
 	if col.CreatedBy != nil && *col.CreatedBy != "" {
 		createdBy = *col.CreatedBy
 	}
-	writeField(&out, "Created By", createdBy)
-	writeField(&out, "Created At", col.CreateTime.Format(detailTimeLayout))
+	command.WriteDetailField(&out, "Created By", createdBy)
+	command.WriteDetailField(&out, "Created At", col.CreateTime.Format(detailTimeLayout))
 
 	formatter.Println(formatter.Stdout, out.String())
 	return nil
-}
-
-// writeField appends a padded label / value line to a detail view.
-func writeField(out *strings.Builder, label, value string) {
-	labelStyled := styles.GlobalStyles.Primary.Render(fmt.Sprintf("%-13s", label+":"))
-	valueStyled := styles.GlobalStyles.Comment.Render(value)
-	fmt.Fprintf(out, "  %s %s\n", labelStyled, valueStyled)
 }
