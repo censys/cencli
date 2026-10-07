@@ -11,6 +11,7 @@ import (
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/require"
 
+	"github.com/censys/cencli/internal/app/streaming"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 )
 
@@ -76,6 +77,14 @@ func TestPaginate(t *testing.T) {
 			wantHasMore: true,
 		},
 		{
+			name:      "empty first page",
+			pages:     []testPage{{}},
+			errAt:     -1,
+			maxPages:  mo.None[uint64](),
+			wantItems: nil,
+			wantCalls: 1,
+		},
+		{
 			name:      "all pages until next token is empty",
 			pages:     []testPage{{items: []string{"a"}, next: "t1"}, {items: []string{"b"}}},
 			errAt:     -1,
@@ -138,4 +147,26 @@ func TestPaginate_CancelledBeforeFirstPage(t *testing.T) {
 	_, err := Paginate(ctx, mo.None[uint64](), "things", fetcher(nil, -1, &tokens), extract)
 	require.Error(t, err)
 	require.Empty(t, tokens)
+}
+
+func TestPaginate_Streaming(t *testing.T) {
+	emitter, items := streaming.NewChannelEmitter(64)
+	ctx := streaming.WithEmitter(context.Background(), emitter)
+
+	pages := []testPage{{items: []string{"a", "b"}, next: "t1"}, {items: []string{"c"}}}
+	var tokens []mo.Option[string]
+	res, err := Paginate(ctx, mo.None[uint64](), "things", fetcher(pages, -1, &tokens), extract)
+	require.NoError(t, err)
+	require.Empty(t, res.Items, "streaming mode emits items instead of collecting them")
+
+	emitter.Close(nil)
+	count := 0
+	for item := range items {
+		// Close sends a final Done item; it is not a record.
+		if item.Done {
+			break
+		}
+		count++
+	}
+	require.Equal(t, 3, count)
 }
