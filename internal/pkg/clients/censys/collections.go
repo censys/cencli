@@ -231,31 +231,25 @@ func (c *collectionsSDK) CreateCollection(
 	ctx context.Context,
 	req CreateCollectionRequest,
 ) (Result[components.Collection], ClientError) {
+	// Not retried: a 5xx or transport error can follow a collection the server
+	// already created, and names are not unique, so a retry could create a copy.
 	start := time.Now()
-	var res *operations.V3CollectionsCrudCreateResponse
-	err, attempts := c.executeWithRetry(ctx, func() ClientError {
-		var err error
-		res, err = c.censysSDK.client.Collections.Create(ctx, operations.V3CollectionsCrudCreateRequest{
-			OrganizationID: req.OrgID.ToPointer(),
-			CrudCreateInputBody: &components.CrudCreateInputBody{
-				Name:        req.Name,
-				Query:       req.Query,
-				Description: req.Description.ToPointer(),
-			},
-		})
-		if err != nil {
-			return NewClientError(err)
-		}
-		return nil
+	res, err := c.censysSDK.client.Collections.Create(ctx, operations.V3CollectionsCrudCreateRequest{
+		OrganizationID: req.OrgID.ToPointer(),
+		CrudCreateInputBody: &components.CrudCreateInputBody{
+			Name:        req.Name,
+			Query:       req.Query,
+			Description: req.Description.ToPointer(),
+		},
 	})
 	latency := time.Since(start)
 	if err != nil {
 		zero := Result[components.Collection]{}
-		return zero, err
+		return zero, NewClientError(err)
 	}
 	collection := res.GetResponseEnvelopeCollection().GetResult()
 	return Result[components.Collection]{
-		Metadata: buildResponseMetadata(res, latency, attempts),
+		Metadata: buildResponseMetadata(res, latency, 1),
 		Data:     collection,
 	}, nil
 }
