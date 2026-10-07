@@ -174,7 +174,7 @@ func (c *AssignmentsCommand) Run(cmd *cobra.Command, args []string) cenclierrors
 		"maxPages_set", c.maxPages.IsPresent(),
 	)
 
-	warnFetchingAllPages(c.Config().Quiet, logger, c.maxPages)
+	command.WarnFetchingAllPages(c.Config().Quiet, logger, c.maxPages)
 
 	// Set up streaming output (no-op for non-streaming formats)
 	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
@@ -293,6 +293,6 @@ func (c *AssignmentsCommand) parseAssetFilter(raw []string) (mo.Option[string], 
 
 func (c *AssignmentsCommand) parsePaginationFlags() cenclierrors.CencliError {
 	var err cenclierrors.CencliError
-	c.pageSize, c.maxPages, err = parsePaginationFlags(c.flags.pageSize, c.flags.maxPages)
+	c.pageSize, c.maxPages, err = command.ParsePaginationFlags(c.flags.pageSize, c.flags.maxPages)
 	return err
 }

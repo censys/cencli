@@ -42,6 +42,12 @@ echo "Updating golden fixtures..."
 "$BINARY" scan --help > scan_help.out
 "$BINARY" scan rescan --help > scan_rescan_help.out
 "$BINARY" scan get --help > scan_get_help.out
+"$BINARY" collections --help > collections_help.out
+"$BINARY" collections list --help > collections_list_help.out
+"$BINARY" collections get --help > collections_get_help.out
+"$BINARY" collections create --help > collections_create_help.out
+"$BINARY" collections update --help > collections_update_help.out
+"$BINARY" collections delete --help > collections_delete_help.out
 "$BINARY" > root.out
 
 echo "✅ All golden fixtures updated"
