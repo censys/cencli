@@ -73,6 +73,28 @@ func TestCollectionsCreateCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "blank name is rejected before the service",
+			service: func(ctrl *gomock.Controller) appcollections.Service {
+				return collectionsmocks.NewMockCollectionsService(ctrl)
+			},
+			args: []string{"  ", "--query", "q"},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "collection name must not be empty")
+			},
+		},
+		{
+			name: "blank query is rejected before the service",
+			service: func(ctrl *gomock.Controller) appcollections.Service {
+				return collectionsmocks.NewMockCollectionsService(ctrl)
+			},
+			args: []string{"alpha", "--query", " "},
+			assert: func(t *testing.T, stdout, stderr string, err error) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "--query must not be empty")
+			},
+		},
+		{
 			name: "collection limit reached shows the API detail",
 			service: func(ctrl *gomock.Controller) appcollections.Service {
 				m := collectionsmocks.NewMockCollectionsService(ctrl)

@@ -96,6 +96,15 @@ func (c *CreateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 	}
 	c.query = strings.TrimSpace(query)
 
+	// Reject blank input here as well as in the service, so it is reported
+	// before the organization and auth checks below.
+	if c.name == "" {
+		return collections.NewInvalidCollectionNameError()
+	}
+	if c.query == "" {
+		return collections.NewEmptyQueryError()
+	}
+
 	description, err := c.flags.description.Value()
 	if err != nil {
 		return err
