@@ -86,6 +86,20 @@ func removeFirstNLines(data []byte, n int) []byte {
 	return out
 }
 
+// trimLinesRight strips trailing whitespace from each line, then trims the overall
+// trailing newlines. This normalizes Cobra's terminal-width padding (Linux CI pads
+// wrapped description lines to the detected terminal width).
+func trimLinesRight(b []byte) []byte {
+	scanner := bufio.NewScanner(bytes.NewReader(b))
+	var buf bytes.Buffer
+	for scanner.Scan() {
+		line := bytes.TrimRight(scanner.Bytes(), " \t")
+		buf.Write(line)
+		buf.WriteByte('\n')
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n\r\t ")
+}
+
 // assertGoldenFile asserts that the given stdout matches the contents of the golden file.
 // It normalizes both inputs by trimming trailing whitespace and normalizing line endings
 // to handle platform differences (Windows uses \r\n, Unix uses \n).
@@ -95,8 +109,8 @@ func assertGoldenFile(t *testing.T, golden, stdout []byte, leadingLinesRemoved i
 	// normalize line endings to \n for cross-platform compatibility
 	normalizedGolden := bytes.ReplaceAll(golden, []byte("\r\n"), []byte("\n"))
 	normalizedStdout := bytes.ReplaceAll(stdout, []byte("\r\n"), []byte("\n"))
-	// trim trailing whitespace
-	normalizedGolden = bytes.TrimRight(normalizedGolden, "\n\r\t ")
-	normalizedStdout = bytes.TrimRight(normalizedStdout, "\n\r\t ")
+	// trim trailing whitespace per-line and overall
+	normalizedGolden = trimLinesRight(normalizedGolden)
+	normalizedStdout = trimLinesRight(normalizedStdout)
 	assert.Equal(t, string(normalizedGolden), string(normalizedStdout))
 }

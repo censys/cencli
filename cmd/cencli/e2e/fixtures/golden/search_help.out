@@ -1,5 +1,5 @@
 Run a search query across Censys data. Queries must be written in the Censys Query
-Language.                                                                         
+Language.
 
 Usage:
   censys search <query> [flags]
@@ -9,14 +9,18 @@ Examples:
   censys search --fields host.ip,host.location.country "host.services: (protocol=SSH and not port: 22)"
   censys search --collection-id <your-collection-id> "host.services.protocol=SSH"
   censys search --page-size 50 --max-pages 5 "cert.names=censys.com"
-  censys search --max-pages -1 "host.services.port: 443 and host.location.country: Germany"
+  censys search --all "host.services.port: 443 and host.location.country: Germany"
   censys search --count "host.services.protocol=SSH"
+  censys search --jq .host.ip "host.services.protocol=SSH"
+  censys search --all --jq ".host.services[].port" "host.location.country: Germany"
 
 Flags:
+  -A, --all                    fetch all pages of results (shorthand for --max-pages=-1)
   -c, --collection-id string   collection to search within (optional)
       --count                  print only the total number of matching results (from the first page) instead of the results themselves
   -f, --fields strings         fields to return in response (optional)
   -h, --help                   help for search
+      --jq string              filter output using a jq-style path (e.g. .host.ip, .host.services[].port)
   -p, --max-pages int          maximum number of pages to fetch (-1 for all pages) (default 1)
   -o, --org-id string          organization ID to target (personal access tokens only)
   -n, --page-size int          number of results to return per page (default 100)

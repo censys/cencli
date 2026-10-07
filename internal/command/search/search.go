@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/censys/cencli/internal/pkg/flags"
 	"github.com/censys/cencli/internal/pkg/formatter"
 	"github.com/censys/cencli/internal/pkg/formatter/short"
+	"github.com/censys/cencli/internal/pkg/jq"
 	"github.com/censys/cencli/internal/pkg/styles"
 	"github.com/censys/cencli/internal/pkg/tape"
 )
@@ -47,6 +49,8 @@ type Command struct {
 	pageSize     mo.Option[uint64]
 	maxPages     mo.Option[uint64]
 	count        bool
+	allPages     bool   // --all: suppresses the "fetching all pages" warning
+	jqExpr       string // --jq: path expression applied to each result
 	// result stores the search result for rendering
 	result search.Result
 }
@@ -59,6 +63,8 @@ type searchCommandFlags struct {
 	pageSize     flags.IntegerFlag
 	maxPages     flags.IntegerFlag
 	count        flags.BoolFlag
+	all          flags.BoolFlag
+	jq           flags.StringFlag
 }
 
 var _ command.Command = (*Command)(nil)
@@ -104,8 +110,10 @@ func (c *Command) Examples() []string {
 		`--fields host.ip,host.location.country "host.services: (protocol=SSH and not port: 22)"`,
 		`--collection-id <your-collection-id> "host.services.protocol=SSH"`,
 		`--page-size 50 --max-pages 5 "cert.names=censys.com"`,
-		`--max-pages -1 "host.services.port: 443 and host.location.country: Germany"`,
+		`--all "host.services.port: 443 and host.location.country: Germany"`,
 		`--count "host.services.protocol=SSH"`,
+		`--jq .host.ip "host.services.protocol=SSH"`,
+		`--all --jq ".host.services[].port" "host.location.country: Germany"`,
 	}
 }
 
@@ -164,6 +172,21 @@ func (c *Command) Init() error {
 		false,
 		"print only the total number of matching results (from the first page) instead of the results themselves",
 	)
+	c.flags.all = flags.NewBoolFlag(
+		c.Flags(),
+		"all",
+		"A",
+		false,
+		"fetch all pages of results (shorthand for --max-pages=-1)",
+	)
+	c.flags.jq = flags.NewStringFlag(
+		c.Flags(),
+		false,
+		"jq",
+		"",
+		"",
+		`filter output using a jq-style path (e.g. .host.ip, .host.services[].port)`,
+	)
 	return nil
 }
 
@@ -187,6 +210,12 @@ func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliE
 	if err := c.parseCountFlag(); err != nil {
 		return err
 	}
+	if err := c.parseAllFlag(); err != nil {
+		return err
+	}
+	if err := c.parseJQFlag(); err != nil {
+		return err
+	}
 	return c.resolveSearchService()
 }
 
@@ -206,13 +235,13 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 		return c.runCount(cmd, logger)
 	}
 
-	if !c.Config().Quiet && !c.maxPages.IsPresent() {
+	if !c.Config().Quiet && !c.maxPages.IsPresent() && !c.allPages {
 		msg := styles.GlobalStyles.Warning.Render("Warning: fetching all pages (--max-pages=-1). This may take a while and increase API usage.")
 		formatter.Println(formatter.Stderr, msg)
 		logger.Debug("fetching all pages", "message", msg)
 	}
 
-	// Set up streaming output (no-op for non-streaming formats)
+	// Set up streaming output (no-op for non-streaming formats or when --jq is set)
 	ctx, stopStreaming := c.WithStreamingOutput(cmd.Context(), logger)
 	defer stopStreaming(nil)
 
@@ -233,6 +262,10 @@ func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliErro
 
 	// Print response metadata
 	c.PrintAppResponseMeta(c.result.Meta)
+
+	if c.jqExpr != "" {
+		return c.runJQ()
+	}
 
 	// PrintData handles streaming vs buffered automatically
 	data := c.prepareSearchData()
@@ -286,7 +319,7 @@ func (c *Command) warnIgnoredCountFlags(cmd *cobra.Command, logger *slog.Logger)
 	}
 
 	var ignored []string
-	for _, name := range []string{"page-size", "max-pages", "fields", config.StreamingFlagName} {
+	for _, name := range []string{"page-size", "max-pages", "all", "fields", "jq", config.StreamingFlagName} {
 		if f := cmd.Flag(name); f != nil && f.Changed {
 			ignored = append(ignored, "--"+name)
 		}
@@ -336,6 +369,55 @@ func (c *Command) RenderTemplate() cenclierrors.CencliError {
 func (c *Command) RenderShort() cenclierrors.CencliError {
 	output := short.SearchHits(c.result.Hits)
 	formatter.Println(formatter.Stdout, output)
+	return nil
+}
+
+// parseAllFlag parses --all and, when set, overrides max-pages to unlimited.
+func (c *Command) parseAllFlag() cenclierrors.CencliError {
+	var err cenclierrors.CencliError
+	c.allPages, err = c.flags.all.Value()
+	if err != nil {
+		return err
+	}
+	if c.allPages {
+		c.maxPages = mo.None[uint64]()
+	}
+	return nil
+}
+
+// parseJQFlag parses --jq and validates the expression at PreRun time.
+func (c *Command) parseJQFlag() cenclierrors.CencliError {
+	var err cenclierrors.CencliError
+	c.jqExpr, err = c.flags.jq.Value()
+	if err != nil {
+		return err
+	}
+	if c.jqExpr != "" {
+		if _, parseErr := jq.Parse(c.jqExpr); parseErr != nil {
+			return cenclierrors.NewCencliError(parseErr)
+		}
+	}
+	return nil
+}
+
+// runJQ applies the --jq expression to every result hit and prints one value per line.
+func (c *Command) runJQ() cenclierrors.CencliError {
+	for _, item := range c.prepareSearchData() {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		values, err := jq.EvalJSON(c.jqExpr, raw)
+		if err != nil {
+			return cenclierrors.NewCencliError(err)
+		}
+		for _, v := range values {
+			formatter.Println(formatter.Stdout, jq.FormatValue(v))
+		}
+	}
+	if c.result.PartialError != nil {
+		formatter.Println(formatter.Stderr, c.result.PartialError.Error())
+	}
 	return nil
 }
 
