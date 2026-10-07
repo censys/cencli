@@ -117,23 +117,25 @@ func (e *missingCollectionError) Title() string { return "Collection Not Returne
 func (e *missingCollectionError) ShouldPrintUsage() bool { return false }
 
 // collectionLimitError signals that the API refused a create because the
-// organization is at its collection limit (HTTP 412). Count is the number of
-// collections that count toward the limit (archived ones do not), or absent
-// when counting them failed.
+// organization is at its collection limit (HTTP 412). Detail is the API's own
+// message, which names the current count and the maximum ("organization has N
+// active collections out of maximum allowed M"), or absent when the response
+// carried none.
 type collectionLimitError struct {
-	count mo.Option[int]
+	detail mo.Option[string]
 }
 
 // NewCollectionLimitError creates a collection-limit error.
-func NewCollectionLimitError(count mo.Option[int]) cenclierrors.CencliError {
-	return &collectionLimitError{count: count}
+func NewCollectionLimitError(detail mo.Option[string]) cenclierrors.CencliError {
+	return &collectionLimitError{detail: detail}
 }
 
 func (e *collectionLimitError) Error() string {
-	if e.count.IsPresent() {
-		return fmt.Sprintf("your organization has reached its collection limit (%d collection(s) count toward it; archived collections do not). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more", e.count.MustGet())
+	const next = "Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more"
+	if e.detail.IsPresent() {
+		return fmt.Sprintf("%s. %s", strings.TrimRight(e.detail.MustGet(), ". "), next)
 	}
-	return "your organization has reached its collection limit (archived collections do not count toward it). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more"
+	return "your organization has reached its collection limit (archived collections do not count toward it). " + next
 }
 
 func (e *collectionLimitError) Title() string { return "Collection Limit Reached" }

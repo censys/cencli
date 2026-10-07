@@ -13,7 +13,6 @@ import (
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
 	client "github.com/censys/cencli/internal/pkg/clients/censys"
 	utilconvert "github.com/censys/cencli/internal/pkg/convertutil"
-	"github.com/censys/cencli/internal/pkg/domain/identifiers"
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 )
 
@@ -126,7 +125,7 @@ func (s *collectionsService) CreateCollection(
 	})
 	if err != nil {
 		if isCollectionLimitError(err) {
-			return CreateResult{}, NewCollectionLimitError(s.countTowardLimit(ctx, params.OrgID))
+			return CreateResult{}, NewCollectionLimitError(apiDetail(err))
 		}
 		return CreateResult{}, err
 	}
@@ -150,34 +149,13 @@ func isCollectionLimitError(err cenclierrors.CencliError) bool {
 	return status.IsPresent() && status.MustGet() == 412
 }
 
-// countedStatuses are the statuses that count toward the collection limit;
-// archived collections do not. Built from SupportedStatuses so the two lists
-// cannot drift.
-var countedStatuses = func() []string {
-	statuses := make([]string, 0, len(SupportedStatuses)-1)
-	for _, s := range SupportedStatuses {
-		if s != "archived" {
-			statuses = append(statuses, s)
-		}
+// apiDetail returns the API's one-line summary of err, when err carries one.
+func apiDetail(err cenclierrors.CencliError) mo.Option[string] {
+	var detailed interface{ Detail() mo.Option[string] }
+	if !errors.As(err, &detailed) {
+		return mo.None[string]()
 	}
-	return statuses
-}()
-
-// countPageSize is the page size for the limit count. It matches the list
-// command's default, so a refused create costs a few calls, not one per collection.
-const countPageSize = 100
-
-// countTowardLimit counts the collections that count toward the limit, across
-// every page. It returns an absent count when any page fails, so a partial
-// count is never shown as the real one. The create command never streams (its
-// context carries no emitter, and it does not support -S), so ListCollections
-// always collects here instead of emitting.
-func (s *collectionsService) countTowardLimit(ctx context.Context, orgID mo.Option[identifiers.OrganizationID]) mo.Option[int] {
-	res, err := s.ListCollections(ctx, ListParams{OrgID: orgID, Statuses: countedStatuses, PageSize: mo.Some[uint64](countPageSize)})
-	if err != nil || res.PartialError != nil {
-		return mo.None[int]()
-	}
-	return mo.Some(len(res.Collections))
+	return detailed.Detail()
 }
 
 // UpdateCollection changes a collection's name, query, or description. The API

@@ -202,13 +202,13 @@ $ censys collections create ssh-hosts --query "host.services.protocol=SSH" --out
 }
 ```
 
-When the organization is at its collection limit, the API refuses the create with a 412 and the command reports how many collections count toward it:
+When the organization is at its collection limit, the API refuses the create with a 412. The command shows the API's message, which names the current count and the maximum:
 
 ```console
 $ censys collections create ssh-hosts --query "host.services.protocol=SSH"
 
 [Collection Limit Reached]
-your organization has reached its collection limit (12 collection(s) count toward it; archived collections do not). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more
+collection limit exceeded: organization has 12 active collections out of maximum allowed 12 (archived collections do not count towards this limit). Delete one with `censys collections delete <collection-id>`, or contact your Censys account team for more
 ```
 
 ### `collections update`
@@ -319,9 +319,9 @@ $ censys collections delete 550e8400-e29b-41d4-a716-446655440000 --yes --output-
 
 ## Data Availability
 
-- Collection limits depend on your organization's plan. The API enforces them when you create a collection. It does not expose the limit or your remaining allowance, so the CLI cannot show how many more collections you can create, or check before it creates one.
-- When the organization is at its limit, `collections create` fails with "Collection Limit Reached". The message shows how many collections count toward the limit. Archived collections do not count.
-- There is no pre-check: the API is the only source of the limit.
+- Collection limits depend on your organization's plan. The API enforces them when you create a collection.
+- When the organization is at its limit, `collections create` fails with "Collection Limit Reached". The message comes from the API and shows the current count and the maximum. Archived collections do not count.
+- There is no pre-check: no endpoint reports the limit before a create, so the CLI cannot show how many more collections you can create.
 - The list endpoint does not return a total count. `collections list` reports how many collections it fetched, and prints a note on stderr when more pages exist.
 - See the [Censys plan documentation](https://docs.censys.com/docs/platform-collections) for collection limits by plan.
 

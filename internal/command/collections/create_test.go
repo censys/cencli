@@ -73,17 +73,17 @@ func TestCollectionsCreateCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "collection limit reached shows the count",
+			name: "collection limit reached shows the API detail",
 			service: func(ctrl *gomock.Controller) appcollections.Service {
 				m := collectionsmocks.NewMockCollectionsService(ctrl)
 				m.EXPECT().CreateCollection(gomock.Any(), gomock.Any()).
-					Return(appcollections.CreateResult{}, appcollections.NewCollectionLimitError(mo.Some(12)))
+					Return(appcollections.CreateResult{}, appcollections.NewCollectionLimitError(mo.Some("organization has 12 active collections out of maximum allowed 12")))
 				return m
 			},
 			args: []string{"alpha", "--query", "host.services.protocol=SSH"},
 			assert: func(t *testing.T, stdout, stderr string, err error) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "12 collection(s) count toward it")
+				require.Contains(t, err.Error(), "12 active collections out of maximum allowed 12")
 			},
 		},
 		{
