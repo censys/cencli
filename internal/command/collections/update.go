@@ -107,12 +107,18 @@ func (c *UpdateCommand) PreRun(cmd *cobra.Command, args []string) cenclierrors.C
 		return err
 	}
 	c.name = optionalNonEmpty(name)
+	if cmd.Flags().Changed("name") && c.name.IsAbsent() {
+		return NewBlankFlagError("name")
+	}
 
 	query, err := c.flags.query.Value()
 	if err != nil {
 		return err
 	}
 	c.query = optionalNonEmpty(query)
+	if cmd.Flags().Changed("query") && c.query.IsAbsent() {
+		return NewBlankFlagError("query")
+	}
 
 	description, err := c.flags.description.Value()
 	if err != nil {

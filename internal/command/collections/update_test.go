@@ -82,10 +82,22 @@ func TestCollectionsUpdateCommand(t *testing.T) {
 			assert:  wantErr("no fields to update"),
 		},
 		{
-			name:    "blank values count as no flags",
+			name:    "blank name is rejected",
 			service: noCall,
 			args:    []string{testCollectionID, "--name", "  "},
-			assert:  wantErr("no fields to update"),
+			assert:  wantErr("--name cannot be blank"),
+		},
+		{
+			name:    "empty name with another flag is rejected, not skipped",
+			service: noCall,
+			args:    []string{testCollectionID, "--name", "", "--description", "d"},
+			assert:  wantErr("--name cannot be blank"),
+		},
+		{
+			name:    "blank query is rejected",
+			service: noCall,
+			args:    []string{testCollectionID, "--query", " "},
+			assert:  wantErr("--query cannot be blank"),
 		},
 		{
 			name:    "description conflict",

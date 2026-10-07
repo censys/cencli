@@ -1,6 +1,10 @@
 package collections
 
-import "github.com/censys/cencli/internal/pkg/cenclierrors"
+import (
+	"fmt"
+
+	"github.com/censys/cencli/internal/pkg/cenclierrors"
+)
 
 // nothingToUpdateError signals that `collections update` was invoked without
 // any mutation flag, so there is nothing to change.
@@ -43,3 +47,19 @@ func (e *confirmationRequiredError) Error() string {
 func (e *confirmationRequiredError) Title() string { return "Confirmation Required" }
 
 func (e *confirmationRequiredError) ShouldPrintUsage() bool { return true }
+
+// blankFlagError signals that a flag was given with a blank value. A blank
+// --name or --query would otherwise be silently treated as "not set".
+type blankFlagError struct {
+	flag string
+}
+
+func NewBlankFlagError(flag string) cenclierrors.CencliError { return &blankFlagError{flag: flag} }
+
+func (e *blankFlagError) Error() string {
+	return fmt.Sprintf("--%s cannot be blank", e.flag)
+}
+
+func (e *blankFlagError) Title() string { return "Invalid Flag Value" }
+
+func (e *blankFlagError) ShouldPrintUsage() bool { return true }
