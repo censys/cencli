@@ -6,9 +6,40 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestConfigWithUnknownTemplate(t *testing.T) {
+	for _, missingHost := range []bool{false, true} {
+		t.Run(fmt.Sprintf("missing_known_template_%t", missingHost), func(t *testing.T) {
+			tempDir, cleanup := setupConfigTest(t)
+			defer cleanup()
+			hostPath := filepath.Join(tempDir, "custom-host.hbs")
+			if !missingHost {
+				require.NoError(t, os.WriteFile(hostPath, []byte("custom host"), 0o600))
+			}
+			futurePath := filepath.Join(tempDir, "future.hbs")
+			writeConfigFile(t, tempDir, fmt.Sprintf("templates:\n  host:\n    path: %q\n  future:\n    path: %q\n    option: keep\n", hostPath, futurePath))
+
+			cfg, err := New(tempDir)
+			if missingHost {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "template file not found for entity 'host'")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, hostPath, cfg.Templates[TemplateEntityHost].Path)
+			assert.NotContains(t, cfg.Templates, TemplateEntity("future"))
+			reader := viper.New()
+			reader.SetConfigFile(filepath.Join(tempDir, "config.yaml"))
+			require.NoError(t, reader.ReadInConfig())
+			assert.Equal(t, map[string]any{"path": futurePath, "option": "keep"}, reader.GetStringMap("templates.future"))
+			assert.NoFileExists(t, futurePath)
+		})
+	}
+}
 
 // TestTemplatePathsWrittenToYAML tests that template paths are properly initialized
 // and written to the config.yaml file during config initialization.
