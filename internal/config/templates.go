@@ -8,11 +8,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 
 	"github.com/censys/cencli/internal/pkg/cenclierrors"
+	"github.com/censys/cencli/internal/pkg/log"
 )
 
 //go:embed templates
@@ -66,6 +69,30 @@ func (a *TemplateEntity) UnmarshalText(text []byte) error {
 		return fmt.Errorf("%w: %s", ErrUnsupportedTemplateEntity, s)
 	}
 	return nil
+}
+
+func skipUnknownTemplateEntitiesHookFunc() mapstructure.DecodeHookFuncType {
+	logger := log.New(viper.GetBool(debugKey), nil)
+	return func(_ reflect.Type, to reflect.Type, data any) (any, error) {
+		if to != reflect.TypeOf(map[TemplateEntity]TemplateConfig{}) {
+			return data, nil
+		}
+		templates, ok := data.(map[string]any)
+		if !ok {
+			return data, nil
+		}
+		// Filter a copy so newer template settings survive config writes.
+		known := make(map[string]any, len(templates))
+		for name, settings := range templates {
+			var entity TemplateEntity
+			if err := entity.UnmarshalText([]byte(name)); err != nil {
+				logger.Debug("Skipping unsupported template entity", "entity", name)
+				continue
+			}
+			known[name] = settings
+		}
+		return known, nil
+	}
 }
 
 func (c *Config) GetTemplate(entity TemplateEntity) (TemplateConfig, TemplateNotFoundError) {

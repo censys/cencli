@@ -126,6 +126,7 @@ func New(dataDir string) (*Config, cenclierrors.CencliError) {
 
 func (c *Config) Unmarshal() cenclierrors.CencliError {
 	hooks := mapstructure.ComposeDecodeHookFunc(
+		skipUnknownTemplateEntitiesHookFunc(),
 		rejectNumericDurationHookFunc(),
 		rejectNegativeDurationHookFunc(),
 		mapstructure.StringToTimeDurationHookFunc(),
