@@ -13,6 +13,7 @@ import (
 
 	"github.com/censys/cencli/internal/app/aggregate"
 	"github.com/censys/cencli/internal/app/censeye"
+	"github.com/censys/cencli/internal/app/collections"
 	"github.com/censys/cencli/internal/app/credits"
 	"github.com/censys/cencli/internal/app/enrich"
 	"github.com/censys/cencli/internal/app/history"
@@ -42,16 +43,17 @@ type Context struct {
 	colorDisabledStdout bool
 	colorDisabledStderr bool
 	// services
-	viewSvc      view.Service
-	enrichSvc    enrich.Service
-	searchSvc    search.Service
-	aggregateSvc aggregate.Service
-	historySvc   history.Service
-	censeyeSvc   censeye.Service
-	creditsSvc   credits.Service
-	orgSvc       organizations.Service
-	tagsSvc      tags.Service
-	scanSvc      scan.Service
+	viewSvc        view.Service
+	enrichSvc      enrich.Service
+	searchSvc      search.Service
+	aggregateSvc   aggregate.Service
+	historySvc     history.Service
+	censeyeSvc     censeye.Service
+	creditsSvc     credits.Service
+	orgSvc         organizations.Service
+	tagsSvc        tags.Service
+	scanSvc        scan.Service
+	collectionsSvc collections.Service
 }
 
 // ContextOpts are functional options for configuring Context
@@ -469,6 +471,27 @@ func (c *Context) ScanService() (scan.Service, cenclierrors.CencliError) {
 // the ScanService will be instantiated on demand.
 func WithScanService(svc scan.Service) ContextOpts {
 	return func(c *Context) { c.scanSvc = svc }
+}
+
+// CollectionsService attempts to provide a CollectionsService to the caller.
+// If it is not already set and is unable to be instantiated, it will return an error.
+func (c *Context) CollectionsService() (collections.Service, cenclierrors.CencliError) {
+	if c.collectionsSvc != nil {
+		return c.collectionsSvc, nil
+	}
+	if c.censysClient == nil {
+		return nil, client.NewCensysClientNotConfiguredError()
+	}
+	// Memoize the service instance since it's stateless and thread-safe for reuse
+	c.collectionsSvc = collections.New(c.censysClient)
+	return c.collectionsSvc, nil
+}
+
+// WithCollectionsService injects an instantiated CollectionsService to the Context.
+// This should only be used in tests, as in the application,
+// the CollectionsService will be instantiated on demand.
+func WithCollectionsService(svc collections.Service) ContextOpts {
+	return func(c *Context) { c.collectionsSvc = svc }
 }
 
 // SearchService attempts to provide a SearchService to the caller.

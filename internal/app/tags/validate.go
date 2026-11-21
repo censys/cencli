@@ -119,17 +119,6 @@ func ValidateTimeWindow(before, after mo.Option[time.Time]) cenclierrors.CencliE
 	return nil
 }
 
-// validatePaginationParams rejects pagination values that would fetch nothing.
-func validatePaginationParams(pageSize, maxPages mo.Option[uint64]) cenclierrors.CencliError {
-	if pageSize.IsPresent() && pageSize.MustGet() == 0 {
-		return NewInvalidPaginationParamsError("page size must be greater than 0")
-	}
-	if maxPages.IsPresent() && maxPages.MustGet() == 0 {
-		return NewInvalidPaginationParamsError("max pages must be greater than 0")
-	}
-	return nil
-}
-
 func validateEnumFilter(filter string, value mo.Option[string], supported []string) cenclierrors.CencliError {
 	if !value.IsPresent() {
 		return nil
