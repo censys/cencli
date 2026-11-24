@@ -11,6 +11,7 @@ import (
 	aggregatecmd "github.com/censys/cencli/internal/command/aggregate"
 	authcmd "github.com/censys/cencli/internal/command/auth"
 	censeyecmd "github.com/censys/cencli/internal/command/censeye"
+	collectionscmd "github.com/censys/cencli/internal/command/collections"
 	completioncmd "github.com/censys/cencli/internal/command/completion"
 	configcmd "github.com/censys/cencli/internal/command/config"
 	creditscmd "github.com/censys/cencli/internal/command/credits"
@@ -80,6 +81,7 @@ func (c *Command) Init() error {
 		orgcmd.NewOrgCommand(c.Context),
 		tagscmd.NewTagsCommand(c.Context),
 		scancmd.NewScanCommand(c.Context),
+		collectionscmd.NewCollectionsCommand(c.Context),
 	)
 }
 

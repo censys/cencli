@@ -1,0 +1,72 @@
+package collections
+
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/censys/cencli/internal/command"
+	"github.com/censys/cencli/internal/pkg/cenclierrors"
+)
+
+const cmdName = "collections"
+
+// Command is the parent collections command that groups collection-management subcommands.
+type Command struct {
+	*command.BaseCommand
+}
+
+var _ command.Command = (*Command)(nil)
+
+// NewCollectionsCommand creates a new collections command with all subcommands.
+func NewCollectionsCommand(cmdContext *command.Context) *Command {
+	return &Command{BaseCommand: command.NewBaseCommand(cmdContext)}
+}
+
+func (c *Command) Use() string {
+	return cmdName
+}
+
+func (c *Command) Short() string {
+	return "Manage collections for your organization"
+}
+
+func (c *Command) Long() string {
+	return `Manage collections for your organization.
+
+A collection is a saved CenQL query whose matching assets Censys keeps up to date. Use "censys search --collection-id" or "censys aggregate --collection-id" to query inside a collection.
+
+Use --org-id on any subcommand to target a different organization; otherwise your stored organization ID is used.`
+}
+
+func (c *Command) Args() command.PositionalArgs {
+	return command.ExactArgs(0)
+}
+
+func (c *Command) DefaultOutputType() command.OutputType {
+	return command.OutputTypeShort
+}
+
+func (c *Command) SupportedOutputTypes() []command.OutputType {
+	return []command.OutputType{command.OutputTypeShort}
+}
+
+func (c *Command) Init() error {
+	return c.AddSubCommands(
+		NewListCommand(c.Context),
+		NewGetCommand(c.Context),
+		NewCreateCommand(c.Context),
+		NewUpdateCommand(c.Context),
+		NewDeleteCommand(c.Context),
+	)
+}
+
+func (c *Command) PreRun(cmd *cobra.Command, args []string) cenclierrors.CencliError {
+	return nil
+}
+
+func (c *Command) Run(cmd *cobra.Command, args []string) cenclierrors.CencliError {
+	// Parent command shows help when run without subcommands.
+	if err := cmd.Help(); err != nil {
+		return cenclierrors.NewCencliError(err)
+	}
+	return nil
+}

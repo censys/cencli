@@ -1,4 +1,4 @@
-package tags
+package pagination
 
 import (
 	"context"
@@ -14,37 +14,41 @@ import (
 	"github.com/censys/cencli/internal/pkg/domain/responsemeta"
 )
 
-// pageData is what the paginator needs from one API page, pulled out of an
+// Page is what the paginator needs from one API page, pulled out of an
 // endpoint-specific list envelope by the caller's extract function.
-type pageData[Item any] struct {
+type Page[Item any] struct {
 	Items         []Item
 	TotalSize     int64
 	NextPageToken string
 }
 
-// paginated is the outcome of a paginated fetch. Items is empty in streaming
+// Result is the outcome of a paginated fetch. Items is empty in streaming
 // mode, where each item is emitted as it arrives instead of being collected.
-type paginated[Item any] struct {
+type Result[Item any] struct {
 	Meta         *responsemeta.ResponseMeta
 	Items        []Item
 	TotalSize    int64
 	PartialError cenclierrors.CencliError
+	// HasMore is true when the walk stopped at maxPages while the server still
+	// offered a next page. It is false when the pages ran out, on a partial
+	// error, and when the server echoed the same token back.
+	HasMore bool
 }
 
-// paginate walks a list endpoint page by page until it runs out of pages or hits
+// Paginate walks a list endpoint page by page until it runs out of pages or hits
 // maxPages (absent = all pages), emitting items in streaming mode and collecting
 // them otherwise. label names the items in progress messages ("tags").
 //
 // A failure on the first page — or a cancellation before any page landed — is a
 // hard error; later failures return the pages gathered so far with the error as
 // PartialError.
-func paginate[Page, Item any](
+func Paginate[P, Item any](
 	ctx context.Context,
 	maxPages mo.Option[uint64],
 	label string,
-	fetch func(pageToken mo.Option[string]) (client.Result[Page], client.ClientError),
-	extract func(*Page) pageData[Item],
-) (paginated[Item], cenclierrors.CencliError) {
+	fetch func(pageToken mo.Option[string]) (client.Result[P], client.ClientError),
+	extract func(*P) Page[Item],
+) (Result[Item], cenclierrors.CencliError) {
 	var items []Item
 	// len(items) stays 0 while streaming, so progress needs its own counter.
 	var collected int
@@ -52,6 +56,7 @@ func paginate[Page, Item any](
 	var lastMeta *responsemeta.ResponseMeta
 	var pagesProcessed uint64
 	var firstError cenclierrors.CencliError
+	var hasMore bool
 	pageToken := mo.None[string]()
 
 	start := time.Now()
@@ -74,14 +79,14 @@ func paginate[Page, Item any](
 			contextErr := cenclierrors.ParseContextError(err)
 			if pagesProcessed > 0 {
 				finalize()
-				return paginated[Item]{
+				return Result[Item]{
 					Meta:         lastMeta,
 					Items:        items,
 					TotalSize:    totalSize,
 					PartialError: cenclierrors.ToPartialError(contextErr),
 				}, nil
 			}
-			return paginated[Item]{}, contextErr
+			return Result[Item]{}, contextErr
 		}
 
 		reportPageProgress(ctx, label, pagesProcessed, collected, maxPages)
@@ -89,7 +94,7 @@ func paginate[Page, Item any](
 		result, err := fetch(pageToken)
 		if err != nil {
 			if pagesProcessed == 0 {
-				return paginated[Item]{}, err
+				return Result[Item]{}, err
 			}
 			firstError = err
 			progress.ReportError(ctx, progress.StageFetch, err)
@@ -111,7 +116,7 @@ func paginate[Page, Item any](
 			if emitErr != nil {
 				// The consumer is gone; keep what was emitted and report why.
 				finalize()
-				return paginated[Item]{
+				return Result[Item]{
 					Meta:         lastMeta,
 					Items:        items,
 					TotalSize:    page.TotalSize,
@@ -135,6 +140,7 @@ func paginate[Page, Item any](
 		}
 
 		if maxPages.IsPresent() && pagesProcessed >= maxPages.MustGet() {
+			hasMore = true
 			break
 		}
 
@@ -143,11 +149,12 @@ func paginate[Page, Item any](
 
 	finalize()
 
-	return paginated[Item]{
+	return Result[Item]{
 		Meta:         lastMeta,
 		Items:        items,
 		TotalSize:    totalSize,
 		PartialError: cenclierrors.ToPartialError(firstError),
+		HasMore:      hasMore,
 	}, nil
 }
 

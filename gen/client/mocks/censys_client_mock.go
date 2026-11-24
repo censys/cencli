@@ -120,6 +120,21 @@ func (mr *MockClientMockRecorder) CancelTagOperation(ctx, orgID, tagID, operatio
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelTagOperation", reflect.TypeOf((*MockClient)(nil).CancelTagOperation), ctx, orgID, tagID, operationID)
 }
 
+// CreateCollection mocks base method.
+func (m *MockClient) CreateCollection(ctx context.Context, req censys.CreateCollectionRequest) (censys.Result[components.Collection], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCollection", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Collection])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// CreateCollection indicates an expected call of CreateCollection.
+func (mr *MockClientMockRecorder) CreateCollection(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCollection", reflect.TypeOf((*MockClient)(nil).CreateCollection), ctx, req)
+}
+
 // CreateTag mocks base method.
 func (m *MockClient) CreateTag(ctx context.Context, req censys.CreateTagRequest) (censys.Result[components.Tag], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -177,6 +192,21 @@ func (m *MockClient) CredentialInfo() credential.Info {
 func (mr *MockClientMockRecorder) CredentialInfo() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CredentialInfo", reflect.TypeOf((*MockClient)(nil).CredentialInfo))
+}
+
+// DeleteCollection mocks base method.
+func (m *MockClient) DeleteCollection(ctx context.Context, orgID mo.Option[string], collectionID string) (censys.Metadata, censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteCollection", ctx, orgID, collectionID)
+	ret0, _ := ret[0].(censys.Metadata)
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// DeleteCollection indicates an expected call of DeleteCollection.
+func (mr *MockClientMockRecorder) DeleteCollection(ctx, orgID, collectionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCollection", reflect.TypeOf((*MockClient)(nil).DeleteCollection), ctx, orgID, collectionID)
 }
 
 // DeleteTag mocks base method.
@@ -237,6 +267,21 @@ func (m *MockClient) GetCertificates(ctx context.Context, orgID mo.Option[string
 func (mr *MockClientMockRecorder) GetCertificates(ctx, orgID, certificateIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCertificates", reflect.TypeOf((*MockClient)(nil).GetCertificates), ctx, orgID, certificateIDs)
+}
+
+// GetCollection mocks base method.
+func (m *MockClient) GetCollection(ctx context.Context, orgID mo.Option[string], collectionID string) (censys.Result[components.Collection], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCollection", ctx, orgID, collectionID)
+	ret0, _ := ret[0].(censys.Result[components.Collection])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// GetCollection indicates an expected call of GetCollection.
+func (mr *MockClientMockRecorder) GetCollection(ctx, orgID, collectionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCollection", reflect.TypeOf((*MockClient)(nil).GetCollection), ctx, orgID, collectionID)
 }
 
 // GetHostObservationsWithCertificate mocks base method.
@@ -418,6 +463,21 @@ func (mr *MockClientMockRecorder) HostTimeline(ctx, orgID, hostID, fromTime, toT
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HostTimeline", reflect.TypeOf((*MockClient)(nil).HostTimeline), ctx, orgID, hostID, fromTime, toTime)
 }
 
+// ListCollections mocks base method.
+func (m *MockClient) ListCollections(ctx context.Context, req censys.ListCollectionsRequest) (censys.Result[components.ListCollectionsResponseV1], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCollections", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.ListCollectionsResponseV1])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// ListCollections indicates an expected call of ListCollections.
+func (mr *MockClientMockRecorder) ListCollections(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCollections", reflect.TypeOf((*MockClient)(nil).ListCollections), ctx, req)
+}
+
 // ListOrganizationMembers mocks base method.
 func (m *MockClient) ListOrganizationMembers(ctx context.Context, orgID string, pageSize mo.Option[int], pageToken mo.Option[string]) (censys.Result[components.OrganizationMembersList], censys.ClientError) {
 	m.ctrl.T.Helper()
@@ -506,6 +566,21 @@ func (m *MockClient) SearchCollection(ctx context.Context, collectionID string, 
 func (mr *MockClientMockRecorder) SearchCollection(ctx, collectionID, orgID, query, fields, pageSize, pageToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCollection", reflect.TypeOf((*MockClient)(nil).SearchCollection), ctx, collectionID, orgID, query, fields, pageSize, pageToken)
+}
+
+// UpdateCollection mocks base method.
+func (m *MockClient) UpdateCollection(ctx context.Context, req censys.UpdateCollectionRequest) (censys.Result[components.Collection], censys.ClientError) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateCollection", ctx, req)
+	ret0, _ := ret[0].(censys.Result[components.Collection])
+	ret1, _ := ret[1].(censys.ClientError)
+	return ret0, ret1
+}
+
+// UpdateCollection indicates an expected call of UpdateCollection.
+func (mr *MockClientMockRecorder) UpdateCollection(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCollection", reflect.TypeOf((*MockClient)(nil).UpdateCollection), ctx, req)
 }
 
 // UpdateTag mocks base method.

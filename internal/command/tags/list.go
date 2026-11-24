@@ -151,7 +151,7 @@ func (c *ListCommand) Run(cmd *cobra.Command, args []string) cenclierrors.Cencli
 		"maxPages_set", c.maxPages.IsPresent(),
 	)
 
-	warnFetchingAllPages(c.Config().Quiet, logger, c.maxPages)
+	command.WarnFetchingAllPages(c.Config().Quiet, logger, c.maxPages)
 
 	err := c.WithProgress(
 		cmd.Context(),
@@ -235,6 +235,6 @@ func (c *ListCommand) parseFilterFlags() cenclierrors.CencliError {
 
 func (c *ListCommand) parsePaginationFlags() cenclierrors.CencliError {
 	var err cenclierrors.CencliError
-	c.pageSize, c.maxPages, err = parsePaginationFlags(c.flags.pageSize, c.flags.maxPages)
+	c.pageSize, c.maxPages, err = command.ParsePaginationFlags(c.flags.pageSize, c.flags.maxPages)
 	return err
 }
